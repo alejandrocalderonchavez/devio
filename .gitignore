@@ -1,0 +1,43 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Turbo & Next.js / React Native builds
+.turbo
+.next
+dist
+build
+coverage
+.expo
+apps/mobile/.expo
+
+# Environment variables & secrets
+.env
+.env.*
+.env.local
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Heavy design assets & raw deliverables (>50MB / exceeding GitHub limit)
+*.ai
+*.psd
+*.raw
+DEVIO ENTREGABLES/*.pdf
+apps/web/public/brand/*.pdf
+apps/web/public/brand/*.ai
+
+# Temp & Generated
+/upload
+/devio-monorepo-*.tar.gz
+migration_data/
+packages/database/src/generated
+

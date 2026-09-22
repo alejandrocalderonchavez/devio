@@ -1,0 +1,33 @@
+{
+  "name": "@devio/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@devio/database": "workspace:*",
+    "@devio/types": "workspace:*",
+    "@devio/validation": "workspace:*",
+    "@nestjs/common": "11.2.3",
+    "@nestjs/core": "11.2.3",
+    "@nestjs/platform-express": "11.2.3",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "7.10.0",
+    "@types/pg": "^8.23.1",
+    "pg": "^8.23.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@devio/typescript-config": "workspace:*",
+    "@nestjs/cli": "11.0.16",
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
+  }
+}

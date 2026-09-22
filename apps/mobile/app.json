@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Devio",
+    "slug": "devio",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1E3B59"
+      }
+    }
+  }
+}

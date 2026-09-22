@@ -1,0 +1,28 @@
+{
+  "name": "devio",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "dev:web": "pnpm --filter @devio/web dev",
+    "dev:api": "pnpm --filter @devio/api dev",
+    "dev:mobile": "pnpm --filter @devio/mobile start",
+    "dev:worker": "pnpm --filter @devio/worker dev",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "db:generate": "pnpm --filter @devio/database generate",
+    "db:migrate": "pnpm --filter @devio/database migrate",
+    "db:studio": "pnpm --filter @devio/database studio",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "2.10.12",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,790 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -----------------------------------------------------------------------------
+// ENUMS
+// -----------------------------------------------------------------------------
+
+enum MembershipRole {
+  SUPER_ADMIN
+  ADMIN
+  COMMERCIAL
+  CONSTRUCTION
+  CLIENT
+}
+
+enum ProjectType {
+  VERTICAL
+  HORIZONTAL
+  COMMERCIAL
+  INDUSTRIAL
+  MIXED
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum Currency {
+  MXN
+  USD
+}
+
+enum Language {
+  ES
+  EN
+}
+
+enum UnitCategory {
+  APARTMENT
+  HOUSE
+  COMMERCIAL_SPACE
+  INDUSTRIAL_WAREHOUSE
+  LAND_LOT
+  OFFICE
+  OTHER
+}
+
+enum UnitStatus {
+  AVAILABLE
+  RESERVED
+  BLOCKED
+  SOLD
+}
+
+enum AdditionalType {
+  PARKING
+  STORAGE
+  OTHER
+}
+
+enum AdditionalStatus {
+  AVAILABLE
+  ASSIGNED
+  SOLD
+}
+
+enum SaleStatus {
+  RESERVED
+  IN_CONTRACT
+  ACTIVE
+  LIQUIDATED
+  CANCELLED
+}
+
+enum ObligationType {
+  RESERVATION
+  DOWN_PAYMENT
+  INSTALLMENT
+  SETTLEMENT
+  ADDITIONAL
+  INTEREST
+  OTHER
+}
+
+enum ObligationStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  TRANSFER
+  CHECK
+  CARD
+  CASH
+  DIRECT_DEBIT
+  OTHER
+}
+
+enum AdjustmentType {
+  DISCOUNT
+  PENALTY
+  CREDIT_NOTE
+  CORRECTION
+}
+
+enum DocumentType {
+  QUOTE
+  RECEIPT
+  STATEMENT
+  CONTRACT
+  ID_OFFICIAL
+  PROOF_OF_INCOME
+  TAX_CERTIFICATE
+  BLUEPRINT
+  OTHER
+}
+
+enum PostsaleIncidentStatus {
+  REPORTED
+  UNDER_REVIEW
+  ASSIGNED
+  VISIT_SCHEDULED
+  IN_REPAIR
+  WAITING_CLIENT
+  RESOLVED
+  CLOSED
+  REOPENED
+}
+
+enum PostsalePriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+// -----------------------------------------------------------------------------
+// USUARIOS Y ORGANIZACIONES
+// -----------------------------------------------------------------------------
+
+model User {
+  id          String       @id @default(uuid()) @db.Uuid
+  authUserId  String       @unique @map("auth_user_id") @db.Uuid
+  email       String?      @unique
+  phone       String?      @unique
+  fullName    String?      @map("full_name")
+  avatarUrl   String?      @map("avatar_url")
+  preferredLanguage Language @default(ES) @map("preferred_language")
+  preferredCurrency Currency @default(MXN) @map("preferred_currency")
+  bubbleId    String?      @unique @map("bubble_id")
+  memberships Membership[]
+  clientProfiles Client[]
+  registeredReceipts PaymentReceipt[] @relation("UserRegisteredReceipts")
+  incidentComments IncidentComment[]
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Developer {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String
+  legalName   String?      @map("legal_name")
+  taxId       String?      @map("tax_id")
+  logoPath    String?      @map("logo_path")
+  phone       String?
+  email       String?
+  website     String?
+  instagram   String?
+  addressLine1 String?     @map("address_line_1")
+  addressLine2 String?     @map("address_line_2")
+  neighborhood String?
+  city        String?
+  state       String?
+  postalCode  String?      @map("postal_code")
+  country     String?      @default("MEX")
+  description String?
+  bubbleId    String?      @unique @map("bubble_id")
+  memberships Membership[]
+  projects    Project[]
+  clients     Client[]
+  documents   Document[]
+  subscription DeveloperSubscription?
+  pricingInvites CustomPricingInvite[]
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("developers")
+}
+
+model Membership {
+  id          String         @id @default(uuid()) @db.Uuid
+  userId      String         @map("user_id") @db.Uuid
+  developerId String         @map("developer_id") @db.Uuid
+  role        MembershipRole
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  developer   Developer      @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  @@unique([userId, developerId])
+  @@index([developerId, role])
+  @@map("memberships")
+}
+
+// -----------------------------------------------------------------------------
+// TIPO DE CAMBIO (BANXICO FX)
+// -----------------------------------------------------------------------------
+
+model ExchangeRate {
+  id           String   @id @default(uuid()) @db.Uuid
+  date         DateTime @db.Date
+  fromCurrency Currency @map("from_currency")
+  toCurrency   Currency @map("to_currency")
+  rate         Decimal  @db.Decimal(12, 6)
+  source       String   @default("BANXICO_FIX")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([date, fromCurrency, toCurrency])
+  @@index([date])
+  @@map("exchange_rates")
+}
+
+// -----------------------------------------------------------------------------
+// PROYECTOS E INVENTARIO
+// -----------------------------------------------------------------------------
+
+model Project {
+  id                           String        @id @default(uuid()) @db.Uuid
+  developerId                  String        @map("developer_id") @db.Uuid
+  name                         String
+  code                         String?
+  description                  String?
+  projectType                  ProjectType   @default(VERTICAL) @map("project_type")
+  status                       ProjectStatus @default(DRAFT)
+  baseCurrency                 Currency      @default(MXN) @map("base_currency")
+  defaultLanguage              Language      @default(ES) @map("default_language")
+  lateInterestRateMonthly      Decimal       @default(0.0) @map("late_interest_rate_monthly") @db.Decimal(5, 2)
+  commercialCommissionPercentage Decimal     @default(0.0) @map("commercial_commission_percentage") @db.Decimal(5, 2)
+  addressLine1                 String?       @map("address_line_1")
+  addressLine2                 String?       @map("address_line_2")
+  neighborhood                 String?
+  city                         String?
+  state                        String?
+  postalCode                   String?       @map("postal_code")
+  country                      String?       @default("MEX")
+  latitude                     Decimal?      @db.Decimal(10, 8)
+  longitude                    Decimal?      @db.Decimal(11, 8)
+  coverImagePath               String?       @map("cover_image_path")
+  galleryPaths                 String[]      @default([]) @map("gallery_paths")
+  bubbleId                     String?       @unique @map("bubble_id")
+  developer                    Developer     @relation(fields: [developerId], references: [id], onDelete: Restrict)
+  units                        Unit[]
+  additionals                  UnitAdditional[]
+  sales                        Sale[]
+  documents                    Document[]
+  constructionProgress         ConstructionProgress[]
+  incidents                    PostsaleIncident[]
+  createdAt                    DateTime      @default(now()) @map("created_at")
+  updatedAt                    DateTime      @updatedAt @map("updated_at")
+
+  @@index([developerId])
+  @@map("projects")
+}
+
+model Unit {
+  id                  String         @id @default(uuid()) @db.Uuid
+  projectId           String         @map("project_id") @db.Uuid
+  unitNumber          String         @map("unit_number")
+  category            UnitCategory   @default(APARTMENT)
+  status              UnitStatus     @default(AVAILABLE)
+  level               Int?
+  tower               String?
+  zone                String?
+  totalAreaM2         Decimal        @map("total_area_m2") @db.Decimal(10, 2)
+  interiorAreaM2      Decimal?       @map("interior_area_m2") @db.Decimal(10, 2)
+  terraceAreaM2       Decimal?       @map("terrace_area_m2") @db.Decimal(10, 2)
+  gardenAreaM2        Decimal?       @map("garden_area_m2") @db.Decimal(10, 2)
+  lotAreaM2           Decimal?       @map("lot_area_m2") @db.Decimal(10, 2)
+  constructionAreaM2  Decimal?       @map("construction_area_m2") @db.Decimal(10, 2)
+  bedrooms            Int?
+  bathrooms           Decimal?       @db.Decimal(3, 1)
+  halfBathrooms       Int?           @map("half_bathrooms")
+  parkingSpaces       Int            @default(0) @map("parking_spaces")
+  storageRooms        Int            @default(0) @map("storage_rooms")
+  basePrice           Decimal        @map("base_price") @db.Decimal(14, 2)
+  currency            Currency       @default(MXN)
+  blueprintUrl        String?        @map("blueprint_url")
+  renderUrls          String[]       @default([]) @map("render_urls")
+  customAttributes    Json?          @map("custom_attributes")
+  bubbleId            String?        @unique @map("bubble_id")
+  project             Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  additionals         UnitAdditional[]
+  priceHistory        PriceHistory[]
+  sales               Sale[]
+  documents           Document[]
+  incidents           PostsaleIncident[]
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  @@unique([projectId, unitNumber])
+  @@index([projectId, status])
+  @@map("units")
+}
+
+model PriceHistory {
+  id             String    @id @default(uuid()) @db.Uuid
+  unitId         String    @map("unit_id") @db.Uuid
+  previousPrice  Decimal   @map("previous_price") @db.Decimal(14, 2)
+  newPrice       Decimal   @map("new_price") @db.Decimal(14, 2)
+  currency       Currency  @default(MXN)
+  reason         String?
+  changedByUserId String?  @map("changed_by_user_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  unit           Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([unitId])
+  @@map("price_history")
+}
+
+model UnitAdditional {
+  id          String           @id @default(uuid()) @db.Uuid
+  projectId   String           @map("project_id") @db.Uuid
+  unitId      String?          @map("unit_id") @db.Uuid
+  name        String
+  type        AdditionalType   @default(PARKING)
+  status      AdditionalStatus @default(AVAILABLE)
+  price       Decimal          @db.Decimal(14, 2)
+  currency    Currency         @default(MXN)
+  bubbleId    String?          @unique @map("bubble_id")
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unit        Unit?            @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@index([projectId, status])
+  @@map("unit_additionals")
+}
+
+// -----------------------------------------------------------------------------
+// CLIENTES Y EXPEDIENTES
+// -----------------------------------------------------------------------------
+
+model Client {
+  id                String       @id @default(uuid()) @db.Uuid
+  developerId       String       @map("developer_id") @db.Uuid
+  userId            String?      @map("user_id") @db.Uuid
+  fullName          String       @map("full_name")
+  firstName         String?      @map("first_name")
+  lastName          String?      @map("last_name")
+  email             String?
+  phone             String?
+  taxId             String?      @map("tax_id")
+  curp              String?
+  birthDate         DateTime?    @map("birth_date") @db.Date
+  maritalStatus     String?      @map("marital_status")
+  occupation        String?
+  addressLine1      String?      @map("address_line_1")
+  neighborhood      String?
+  city              String?
+  state             String?
+  postalCode        String?      @map("postal_code")
+  country           String?      @default("MEX")
+  preferredLanguage Language     @default(ES) @map("preferred_language")
+  preferredCurrency Currency     @default(MXN) @map("preferred_currency")
+  notes             String?
+  bubbleId          String?      @unique @map("bubble_id")
+  developer         Developer    @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  user              User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  primarySales      Sale[]       @relation("PrimaryClientSales")
+  coOwnerSales      SaleCoOwner[]
+  paidReceipts      PaymentReceipt[] @relation("ClientPaidReceipts")
+  documents         Document[]
+  incidents         PostsaleIncident[]
+  incidentComments  IncidentComment[]
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  @@index([developerId])
+  @@index([email])
+  @@index([phone])
+  @@map("clients")
+}
+
+// -----------------------------------------------------------------------------
+// VENTAS Y COPROPIEDAD
+// -----------------------------------------------------------------------------
+
+model Sale {
+  id                      String                 @id @default(uuid()) @db.Uuid
+  projectId               String                 @map("project_id") @db.Uuid
+  unitId                  String                 @map("unit_id") @db.Uuid
+  primaryClientId         String                 @map("primary_client_id") @db.Uuid
+  status                  SaleStatus             @default(RESERVED)
+  agreedPrice             Decimal                @map("agreed_price") @db.Decimal(14, 2)
+  discountAmount          Decimal                @default(0) @map("discount_amount") @db.Decimal(14, 2)
+  finalPrice              Decimal                @map("final_price") @db.Decimal(14, 2)
+  baseCurrency            Currency               @default(MXN) @map("base_currency")
+  contractNumber          String?                @map("contract_number")
+  contractDate            DateTime?              @map("contract_date")
+  reservationDate         DateTime?              @map("reservation_date")
+  deliveryDate            DateTime?              @map("delivery_date")
+  lateInterestRateMonthly Decimal?               @map("late_interest_rate_monthly") @db.Decimal(5, 2)
+  bubbleId                String?                @unique @map("bubble_id")
+  project                 Project                @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  unit                    Unit                   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  primaryClient           Client                 @relation("PrimaryClientSales", fields: [primaryClientId], references: [id], onDelete: Restrict)
+  coOwners                SaleCoOwner[]
+  paymentPlan             PaymentPlan?
+  scheduledObligations    ScheduledObligation[]
+  paymentReceipts         PaymentReceipt[]
+  financialAdjustments    FinancialAdjustment[]
+  documents               Document[]
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+
+  @@index([projectId, status])
+  @@index([unitId])
+  @@index([primaryClientId])
+  @@map("sales")
+}
+
+model SaleCoOwner {
+  id                  String    @id @default(uuid()) @db.Uuid
+  saleId              String    @map("sale_id") @db.Uuid
+  clientId            String    @map("client_id") @db.Uuid
+  ownershipPercentage Decimal   @map("ownership_percentage") @db.Decimal(5, 2)
+  isMainContact       Boolean   @default(false) @map("is_main_contact")
+  notes               String?
+  startDate           DateTime  @default(now()) @map("start_date")
+  endDate             DateTime? @map("end_date")
+  sale                Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  client              Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  @@unique([saleId, clientId])
+  @@index([saleId])
+  @@index([clientId])
+  @@map("sale_co_owners")
+}
+
+// -----------------------------------------------------------------------------
+// MOTOR FINANCIERO Y COBRANZA
+// -----------------------------------------------------------------------------
+
+model PaymentPlan {
+  id                       String   @id @default(uuid()) @db.Uuid
+  saleId                   String   @unique @map("sale_id") @db.Uuid
+  downPaymentPercentage    Decimal  @map("down_payment_percentage") @db.Decimal(5, 2)
+  downPaymentAmount        Decimal  @map("down_payment_amount") @db.Decimal(14, 2)
+  installmentsCount        Int      @map("installments_count")
+  installmentsTotalAmount  Decimal  @map("installments_total_amount") @db.Decimal(14, 2)
+  settlementAmount         Decimal  @map("settlement_amount") @db.Decimal(14, 2)
+  notes                    String?
+  sale                     Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  @@map("payment_plans")
+}
+
+model ScheduledObligation {
+  id                   String              @id @default(uuid()) @db.Uuid
+  saleId               String              @map("sale_id") @db.Uuid
+  obligationNumber     Int                 @map("obligation_number")
+  title                String
+  type                 ObligationType      @default(INSTALLMENT)
+  dueDate              DateTime            @map("due_date") @db.Date
+  originalAmount       Decimal             @map("original_amount") @db.Decimal(14, 2)
+  pendingAmount        Decimal             @map("pending_amount") @db.Decimal(14, 2)
+  paidAmount           Decimal             @default(0) @map("paid_amount") @db.Decimal(14, 2)
+  accruedLateInterest  Decimal             @default(0) @map("accrued_late_interest") @db.Decimal(14, 2)
+  currency             Currency            @default(MXN)
+  status               ObligationStatus    @default(PENDING)
+  bubbleId             String?             @unique @map("bubble_id")
+  sale                 Sale                @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  paymentAllocations   PaymentAllocation[]
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+
+  @@index([saleId, status])
+  @@index([dueDate])
+  @@map("scheduled_obligations")
+}
+
+model PaymentReceipt {
+  id                             String              @id @default(uuid()) @db.Uuid
+  saleId                         String              @map("sale_id") @db.Uuid
+  payerClientId                  String?             @map("payer_client_id") @db.Uuid
+  receiptFolio                   String              @unique @map("receipt_folio")
+  paymentDate                    DateTime            @map("payment_date")
+  paymentMethod                  PaymentMethod       @default(TRANSFER) @map("payment_method")
+  bankName                       String?             @map("bank_name")
+  transactionReference           String?             @map("transaction_reference")
+  amount                         Decimal             @db.Decimal(14, 2)
+  currency                       Currency            @default(MXN)
+  exchangeRateToSaleCurrency     Decimal             @default(1.0) @map("exchange_rate_to_sale_currency") @db.Decimal(12, 6)
+  equivalentAmountInSaleCurrency Decimal             @map("equivalent_amount_in_sale_currency") @db.Decimal(14, 2)
+  voucherDocumentId              String?             @map("voucher_document_id") @db.Uuid
+  notes                          String?
+  registeredByUserId             String?             @map("registered_by_user_id") @db.Uuid
+  bubbleId                       String?             @unique @map("bubble_id")
+  sale                           Sale                @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  payerClient                    Client?             @relation("ClientPaidReceipts", fields: [payerClientId], references: [id], onDelete: SetNull)
+  registeredByUser               User?               @relation("UserRegisteredReceipts", fields: [registeredByUserId], references: [id], onDelete: SetNull)
+  allocations                    PaymentAllocation[]
+  createdAt                      DateTime            @default(now()) @map("created_at")
+  updatedAt                      DateTime            @updatedAt @map("updated_at")
+
+  @@index([saleId])
+  @@index([payerClientId])
+  @@map("payment_receipts")
+}
+
+model PaymentAllocation {
+  id               String              @id @default(uuid()) @db.Uuid
+  paymentReceiptId String              @map("payment_receipt_id") @db.Uuid
+  obligationId     String              @map("obligation_id") @db.Uuid
+  amountApplied    Decimal             @map("amount_applied") @db.Decimal(14, 2)
+  amountToPrincipal Decimal            @map("amount_to_principal") @db.Decimal(14, 2)
+  amountToInterest Decimal             @default(0) @map("amount_to_interest") @db.Decimal(14, 2)
+  paymentReceipt   PaymentReceipt      @relation(fields: [paymentReceiptId], references: [id], onDelete: Cascade)
+  obligation       ScheduledObligation @relation(fields: [obligationId], references: [id], onDelete: Cascade)
+  createdAt        DateTime            @default(now()) @map("created_at")
+
+  @@index([paymentReceiptId])
+  @@index([obligationId])
+  @@map("payment_allocations")
+}
+
+model FinancialAdjustment {
+  id                 String         @id @default(uuid()) @db.Uuid
+  saleId             String         @map("sale_id") @db.Uuid
+  type               AdjustmentType @default(DISCOUNT)
+  amount             Decimal        @db.Decimal(14, 2)
+  currency           Currency       @default(MXN)
+  reason             String
+  authorizedByUserId String?        @map("authorized_by_user_id") @db.Uuid
+  bubbleId           String?        @unique @map("bubble_id")
+  sale               Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  createdAt          DateTime       @default(now()) @map("created_at")
+
+  @@index([saleId])
+  @@map("financial_adjustments")
+}
+
+// -----------------------------------------------------------------------------
+// GESTIÓN DOCUMENTAL
+// -----------------------------------------------------------------------------
+
+model Document {
+  id                String       @id @default(uuid()) @db.Uuid
+  developerId       String       @map("developer_id") @db.Uuid
+  projectId         String?      @map("project_id") @db.Uuid
+  unitId            String?      @map("unit_id") @db.Uuid
+  clientId          String?      @map("client_id") @db.Uuid
+  saleId            String?      @map("sale_id") @db.Uuid
+  title             String
+  type              DocumentType @default(OTHER)
+  storagePath       String       @map("storage_path")
+  fileSizeBytes     Int?         @map("file_size_bytes")
+  mimeType          String?      @map("mime_type")
+  isClientVisible   Boolean      @default(true) @map("is_client_visible")
+  metadata          Json?
+  generatedByWorker Boolean      @default(false) @map("generated_by_worker")
+  bubbleId          String?      @unique @map("bubble_id")
+  developer         Developer    @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  project           Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  unit              Unit?        @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  client            Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  sale              Sale?        @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  @@index([developerId])
+  @@index([projectId])
+  @@index([unitId])
+  @@index([clientId])
+  @@index([saleId])
+  @@map("documents")
+}
+
+// -----------------------------------------------------------------------------
+// AVANCES DE OBRA
+// -----------------------------------------------------------------------------
+
+model ConstructionProgress {
+  id                String   @id @default(uuid()) @db.Uuid
+  projectId         String   @map("project_id") @db.Uuid
+  title             String
+  description       String?
+  progressDate      DateTime @map("progress_date") @db.Date
+  overallPercentage Decimal  @map("overall_percentage") @db.Decimal(5, 2)
+  specialtyDetails  Json?    @map("specialty_details")
+  mediaUrls         String[] @default([]) @map("media_urls")
+  isClientVisible   Boolean  @default(true) @map("is_client_visible")
+  bubbleId          String?  @unique @map("bubble_id")
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId, progressDate])
+  @@map("construction_progress")
+}
+
+// -----------------------------------------------------------------------------
+// POSTVENTA E INCIDENCIAS
+// -----------------------------------------------------------------------------
+
+model PostsaleIncident {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  folio              String                 @unique
+  projectId          String                 @map("project_id") @db.Uuid
+  unitId             String                 @map("unit_id") @db.Uuid
+  clientId           String                 @map("client_id") @db.Uuid
+  category           String
+  priority           PostsalePriority       @default(MEDIUM)
+  status             PostsaleIncidentStatus @default(REPORTED)
+  title              String
+  description        String
+  mediaUrls          String[]               @default([]) @map("media_urls")
+  assignedToUserId   String?                @map("assigned_to_user_id") @db.Uuid
+  supplierName       String?                @map("supplier_name")
+  slaTargetDate      DateTime?              @map("sla_target_date")
+  resolvedAt         DateTime?              @map("resolved_at")
+  closedAt           DateTime?              @map("closed_at")
+  satisfactionRating Int?                   @map("satisfaction_rating")
+  bubbleId           String?                @unique @map("bubble_id")
+  project            Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unit               Unit                   @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  client             Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  comments           IncidentComment[]
+  appointments       PostsaleAppointment[]
+  evidences          PostsaleEvidence[]
+  logs               PostsaleLog[]
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+
+  @@index([projectId, status])
+  @@index([unitId])
+  @@index([clientId])
+  @@map("postsale_incidents")
+}
+
+model IncidentComment {
+  id         String           @id @default(uuid()) @db.Uuid
+  incidentId String           @map("incident_id") @db.Uuid
+  userId     String?          @map("user_id") @db.Uuid
+  clientId   String?          @map("client_id") @db.Uuid
+  isInternal Boolean          @default(false) @map("is_internal")
+  message    String
+  mediaUrls  String[]         @default([]) @map("media_urls")
+  incident   PostsaleIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  user       User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  client     Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  @@index([incidentId])
+  @@map("incident_comments")
+}
+
+model PostsaleAppointment {
+  id             String           @id @default(uuid()) @db.Uuid
+  incidentId     String           @map("incident_id") @db.Uuid
+  scheduledDate  DateTime         @map("scheduled_date") @db.Date
+  scheduledTime  String           @map("scheduled_time")
+  technicianName String           @map("technician_name")
+  supplierName   String?          @map("supplier_name")
+  notes          String?
+  status         String           @default("PROGRAMADA")
+  incident       PostsaleIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  @@index([incidentId])
+  @@map("postsale_appointments")
+}
+
+model PostsaleEvidence {
+  id          String           @id @default(uuid()) @db.Uuid
+  incidentId  String           @map("incident_id") @db.Uuid
+  type        String           @default("REPAIR_PROOF") // INITIAL_DEFECT, REPAIR_PROOF, DELIVERY_ACT
+  url         String
+  title       String
+  uploadedBy  String           @map("uploaded_by")
+  incident    PostsaleIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@index([incidentId])
+  @@map("postsale_evidences")
+}
+
+model PostsaleLog {
+  id          String           @id @default(uuid()) @db.Uuid
+  incidentId  String           @map("incident_id") @db.Uuid
+  authorName  String           @map("author_name")
+  authorRole  String           @map("author_role")
+  action      String
+  previousState String?        @map("previous_state")
+  newState    String?          @map("new_state")
+  notes       String?
+  incident    PostsaleIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@index([incidentId])
+  @@map("postsale_logs")
+}
+
+// -----------------------------------------------------------------------------
+// DEVIO SAAS: SUSCRIPCIONES Y SUPER ADMIN
+// -----------------------------------------------------------------------------
+
+model DeveloperSubscription {
+  id                   String             @id @default(uuid()) @db.Uuid
+  developerId          String             @unique @map("developer_id") @db.Uuid
+  stripeCustomerId     String?            @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  pricePerUnitMonthly  Decimal            @default(180.00) @map("price_per_unit_monthly") @db.Decimal(10, 2)
+  totalUnitsCount      Int                @default(0) @map("total_units_count")
+  monthlyBillingAmount Decimal            @default(0) @map("monthly_billing_amount") @db.Decimal(14, 2)
+  status               SubscriptionStatus @default(TRIALING)
+  trialEndsAt          DateTime?          @map("trial_ends_at")
+  currentPeriodStart   DateTime?          @map("current_period_start")
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  canceledAt           DateTime?          @map("canceled_at")
+  developer            Developer          @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  @@map("developer_subscriptions")
+}
+
+model CustomPricingInvite {
+  id                  String       @id @default(uuid()) @db.Uuid
+  token               String       @unique
+  developerId         String?      @map("developer_id") @db.Uuid
+  developerName       String       @map("developer_name")
+  developerEmail      String       @map("developer_email")
+  pricePerUnitMonthly Decimal      @map("price_per_unit_monthly") @db.Decimal(10, 2)
+  discountPercentage  Decimal      @default(0) @map("discount_percentage") @db.Decimal(5, 2)
+  freeTrialMonths     Int          @default(1) @map("free_trial_months")
+  status              InviteStatus @default(PENDING)
+  expiresAt           DateTime     @map("expires_at")
+  createdById         String?      @map("created_by_id") @db.Uuid
+  developer           Developer?   @relation(fields: [developerId], references: [id], onDelete: SetNull)
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  @@index([token])
+  @@map("custom_pricing_invites")
+}
+
+model SuperAdminAuditLog {
+  id                 String   @id @default(uuid()) @db.Uuid
+  superAdminUserId   String?  @map("super_admin_user_id") @db.Uuid
+  superAdminName     String   @map("super_admin_name")
+  action             String
+  targetEntity       String   @map("target_entity")
+  details            String
+  ipAddress          String?  @map("ip_address")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("super_admin_audit_logs")
+}
