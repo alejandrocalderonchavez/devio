@@ -37,6 +37,7 @@ import PhoneInput from "../ui/phone-input";
 import CurrencyInput from "../ui/currency-input";
 import { CoOwner, ProjectItem, ProjectAdditional, QuoteRecord } from "../../data/projects-data";
 import { useProject } from "../../context/project-context";
+import { sendAndLogNotification } from "../../lib/notifications";
 
 export interface CreateSaleWizardModalProps {
   isOpen: boolean;
@@ -1180,95 +1181,87 @@ export default function CreateSaleWizardModal({
       }
 
       // ----------------------------------------------------------------------
-      // Dispatch Real Email Notifications via Postmark API
+      // Dispatch Real Email Notifications & Audit Logs via Postmark API
       // ----------------------------------------------------------------------
       allOwnersCombined.forEach(async (owner) => {
         if (!owner.email) return;
         const tempPassword = `Devio-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
         const loginLink = typeof window !== "undefined" ? `${window.location.origin}/login` : "https://devio.lat/login";
         const projName = currentProject?.name || "Proyecto Inmobiliario";
+        const devName = currentProject?.name ? `${currentProject.name} (Desarrolladora)` : "Desarrolladora Inmobiliaria";
 
         // 1. Envío obligatorio de credenciales de acceso al portal de clientes
-        try {
-          await fetch("/api/notifications/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              to: owner.email,
-              templateAlias: "bienvenida-cliente",
-              templateModel: {
-                nombre: owner.name,
-                correo: owner.email,
-                password_temporal: tempPassword,
-                login_link: loginLink,
-                proyecto: projName,
-                unidad: selectedUnitNumber,
-                año: new Date().getFullYear().toString(),
-              },
-            }),
-          });
-        } catch (err) {
-          console.warn("[Notifications] Error enviando credenciales a", owner.email, err);
-        }
+        sendAndLogNotification({
+          to: owner.email,
+          templateAlias: "bienvenida-cliente",
+          templateModel: {
+            nombre: owner.name,
+            correo: owner.email,
+            password_temporal: tempPassword,
+            login_link: loginLink,
+            proyecto: projName,
+            unidad: selectedUnitNumber,
+            año: new Date().getFullYear().toString(),
+          },
+          triggerKey: "auth.welcome_client",
+          triggerName: "Bienvenida y Credenciales Portal Cliente",
+          recipientName: owner.name,
+          developerName: devName,
+          channel: "POSTMARK",
+        });
 
         // 2. Envío de confirmación de venta y asignación de unidad
         if (sendSaleConfirmationEmail) {
-          try {
-            await fetch("/api/notifications/send", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                to: owner.email,
-                templateAlias: "alta-unidad",
-                templateModel: {
-                  nombre: owner.name,
-                  correo: owner.email,
-                  proyecto: projName,
-                  unidad: selectedUnitNumber,
-                  tipo: currentProject?.type || "Departamento",
-                  fecha_entrega: unitEstimatedDelivery || "Mayo 2028",
-                  login_link: loginLink,
-                  año: new Date().getFullYear().toString(),
-                },
-              }),
-            });
-          } catch (err) {
-            console.warn("[Notifications] Error enviando alta de unidad a", owner.email, err);
-          }
+          sendAndLogNotification({
+            to: owner.email,
+            templateAlias: "alta-unidad",
+            templateModel: {
+              nombre: owner.name,
+              correo: owner.email,
+              proyecto: projName,
+              unidad: selectedUnitNumber,
+              tipo: currentProject?.type || "Departamento",
+              fecha_entrega: unitEstimatedDelivery || "Mayo 2028",
+              login_link: loginLink,
+              año: new Date().getFullYear().toString(),
+            },
+            triggerKey: "sales.unit_assigned",
+            triggerName: "Asignación de Unidad Formalizada",
+            recipientName: owner.name,
+            developerName: devName,
+            channel: "POSTMARK",
+          });
         }
 
         // 3. Envío de recibo de pago de enganche inicial si se registró pago
         if (initialPaymentOption !== "NONE" && sendReceiptEmail) {
-          try {
-            await fetch("/api/notifications/send", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                to: owner.email,
-                templateAlias: "recibo-pago",
-                templateModel: {
-                  nombre: owner.name,
-                  correo: owner.email,
-                  proyecto: projName,
-                  unidad: selectedUnitNumber,
-                  folio_recibo: "REC-2026-001",
-                  monto_pagado: formatMoney(initialPaymentAmount),
-                  concepto: "Pago de Enganche Inicial",
-                  metodo_pago:
-                    paymentMethod === "transferencia"
-                      ? "Transferencia SPEI"
-                      : paymentMethod === "cheque"
-                      ? "Cheque de Caja"
-                      : "Depósito Bancario",
-                  fecha_pago: new Date().toLocaleDateString("es-MX"),
-                  saldo_pendiente: formatMoney(Math.max(0, netTotalSaleAmount - initialPaymentAmount)),
-                  año: new Date().getFullYear().toString(),
-                },
-              }),
-            });
-          } catch (err) {
-            console.warn("[Notifications] Error enviando recibo a", owner.email, err);
-          }
+          sendAndLogNotification({
+            to: owner.email,
+            templateAlias: "recibo-pago",
+            templateModel: {
+              nombre: owner.name,
+              correo: owner.email,
+              proyecto: projName,
+              unidad: selectedUnitNumber,
+              folio_recibo: "REC-2026-001",
+              monto_pagado: formatMoney(initialPaymentAmount),
+              concepto: "Pago de Enganche Inicial",
+              metodo_pago:
+                paymentMethod === "transferencia"
+                  ? "Transferencia SPEI"
+                  : paymentMethod === "cheque"
+                  ? "Cheque de Caja"
+                  : "Depósito Bancario",
+              fecha_pago: new Date().toLocaleDateString("es-MX"),
+              saldo_pendiente: formatMoney(Math.max(0, netTotalSaleAmount - initialPaymentAmount)),
+              año: new Date().getFullYear().toString(),
+            },
+            triggerKey: "payments.payment_receipt",
+            triggerName: "Recibo de Pago de Enganche",
+            recipientName: owner.name,
+            developerName: devName,
+            channel: "POSTMARK",
+          });
         }
       });
 

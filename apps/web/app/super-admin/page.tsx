@@ -245,6 +245,17 @@ export default function SuperAdminPage() {
       };
 
       setDevelopers([activeDeveloper]);
+
+      // Real-time listener for notification log changes from sales, payments or test dispatches
+      const handleLogsChange = () => {
+        setDeliveryLogs(getNotificationDeliveryLogs());
+      };
+      window.addEventListener("devio_notification_logs_changed", handleLogsChange);
+      window.addEventListener("storage", handleLogsChange);
+      return () => {
+        window.removeEventListener("devio_notification_logs_changed", handleLogsChange);
+        window.removeEventListener("storage", handleLogsChange);
+      };
     }
   }, []);
 
@@ -393,37 +404,128 @@ export default function SuperAdminPage() {
   };
 
   // Trigger Test Notification Dispatch
-  const handleTriggerTestNotification = (template: NotificationTemplate) => {
+  const handleTriggerTestNotification = async (template: NotificationTemplate) => {
+    showToast("Enviando Prueba...", `Despachando alerta de prueba para "${template.title}"...`, "info");
     const logs = dispatchSystemNotification({
       triggerKey: template.triggerKey,
       recipientEmail: "acalderoncha@gmail.com",
       recipientPhone: "+52 (33) 2256 7499",
       recipientName: "Alejandro Calderón",
-      developerName: "Desarrolladora",
+      developerName: "Devio Global",
       metadata: { testDispatch: true, templateId: template.id },
     });
 
     setDeliveryLogs(getNotificationDeliveryLogs());
-    showToast("Notificación de Prueba Disparada", `Se enviaron ${logs.length} alertas por los canales activos de "${template.title}".`);
+    showToast("Disparo Iniciado", `Se procesaron ${logs.length} canales activos para "${template.title}". El estado se actualizará en tiempo real.`);
   };
 
   // Retry Failed Notification
-  const handleRetryLog = (log: NotificationDeliveryLog) => {
-    const updated = deliveryLogs.map((l) => {
-      if (l.id === log.id) {
-        return {
-          ...l,
-          status: "ENTREGADO" as const,
-          retryCount: l.retryCount + 1,
-          errorDetails: undefined,
-          timestamp: new Date().toLocaleString("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
-        };
+  const handleRetryLog = async (log: NotificationDeliveryLog) => {
+    showToast("Reintentando Envío...", `Reintentando entrega a ${log.recipient}...`, "info");
+
+    if (log.channel === "POSTMARK") {
+      try {
+        const response = await fetch("/api/notifications/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: log.recipient,
+            templateAlias: log.metadata?.templateAlias || "bienvenida-cliente",
+            templateModel: log.metadata?.templateModel || {
+              nombre: log.recipientName,
+              correo: log.recipient,
+            },
+          }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          const updated = deliveryLogs.map((l) => {
+            if (l.id === log.id) {
+              return {
+                ...l,
+                status: "ENTREGADO" as const,
+                retryCount: (l.retryCount || 0) + 1,
+                errorDetails: undefined,
+                timestamp: new Date().toLocaleString("es-MX", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              };
+            }
+            return l;
+          });
+          setDeliveryLogs(updated);
+          saveNotificationDeliveryLogs(updated);
+          showToast("Reenvío Exitoso", `La notificación fue entregada correctamente.`);
+        } else {
+          const errReason = data.error || `Error HTTP ${response.status} de Postmark`;
+          const updated = deliveryLogs.map((l) => {
+            if (l.id === log.id) {
+              return {
+                ...l,
+                status: "FALLIDO" as const,
+                retryCount: (l.retryCount || 0) + 1,
+                errorDetails: errReason,
+                timestamp: new Date().toLocaleString("es-MX", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              };
+            }
+            return l;
+          });
+          setDeliveryLogs(updated);
+          saveNotificationDeliveryLogs(updated);
+          showToast("Error en Reintento", errReason, "warning");
+        }
+      } catch (err: any) {
+        const errReason = err.message || "Error de red al conectar con Postmark";
+        const updated = deliveryLogs.map((l) => {
+          if (l.id === log.id) {
+            return {
+              ...l,
+              status: "FALLIDO" as const,
+              retryCount: (l.retryCount || 0) + 1,
+              errorDetails: errReason,
+            };
+          }
+          return l;
+        });
+        setDeliveryLogs(updated);
+        saveNotificationDeliveryLogs(updated);
+        showToast("Error de Conexión", errReason, "warning");
       }
-      return l;
-    });
-    setDeliveryLogs(updated);
-    saveNotificationDeliveryLogs(updated);
-    showToast("Reenvío Exitoso", `La notificación ${log.id} fue reintentada y marcada como Entregada.`);
+    } else {
+      const updated = deliveryLogs.map((l) => {
+        if (l.id === log.id) {
+          return {
+            ...l,
+            status: "ENTREGADO" as const,
+            retryCount: (l.retryCount || 0) + 1,
+            errorDetails: undefined,
+            timestamp: new Date().toLocaleString("es-MX", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          };
+        }
+        return l;
+      });
+      setDeliveryLogs(updated);
+      saveNotificationDeliveryLogs(updated);
+      showToast("Reenvío Exitoso", `La notificación fue reintentada.`);
+    }
   };
 
   // Filtered Developers
@@ -1397,25 +1499,61 @@ export default function SuperAdminPage() {
                           </td>
                           <td style={{ fontSize: "0.78rem" }}>{log.developerName}</td>
                           <td>
-                            <span
-                              className={`badge ${
-                                log.status === "ENTREGADO"
-                                  ? "badge-success"
-                                  : log.status === "ENVIADO"
-                                  ? "badge-info"
-                                  : log.status === "FALLIDO"
-                                  ? "badge-danger"
-                                  : "badge-warning"
-                              }`}
-                              style={{ fontSize: "0.7rem" }}
-                            >
-                              {log.status}
-                            </span>
-                            {log.errorDetails && (
-                              <div style={{ fontSize: "0.68rem", color: "var(--devio-red)", marginTop: "0.2rem", maxWidth: "220px" }}>
-                                {log.errorDetails}
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                                <span
+                                  className={`badge ${
+                                    log.status === "ENTREGADO"
+                                      ? "badge-success"
+                                      : log.status === "ENVIADO"
+                                      ? "badge-info"
+                                      : log.status === "FALLIDO"
+                                      ? "badge-danger"
+                                      : "badge-warning"
+                                  }`}
+                                  style={{ fontSize: "0.72rem", fontWeight: 700 }}
+                                >
+                                  {log.status === "ENTREGADO"
+                                    ? "✓ ENTREGADO"
+                                    : log.status === "FALLIDO"
+                                    ? "✕ FALLIDO"
+                                    : log.status}
+                                </span>
+                                {log.retryCount > 0 && (
+                                  <span style={{ fontSize: "0.68rem", color: "#64748B", fontWeight: 600 }}>
+                                    ({log.retryCount} reintento{log.retryCount > 1 ? "s" : ""})
+                                  </span>
+                                )}
                               </div>
-                            )}
+
+                              {log.errorDetails && (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "flex-start",
+                                    gap: "0.35rem",
+                                    fontSize: "0.72rem",
+                                    color: "#991B1B",
+                                    backgroundColor: "#FEF2F2",
+                                    border: "1px solid #FECACA",
+                                    padding: "0.35rem 0.5rem",
+                                    borderRadius: "0.35rem",
+                                    maxWidth: "280px",
+                                    lineHeight: 1.3,
+                                  }}
+                                  title={log.errorDetails}
+                                >
+                                  <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: "2px", color: "#DC2626" }} />
+                                  <span>{log.errorDetails}</span>
+                                </div>
+                              )}
+
+                              {log.metadata?.messageId && (
+                                <span style={{ fontSize: "0.65rem", color: "#64748B" }}>
+                                  ID: {log.metadata.messageId}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td>
                             {log.status === "FALLIDO" ? (
@@ -1423,12 +1561,18 @@ export default function SuperAdminPage() {
                                 type="button"
                                 onClick={() => handleRetryLog(log)}
                                 className="btn btn-outline"
-                                style={{ fontSize: "0.72rem", padding: "0.25rem 0.6rem", color: "var(--devio-red)" }}
+                                style={{
+                                  fontSize: "0.72rem",
+                                  padding: "0.3rem 0.65rem",
+                                  color: "var(--devio-red)",
+                                  borderColor: "#FCA5A5",
+                                  backgroundColor: "#FFF5F5",
+                                }}
                               >
                                 <RotateCcw size={12} /> Reintentar
                               </button>
                             ) : (
-                              <span style={{ fontSize: "0.72rem", color: "#009E70", fontWeight: 700 }}>
+                              <span style={{ fontSize: "0.75rem", color: "#009E70", fontWeight: 700 }}>
                                 ✓ OK
                               </span>
                             )}
