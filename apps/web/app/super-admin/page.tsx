@@ -246,12 +246,28 @@ export default function SuperAdminPage() {
 
       setDevelopers([activeDeveloper]);
 
-      // Real-time listener for notification log changes from sales, payments or test dispatches
+      // Real-time listener and server fetch for notification log changes from sales, payments or test dispatches
       const handleLogsChange = () => {
         setDeliveryLogs(getNotificationDeliveryLogs());
       };
       window.addEventListener("devio_notification_logs_changed", handleLogsChange);
       window.addEventListener("storage", handleLogsChange);
+
+      // Fetch persistent server-side delivery logs
+      fetch("/api/notifications/logs")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.logs && Array.isArray(data.logs) && data.logs.length > 0) {
+            const local = getNotificationDeliveryLogs();
+            // Merge unique logs
+            const ids = new Set(data.logs.map((l: any) => l.id));
+            const merged = [...data.logs, ...local.filter((l) => !ids.has(l.id))];
+            setDeliveryLogs(merged);
+            saveNotificationDeliveryLogs(merged);
+          }
+        })
+        .catch((e) => console.warn("Could not sync server notification logs:", e));
+
       return () => {
         window.removeEventListener("devio_notification_logs_changed", handleLogsChange);
         window.removeEventListener("storage", handleLogsChange);

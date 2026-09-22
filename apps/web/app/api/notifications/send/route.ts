@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { addServerLog } from "@/lib/server-notification-logs";
 
 export async function POST(request: Request) {
   try {
@@ -86,11 +87,49 @@ export async function POST(request: Request) {
 
     const data = await response.json();
 
+    const triggerName =
+      templateAlias === "bienvenida-cliente"
+        ? "Bienvenida y Credenciales Portal Cliente"
+        : templateAlias === "alta-unidad"
+        ? "Asignación de Unidad Formalizada"
+        : templateAlias === "recibo-pago"
+        ? "Recibo de Pago de Enganche"
+        : templateAlias === "estado-cuenta"
+        ? "Estado de Cuenta Digital"
+        : templateAlias === "recordatorio-pago"
+        ? "Recordatorio Preventivo de Pago"
+        : templateAlias === "moroso"
+        ? "Aviso de Saldo Vencido / Moroso"
+        : `Notificación (${templateAlias})`;
+
     if (!response.ok) {
       console.error("[Postmark Error]", response.status, data);
+      const errMsg = data.Message || "Error al enviar correo en Postmark";
+
+      addServerLog({
+        id: `log-pmk-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        timestamp: new Date().toLocaleString("es-MX", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        triggerKey: `postmark.${templateAlias}`,
+        triggerName,
+        channel: "POSTMARK",
+        recipient: to,
+        recipientName: templateModel.nombre || "Usuario Devio",
+        developerName: templateModel.desarrolladora || "Devio Inmobiliario",
+        status: "FALLIDO",
+        errorDetails: `Postmark [Error ${data.ErrorCode || response.status}]: ${errMsg}`,
+        retryCount: 0,
+        metadata: { templateAlias, postmarkCode: data.ErrorCode, templateModel },
+      });
+
       return NextResponse.json(
         {
-          error: data.Message || "Error al enviar correo en Postmark",
+          error: errMsg,
           postmarkCode: data.ErrorCode,
         },
         { status: response.status }
@@ -98,6 +137,26 @@ export async function POST(request: Request) {
     }
 
     console.log(`[Postmark Success] Mensaje enviado exitosamente a ${to}. MessageID: ${data.MessageID}`);
+
+    addServerLog({
+      id: `log-pmk-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: new Date().toLocaleString("es-MX", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      triggerKey: `postmark.${templateAlias}`,
+      triggerName,
+      channel: "POSTMARK",
+      recipient: to,
+      recipientName: templateModel.nombre || "Usuario Devio",
+      developerName: templateModel.desarrolladora || "Devio Inmobiliario",
+      status: "ENTREGADO",
+      retryCount: 0,
+      metadata: { templateAlias, messageId: data.MessageID, templateModel },
+    });
 
     return NextResponse.json({
       success: true,
