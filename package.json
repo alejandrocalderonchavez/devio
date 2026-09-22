@@ -8,7 +8,7 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
-    "build": "turbo run build",
+    "build": "pnpm --filter @devio/database generate && turbo run build",
     "start": "pnpm --filter @devio/web start",
     "start:web": "pnpm --filter @devio/web start",
     "start:api": "pnpm --filter @devio/api start",
