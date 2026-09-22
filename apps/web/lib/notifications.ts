@@ -118,6 +118,27 @@ export function dispatchSystemNotification(options: DispatchNotificationOptions)
       retryCount: 0,
       metadata: options.metadata,
     });
+
+    // Real async dispatch if in browser
+    if (typeof window !== "undefined") {
+      fetch("/api/notifications/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: options.recipientEmail,
+          templateAlias: template.postmark.templateAlias,
+          templateModel: {
+            nombre: options.recipientName,
+            correo: options.recipientEmail,
+            ...options.metadata,
+          },
+          fromEmail: channelsConfig.postmark.fromEmail || "noreply@deviomx.com",
+          fromName: channelsConfig.postmark.senderAlias || "DEVIO",
+        }),
+      }).catch((err) => {
+        console.warn("Error sending Postmark notification:", err);
+      });
+    }
   }
 
   // 2. WHATSAPP
