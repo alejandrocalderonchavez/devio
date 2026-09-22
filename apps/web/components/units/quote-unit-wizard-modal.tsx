@@ -36,6 +36,7 @@ import CurrencyInput from "../ui/currency-input";
 import { UnitItem } from "./bulk-price-modal";
 import { CoOwner, ProjectAdditional } from "../../data/projects-data";
 import { useProject } from "../../context/project-context";
+import { generateQuotePDF } from "../../lib/pdf-generator";
 
 export interface QuoteUnitWizardModalProps {
   isOpen: boolean;
@@ -1884,7 +1885,39 @@ export default function QuoteUnitWizardModal({
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                 <button
                   type="button"
-                  onClick={() => alert(`Descargando Cotización en PDF: ${quoteFolio}.pdf`)}
+                  onClick={async () => {
+                    await generateQuotePDF({
+                      quoteFolio: quoteFolio,
+                      projectName: projectName || "Proyecto",
+                      unitNumber: unit?.unit || "Unidad",
+                      unitType: unit?.type || "Departamento",
+                      superficieM2: unit?.areaM2 || 100,
+                      deliveryDate: unit?.deliveryDate || "Mayo 2028",
+                      listPrice: unitBasePrice,
+                      discountPct: discountPct,
+                      discountAmount: discountAmount,
+                      totalQuoteAmount: netTotalQuoteAmount,
+                      planName: customPlanName || "Plan de Pago",
+                      downPaymentAmount: Math.round(netTotalQuoteAmount * (downPaymentPct / 100)),
+                      downPaymentPct: downPaymentPct,
+                      installmentsCount: installmentsCount,
+                      installmentAmount: installmentsCount > 0 ? Math.round(((netTotalQuoteAmount * (1 - (downPaymentPct + balloonLiquidationPct) / 100)) / installmentsCount) * 100) / 100 : 0,
+                      settlementAmount: Math.round(netTotalQuoteAmount * (balloonLiquidationPct / 100)),
+                      settlementPct: balloonLiquidationPct,
+                      additionals: selectedAdditionals.map((a) => ({ name: a.name, price: a.price })),
+                      client: {
+                        name: primaryClient.name || "Cliente",
+                        email: primaryClient.email,
+                        phone: primaryClient.phone,
+                        rfc: primaryClient.rfc,
+                      },
+                      advisor: {
+                        name: "Asesor Comercial",
+                        role: "Asesor de Ventas",
+                      },
+                      brandColor: "#1F3652",
+                    });
+                  }}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",

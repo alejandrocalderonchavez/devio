@@ -32,6 +32,7 @@ import { exportTableToExcel, exportTableToPDF } from "../../../../lib/export-uti
 import { InfoTooltip } from "../../../../components/ui/tooltip";
 import { DevioDatePicker } from "../../../../components/ui/devio-date-picker";
 import { UploadPaymentsModal } from "../../../../components/payments/upload-payments-modal";
+import { generateReceiptPDF } from "../../../../lib/pdf-generator";
 
 // Date range formatters
 const formatYYYYMMDD = (d: Date) => {
@@ -2390,8 +2391,20 @@ export default function ProjectPaymentsPage() {
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
                 <button
                   type="button"
-                  onClick={() => {
-                    showToast("Descarga Completa", "Comprobante bancario descargado.");
+                  onClick={async () => {
+                    await generateReceiptPDF({
+                      folio: selectedVoucherForView.id || `REC-${Date.now().toString().slice(-5)}`,
+                      projectName: project?.name || "Proyecto",
+                      unitNumber: selectedVoucherForView.unit || "101",
+                      clientName: selectedVoucherForView.client || "Cliente",
+                      paymentMethod: selectedVoucherForView.method || "Transferencia SPEI",
+                      totalAmount: selectedVoucherForView.paidAmount || selectedVoucherForView.scheduledAmount || 0,
+                      capitalAmount: selectedVoucherForView.paidAmount || selectedVoucherForView.scheduledAmount || 0,
+                      interestAmount: 0,
+                      emissionDate: selectedVoucherForView.paymentDate || new Date().toISOString().slice(0, 10),
+                      developerName: "Desarrolladora",
+                    });
+                    showToast("Descarga Completa", "Recibo oficial en PDF descargado exitosamente.");
                     setSelectedVoucherForView(null);
                   }}
                   style={{
@@ -2408,7 +2421,7 @@ export default function ProjectPaymentsPage() {
                     cursor: "pointer",
                   }}
                 >
-                  <Download size={15} /> Descargar Comprobante
+                  <Download size={15} /> Descargar Recibo Oficial (PDF)
                 </button>
               </div>
             </div>
