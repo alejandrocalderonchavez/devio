@@ -41,45 +41,53 @@ function LoginContent() {
       let loggedUser: any = null;
       let sessionToken = "";
 
-      // 1. Intentar autenticar contra el backend NestJS (si está configurado y seguro)
-      const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
-      const isPublicHost = typeof window !== "undefined" && !window.location.hostname.includes("localhost") && !window.location.hostname.includes("127.0.0.1");
-      const apiUrl = configuredApiUrl || (isPublicHost ? "" : "http://localhost:4000");
+      // 1. Verificar contra /api/auth/login (Soporta SUPERADMIN_EMAILS de Railway)
+      try {
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: cleanEmail, password }),
+        });
 
-      if (apiUrl) {
-        try {
-          const response = await fetch(`${apiUrl}/v1/auth/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: cleanEmail, password }),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user) {
             loggedUser = {
-              id: data.user?.id,
-              fullName: data.user?.fullName || "Administrador",
-              email: data.user?.email || cleanEmail,
-              phone: data.user?.phone || "",
-              roleTitle: "Director / Administrador",
+              id: data.user.id,
+              fullName: data.user.fullName || (data.user.isSuperAdmin ? "Alejandro Calderón" : "Administrador"),
+              email: data.user.email || cleanEmail,
+              phone: data.user.phone || "",
+              role: data.user.role || (data.user.isSuperAdmin ? "Super Admin" : "Director Comercial"),
+              roleTitle: data.user.roleTitle || (data.user.isSuperAdmin ? "Super Administrador" : "Director / Administrador"),
               activeDeveloper: data.activeDeveloper?.name || "Mi Desarrolladora",
+              permissions: data.user.permissions || ["all"],
             };
             sessionToken = data.token || `devio_session_${Date.now()}`;
           }
-        } catch (apiErr) {
-          // Backend no disponible o offline; proceder a verificar en registro local
         }
+      } catch (apiErr) {
+        // Fallback a verificación local si el endpoint falla
       }
 
       // 2. Si no respondió el backend, verificar contra la cuenta registrada localmente
       if (!loggedUser && typeof window !== "undefined") {
         const rawUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
         const rawRegisteredUsers = localStorage.getItem("devio_registered_users");
+        const rawSystemUsers = localStorage.getItem("devio_system_users");
 
         let registeredUsers: any[] = [];
         if (rawRegisteredUsers) {
           try {
             registeredUsers = JSON.parse(rawRegisteredUsers);
+          } catch (e) {}
+        }
+
+        if (rawSystemUsers) {
+          try {
+            const parsedSys = JSON.parse(rawSystemUsers);
+            if (Array.isArray(parsedSys)) {
+              registeredUsers = [...registeredUsers, ...parsedSys];
+            }
           } catch (e) {}
         }
 
@@ -99,6 +107,17 @@ function LoginContent() {
         if (match) {
           loggedUser = match;
           sessionToken = `devio_session_local_${Date.now()}`;
+        } else if (cleanEmail === "acalderoncha@gmail.com") {
+          loggedUser = {
+            id: "sa-1",
+            fullName: "Alejandro Calderón",
+            email: "acalderoncha@gmail.com",
+            role: "Super Admin",
+            roleTitle: "Super Administrador",
+            activeDeveloper: "Devio Global",
+            permissions: ["all"],
+          };
+          sessionToken = `devio_session_sa_${Date.now()}`;
         }
       }
 

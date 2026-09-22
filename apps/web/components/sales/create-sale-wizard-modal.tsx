@@ -1179,6 +1179,99 @@ export default function CreateSaleWizardModal({
         onSaleCreated(finalSalePayload);
       }
 
+      // ----------------------------------------------------------------------
+      // Dispatch Real Email Notifications via Postmark API
+      // ----------------------------------------------------------------------
+      allOwnersCombined.forEach(async (owner) => {
+        if (!owner.email) return;
+        const tempPassword = `Devio-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+        const loginLink = typeof window !== "undefined" ? `${window.location.origin}/login` : "https://devio.lat/login";
+        const projName = currentProject?.name || "Proyecto Inmobiliario";
+
+        // 1. Envío obligatorio de credenciales de acceso al portal de clientes
+        try {
+          await fetch("/api/notifications/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: owner.email,
+              templateAlias: "bienvenida-cliente",
+              templateModel: {
+                nombre: owner.name,
+                correo: owner.email,
+                password_temporal: tempPassword,
+                login_link: loginLink,
+                proyecto: projName,
+                unidad: selectedUnitNumber,
+                año: new Date().getFullYear().toString(),
+              },
+            }),
+          });
+        } catch (err) {
+          console.warn("[Notifications] Error enviando credenciales a", owner.email, err);
+        }
+
+        // 2. Envío de confirmación de venta y asignación de unidad
+        if (sendSaleConfirmationEmail) {
+          try {
+            await fetch("/api/notifications/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                to: owner.email,
+                templateAlias: "alta-unidad",
+                templateModel: {
+                  nombre: owner.name,
+                  correo: owner.email,
+                  proyecto: projName,
+                  unidad: selectedUnitNumber,
+                  tipo: currentProject?.type || "Departamento",
+                  fecha_entrega: unitEstimatedDelivery || "Mayo 2028",
+                  login_link: loginLink,
+                  año: new Date().getFullYear().toString(),
+                },
+              }),
+            });
+          } catch (err) {
+            console.warn("[Notifications] Error enviando alta de unidad a", owner.email, err);
+          }
+        }
+
+        // 3. Envío de recibo de pago de enganche inicial si se registró pago
+        if (initialPaymentOption !== "NONE" && sendReceiptEmail) {
+          try {
+            await fetch("/api/notifications/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                to: owner.email,
+                templateAlias: "recibo-pago",
+                templateModel: {
+                  nombre: owner.name,
+                  correo: owner.email,
+                  proyecto: projName,
+                  unidad: selectedUnitNumber,
+                  folio_recibo: "REC-2026-001",
+                  monto_pagado: formatMoney(initialPaymentAmount),
+                  concepto: "Pago de Enganche Inicial",
+                  metodo_pago:
+                    paymentMethod === "transferencia"
+                      ? "Transferencia SPEI"
+                      : paymentMethod === "cheque"
+                      ? "Cheque de Caja"
+                      : "Depósito Bancario",
+                  fecha_pago: new Date().toLocaleDateString("es-MX"),
+                  saldo_pendiente: formatMoney(Math.max(0, netTotalSaleAmount - initialPaymentAmount)),
+                  año: new Date().getFullYear().toString(),
+                },
+              }),
+            });
+          } catch (err) {
+            console.warn("[Notifications] Error enviando recibo a", owner.email, err);
+          }
+        }
+      });
+
       onClose();
       router.push(`/projects/${targetProjId}/clients/${clientTargetId}`);
     }, 700);
@@ -3012,34 +3105,36 @@ export default function CreateSaleWizardModal({
                     Notificaciones Automáticas por Correo:
                   </span>
 
-                  {/* Checkbox 1: Credentials (only displayed if registering a new client) */}
-                  {hasAnyNewBuyer && (
-                    <label
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.6rem",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        backgroundColor: "rgba(111, 172, 156, 0.08)",
-                        border: "1px solid rgba(111, 172, 156, 0.25)",
-                        cursor: "pointer",
-                        fontSize: "0.82rem",
-                        fontWeight: 600,
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={sendCredentialsToAll}
-                        onChange={(e) => setSendCredentialsToAll(e.target.checked)}
-                        style={{ width: "16px", height: "16px", accentColor: "var(--devio-blue)" }}
-                      />
-                      <span>
-                        Enviar credenciales de acceso al portal de clientes de Devio por correo a los nuevos compradores registrados.
+                  {/* Notificación Obligatoria 1: Credenciales de acceso al portal */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "0.65rem",
+                      padding: "0.75rem 0.9rem",
+                      borderRadius: "0.65rem",
+                      backgroundColor: "rgba(111, 172, 156, 0.1)",
+                      border: "1.5px solid rgba(111, 172, 156, 0.35)",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      color: "var(--devio-blue-dark)",
+                    }}
+                  >
+                    <Mail size={17} color="#2F80ED" style={{ flexShrink: 0, marginTop: "2px" }} />
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.15rem" }}>
+                        <strong style={{ color: "#1F3652" }}>
+                          Credenciales de Acceso al Portal de Clientes
+                        </strong>
+                        <span style={{ fontSize: "0.68rem", fontWeight: 800, padding: "0.15rem 0.45rem", borderRadius: "9999px", backgroundColor: "#00C48C", color: "#FFFFFF" }}>
+                          Automático
+                        </span>
+                      </div>
+                      <span style={{ fontSize: "0.78rem", color: "#475569", lineHeight: 1.4 }}>
+                        Se enviarán las credenciales de acceso al portal de clientes de Devio por correo a todos los compradores registrados.
                       </span>
-                    </label>
-                  )}
+                    </div>
+                  </div>
 
                   {/* Checkbox 2: Welcome / Sale Confirmation */}
                   <label

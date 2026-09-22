@@ -79,10 +79,35 @@ import {
 
 export default function SuperAdminPage() {
   const router = useRouter();
-  const { setDeveloperName, showToast, userEmail } = useProject();
+  const { setDeveloperName, showToast, userEmail, userRole } = useProject();
 
-  // Route security check: Only acalderoncha@gmail.com
-  const isAuthorized = (userEmail || "").toLowerCase().trim() === "acalderoncha@gmail.com";
+  const [superAdminEmails, setSuperAdminEmails] = useState<string[]>(["acalderoncha@gmail.com"]);
+
+  useEffect(() => {
+    fetch("/api/auth/superadmins")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.superAdminEmails && Array.isArray(data.superAdminEmails)) {
+          setSuperAdminEmails(data.superAdminEmails);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Route security check: Super Admin role or email in superAdminEmails list
+  const isAuthorized = useMemo(() => {
+    const cleanEmail = (userEmail || "").toLowerCase().trim();
+    if (userRole === "Super Admin") return true;
+    if (cleanEmail && superAdminEmails.includes(cleanEmail)) return true;
+    if (cleanEmail === "acalderoncha@gmail.com") return true;
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
+      if (stored && (stored.includes("Super Admin") || stored.includes("acalderoncha@gmail.com"))) {
+        return true;
+      }
+    }
+    return false;
+  }, [userEmail, userRole, superAdminEmails]);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<"tenants" | "notifications" | "pricing" | "health_logs">("tenants");

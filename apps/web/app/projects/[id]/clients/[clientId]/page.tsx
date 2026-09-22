@@ -47,7 +47,7 @@ import AppLayout from "../../../../../components/layout/app-layout";
 import { useProject } from "../../../../../context/project-context";
 import { INITIAL_CLIENTS, ClientProfile, ClientOwnedUnit, QuoteRecord } from "../../../../../data/projects-data";
 import { exportTableToExcel, exportTableToPDF } from "../../../../../lib/export-utils";
-import { generateQuotePDF } from "../../../../../lib/pdf-generator";
+import { generateQuotePDF, generateReceiptPDF } from "../../../../../lib/pdf-generator";
 import { InfoTooltip } from "../../../../../components/ui/tooltip";
 import CurrencyInput from "../../../../../components/ui/currency-input";
 import { DevioDatePicker } from "../../../../../components/ui/devio-date-picker";
@@ -580,18 +580,23 @@ export default function ClientDetailPage() {
       }));
     }
     const invUnit = project?.unitsInventory?.find((u) => u.unit === selectedUnit);
-    if (invUnit && (invUnit.salePaidAmount || 0) > 0) {
+    const totalPaid = (currentSale?.paidAmount || 0) > 0 ? (currentSale?.paidAmount || 0) : (invUnit?.salePaidAmount || 0);
+    if (totalPaid > 0) {
+      const saleDate = currentSale?.saleDate || invUnit?.saleDate;
+      const formattedDate = saleDate
+        ? new Date(saleDate).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })
+        : new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
       return [
         {
           id: `pay-${selectedUnit}-init`,
-          fechaPago: invUnit.saleDate ? new Date(invUnit.saleDate).toLocaleDateString("es-MX") : "17 Ago 2026",
+          fechaPago: formattedDate,
           metodoPago: "Transferencia SPEI",
-          monto: invUnit.salePaidAmount || 0,
+          monto: totalPaid,
           unit: selectedUnit,
-          reciboFolio: "REC-2026-001",
+          reciboFolio: `REC-${(currentSale?.id || selectedUnit || "001").replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}`,
           notes: "Pago de enganche inicial",
-          scheduledAmount: invUnit.salePaidAmount || 0,
-          scheduledDate: "17 Ago 2026",
+          scheduledAmount: totalPaid,
+          scheduledDate: formattedDate,
         },
       ];
     }
@@ -4002,8 +4007,28 @@ export default function ClientDetailPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    showToast("Descarga Lista", "Se descargó el recibo en formato PDF.");
+                  onClick={async () => {
+                    try {
+                      showToast("Generando Recibo...", "Preparando documento oficial para descarga.", "info");
+                      await generateReceiptPDF({
+                        folio: selectedReceiptForView.reciboFolio || `REC-${Date.now().toString().slice(-6)}`,
+                        projectName: project?.name || "Proyecto Inmobiliario",
+                        unitNumber: selectedReceiptForView.unit,
+                        clientName: rawClient.name,
+                        paymentMethod: selectedReceiptForView.metodoPago || "Transferencia SPEI",
+                        totalAmount: selectedReceiptForView.monto,
+                        capitalAmount: selectedReceiptForView.moratoryAmount
+                          ? selectedReceiptForView.monto - selectedReceiptForView.moratoryAmount
+                          : selectedReceiptForView.monto,
+                        interestAmount: selectedReceiptForView.moratoryAmount || 0,
+                        emissionDate: selectedReceiptForView.fechaPago,
+                        developerName: "Desarrolladora Inmobiliaria",
+                      });
+                      showToast("Descarga Lista", "Se descargó el recibo en formato PDF.", "success");
+                    } catch (err) {
+                      console.error("Error generating receipt PDF:", err);
+                      showToast("Error al Generar", "No se pudo generar el PDF del recibo.", "warning");
+                    }
                     setSelectedReceiptForView(null);
                   }}
                   style={{
