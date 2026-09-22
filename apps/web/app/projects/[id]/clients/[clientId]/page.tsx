@@ -42,12 +42,14 @@ import {
   Package,
   Box,
   ShieldAlert,
+  Send,
 } from "lucide-react";
 import AppLayout from "../../../../../components/layout/app-layout";
 import { useProject } from "../../../../../context/project-context";
 import { INITIAL_CLIENTS, ClientProfile, ClientOwnedUnit, QuoteRecord } from "../../../../../data/projects-data";
 import { exportTableToExcel, exportTableToPDF } from "../../../../../lib/export-utils";
 import { generateQuotePDF, generateReceiptPDF } from "../../../../../lib/pdf-generator";
+import { sendAndLogNotification } from "../../../../../lib/notifications";
 import { InfoTooltip } from "../../../../../components/ui/tooltip";
 import CurrencyInput from "../../../../../components/ui/currency-input";
 import { DevioDatePicker } from "../../../../../components/ui/devio-date-picker";
@@ -846,6 +848,79 @@ export default function ClientDetailPage() {
     });
     return list;
   }, [paymentsList, paymentSortField, paymentSortDirection]);
+
+  // Enviar recordatorio preventivo de cuota individual
+  const handleSendInstallmentReminder = async (item: InstallmentItem) => {
+    const targetEmail = rawClient.email || "acalderoncha@gmail.com";
+    showToast("Enviando Recordatorio...", `Despachando recordatorio de pago a ${rawClient.name}...`, "info");
+    const res = await sendAndLogNotification({
+      to: targetEmail,
+      templateAlias: "recordatorio-pago",
+      templateModel: {
+        nombre: rawClient.name,
+        correo: targetEmail,
+        proyecto: project?.name || "Proyecto Inmobiliario",
+        unidad: item.unit,
+        dias: 5,
+        fecha_vencimiento: item.fechaProgramada,
+        monto: formatMoney(item.montoPendiente),
+        concepto: item.concept || `Cuota ${item.unit}`,
+        login_link: typeof window !== "undefined" ? `${window.location.origin}/login` : "https://devio.lat/login",
+        logo_proyecto: project?.image?.startsWith("http") ? project.image : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg",
+        logo_desarrolladora: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg",
+        desarrolladora: project?.name ? `${project.name} (Desarrolladora)` : "Desarrolladora Inmobiliaria",
+        año: new Date().getFullYear().toString(),
+      },
+      triggerKey: "payments.upcoming_reminder",
+      triggerName: "Recordatorio Preventivo de Pago",
+      recipientName: rawClient.name,
+      developerName: project?.name || "Desarrolladora Inmobiliaria",
+      channel: "POSTMARK",
+    });
+
+    if (res.success) {
+      showToast("Recordatorio Enviado", `Se envió el recordatorio a ${targetEmail}.`, "success");
+    } else {
+      showToast("Error al Enviar", res.error || "No se pudo enviar el recordatorio.", "warning");
+    }
+  };
+
+  // Enviar aviso de mora de cuota individual
+  const handleSendInstallmentOverdueNotice = async (item: InstallmentItem) => {
+    const targetEmail = rawClient.email || "acalderoncha@gmail.com";
+    showToast("Enviando Aviso de Mora...", `Despachando aviso urgente a ${rawClient.name}...`, "info");
+    const res = await sendAndLogNotification({
+      to: targetEmail,
+      templateAlias: "moroso",
+      templateModel: {
+        nombre: rawClient.name,
+        correo: targetEmail,
+        proyecto: project?.name || "Proyecto Inmobiliario",
+        unidad: item.unit,
+        dias_vencido: 10,
+        fecha_vencimiento: item.fechaProgramada,
+        monto: formatMoney(item.montoPendiente),
+        concepto: item.concept || `Cuota Vencida ${item.unit}`,
+        interes_moratorio: item.interesMoratorio > 0 ? formatMoney(item.interesMoratorio) : "3%",
+        login_link: typeof window !== "undefined" ? `${window.location.origin}/login` : "https://devio.lat/login",
+        logo_proyecto: project?.image?.startsWith("http") ? project.image : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg",
+        logo_desarrolladora: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg",
+        desarrolladora: project?.name ? `${project.name} (Desarrolladora)` : "Desarrolladora Inmobiliaria",
+        año: new Date().getFullYear().toString(),
+      },
+      triggerKey: "payments.overdue_notice",
+      triggerName: "Aviso de Saldo Vencido / Moroso",
+      recipientName: rawClient.name,
+      developerName: project?.name || "Desarrolladora Inmobiliaria",
+      channel: "POSTMARK",
+    });
+
+    if (res.success) {
+      showToast("Aviso de Mora Enviado", `Se envió el aviso de morosidad a ${targetEmail}.`, "success");
+    } else {
+      showToast("Error al Enviar", res.error || "No se pudo enviar el aviso de mora.", "warning");
+    }
+  };
 
   // Excel Export Handler
   const handleExportStatementExcel = () => {
@@ -1991,29 +2066,77 @@ export default function ClientDetailPage() {
                             <Edit3 size={12} color="#2F80ED" /> Editar
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => setSelectedCuotaForAbonos(row)}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.35rem",
-                              backgroundColor: row.montoPagado > 0 ? "rgba(0, 196, 140, 0.12)" : "rgba(47, 128, 237, 0.08)",
-                              color: row.montoPagado > 0 ? "#00A877" : "#2F80ED",
-                              border: row.montoPagado > 0 ? "1px solid rgba(0, 196, 140, 0.25)" : "1px solid rgba(47, 128, 237, 0.2)",
-                              padding: "0.35rem 0.65rem",
-                              borderRadius: "0.5rem",
-                              fontSize: "0.74rem",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              transition: "all 0.15s ease",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            <FileText size={13} /> {row.montoPagado > 0 ? "Abonos" : "Detalle"}
-                          </button>
-                        </div>
-                      </td>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCuotaForAbonos(row)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                                backgroundColor: row.montoPagado > 0 ? "rgba(0, 196, 140, 0.12)" : "rgba(47, 128, 237, 0.08)",
+                                color: row.montoPagado > 0 ? "#00A877" : "#2F80ED",
+                                border: row.montoPagado > 0 ? "1px solid rgba(0, 196, 140, 0.25)" : "1px solid rgba(47, 128, 237, 0.2)",
+                                padding: "0.35rem 0.65rem",
+                                borderRadius: "0.5rem",
+                                fontSize: "0.74rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              <FileText size={13} /> {row.montoPagado > 0 ? "Abonos" : "Detalle"}
+                            </button>
+
+                            {row.status === "Atrasado" && (
+                              <button
+                                type="button"
+                                onClick={() => handleSendInstallmentOverdueNotice(row)}
+                                title="Enviar aviso formal de mora con cálculo de interés al comprador"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.3rem",
+                                  backgroundColor: "#FEF2F2",
+                                  color: "#DC2626",
+                                  border: "1px solid #FECACA",
+                                  padding: "0.35rem 0.6rem",
+                                  borderRadius: "0.5rem",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                <AlertTriangle size={12} /> Notificar Mora
+                              </button>
+                            )}
+
+                            {row.status === "Pendiente" && (
+                              <button
+                                type="button"
+                                onClick={() => handleSendInstallmentReminder(row)}
+                                title="Enviar recordatorio preventivo de pago al comprador"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.3rem",
+                                  backgroundColor: "rgba(47, 128, 237, 0.08)",
+                                  color: "#2F80ED",
+                                  border: "1px solid rgba(47, 128, 237, 0.25)",
+                                  padding: "0.35rem 0.6rem",
+                                  borderRadius: "0.5rem",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                <Send size={12} /> Recordar
+                              </button>
+                            )}
+                          </div>
+                        </td>
                     </tr>
                   ))}
                 </tbody>

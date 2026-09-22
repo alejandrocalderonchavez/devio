@@ -24,6 +24,10 @@ import {
   ExternalLink,
   FileText,
   Plus,
+  Mail,
+  Send,
+  BellRing,
+  AlertCircle,
 } from "lucide-react";
 import AppLayout from "../../../../components/layout/app-layout";
 import { useProject } from "../../../../context/project-context";
@@ -33,6 +37,7 @@ import { InfoTooltip } from "../../../../components/ui/tooltip";
 import { DevioDatePicker } from "../../../../components/ui/devio-date-picker";
 import { UploadPaymentsModal } from "../../../../components/payments/upload-payments-modal";
 import { generateReceiptPDF } from "../../../../lib/pdf-generator";
+import { sendAndLogNotification } from "../../../../lib/notifications";
 
 // Date range formatters
 const formatYYYYMMDD = (d: Date) => {
@@ -96,6 +101,110 @@ export default function ProjectPaymentsPage() {
   const [showEditAbonoModal, setShowEditAbonoModal] = useState(false);
   const [editingAbono, setEditingAbono] = useState<any | null>(null);
   const [localPayments, setLocalPayments] = useState<PaymentScheduleItem[] | null>(null);
+  const [isRunningCron, setIsRunningCron] = useState(false);
+
+  // Ejecutar cron de cobranza automática
+  const handleRunCronCobranza = async () => {
+    try {
+      setIsRunningCron(true);
+      showToast("Ejecutando Cobranza...", "Evaluando cuotas programadas y saldos vencidos...", "info");
+      const res = await fetch(`/api/cron/cobranza?projectId=${projectId}`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(
+          "Cobranza Ejecutada",
+          data.message || `Proceso completado. Recordatorios: ${data.summary?.remindersSent || 0}, Avisos de mora: ${data.summary?.overdueNoticesSent || 0}.`,
+          "success"
+        );
+      } else {
+        showToast("Error en Cobranza", data.error || "No se pudo ejecutar el proceso de cobranza.", "warning");
+      }
+    } catch (err: any) {
+      showToast("Error de Conexión", err.message || "Error al conectar con el servidor", "warning");
+    } finally {
+      setIsRunningCron(false);
+    }
+  };
+
+  // Enviar recordatorio preventivo individual
+  const handleSendPaymentReminder = async (payment: PaymentScheduleItem) => {
+    const payAny = payment as any;
+    const rawEmail = payAny.saleRecord?.clientEmail || (payAny.clientId?.includes("@") ? payAny.clientId : undefined);
+    const targetEmail = rawEmail || "acalderoncha@gmail.com";
+
+    showToast("Enviando Recordatorio...", `Despachando recordatorio a ${payment.clientName}...`, "info");
+    const res = await sendAndLogNotification({
+      to: targetEmail,
+      templateAlias: "recordatorio-pago",
+      templateModel: {
+        nombre: payment.clientName,
+        correo: targetEmail,
+        proyecto: project?.name || "Proyecto Inmobiliario",
+        unidad: payment.unit,
+        dias: 5,
+        fecha_vencimiento: payment.scheduledDate,
+        monto: formatMoney(payment.scheduledAmount - (payment.paidAmount || 0)),
+        concepto: payAny.concept || "Mensualidad Programada",
+        login_link: typeof window !== "undefined" ? `${window.location.origin}/login` : "https://devio.lat/login",
+        logo_proyecto: project?.image?.startsWith("http") ? project.image : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg",
+        logo_desarrolladora: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg",
+        desarrolladora: project?.name ? `${project.name} (Desarrolladora)` : "Desarrolladora Inmobiliaria",
+        año: new Date().getFullYear().toString(),
+      },
+      triggerKey: "payments.upcoming_reminder",
+      triggerName: "Recordatorio Preventivo de Pago",
+      recipientName: payment.clientName,
+      developerName: project?.name || "Desarrolladora Inmobiliaria",
+      channel: "POSTMARK",
+    });
+
+    if (res.success) {
+      showToast("Recordatorio Enviado", `Se envió el recordatorio a ${targetEmail}.`, "success");
+    } else {
+      showToast("Error al Enviar", res.error || "No se pudo enviar el correo de recordatorio.", "warning");
+    }
+  };
+
+  // Enviar aviso de morosidad individual
+  const handleSendOverdueNotice = async (payment: PaymentScheduleItem) => {
+    const payAny = payment as any;
+    const rawEmail = payAny.saleRecord?.clientEmail || (payAny.clientId?.includes("@") ? payAny.clientId : undefined);
+    const targetEmail = rawEmail || "acalderoncha@gmail.com";
+
+    const pending = (payment.scheduledAmount || 0) - (payment.paidAmount || 0);
+    showToast("Enviando Aviso de Mora...", `Despachando aviso urgente a ${payment.clientName}...`, "info");
+    const res = await sendAndLogNotification({
+      to: targetEmail,
+      templateAlias: "moroso",
+      templateModel: {
+        nombre: payment.clientName,
+        correo: targetEmail,
+        proyecto: project?.name || "Proyecto Inmobiliario",
+        unidad: payment.unit,
+        dias_vencido: 10,
+        fecha_vencimiento: payment.scheduledDate,
+        monto: formatMoney(pending),
+        concepto: (payment as any).concept || "Mensualidad Vencida",
+        interes_moratorio: "3%",
+        login_link: typeof window !== "undefined" ? `${window.location.origin}/login` : "https://devio.lat/login",
+        logo_proyecto: project?.image?.startsWith("http") ? project.image : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg",
+        logo_desarrolladora: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg",
+        desarrolladora: project?.name ? `${project.name} (Desarrolladora)` : "Desarrolladora Inmobiliaria",
+        año: new Date().getFullYear().toString(),
+      },
+      triggerKey: "payments.overdue_notice",
+      triggerName: "Aviso de Saldo Vencido / Moroso",
+      recipientName: payment.clientName,
+      developerName: project?.name || "Desarrolladora Inmobiliaria",
+      channel: "POSTMARK",
+    });
+
+    if (res.success) {
+      showToast("Aviso de Mora Enviado", `Se envió la notificación de mora a ${targetEmail}.`, "success");
+    } else {
+      showToast("Error al Enviar", res.error || "No se pudo enviar el aviso de mora.", "warning");
+    }
+  };
 
   // Helper date parser
   const parseDateFlexible = (dStr: string): Date | null => {
@@ -848,6 +957,30 @@ export default function ProjectPaymentsPage() {
                 )}
               </div>
 
+              {/* Botón Ejecutar Cobranza Automática (Cron) */}
+              <button
+                type="button"
+                onClick={handleRunCronCobranza}
+                disabled={isRunningCron}
+                title="Evalúa todas las cuotas y dispara recordatorios y avisos de mora programados"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  backgroundColor: isRunningCron ? "#E2E8F0" : "rgba(47, 128, 237, 0.08)",
+                  color: isRunningCron ? "#64748B" : "#2F80ED",
+                  border: "1.5px solid rgba(47, 128, 237, 0.3)",
+                  padding: "0.6rem 1.25rem",
+                  borderRadius: "9999px",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  cursor: isRunningCron ? "not-allowed" : "pointer",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <BellRing size={15} /> {isRunningCron ? "Procesando..." : "Ejecutar Cobranza"}
+              </button>
+
               {/* Botón Carga Masiva XLSX */}
               {hasPermission("payments.bulk_import") && (
                 <button
@@ -1297,29 +1430,79 @@ export default function ProjectPaymentsPage() {
                           )}
                         </td>
 
-                        {/* Botón Ver Abonos / Recibo */}
+                        {/* Botón Ver Abonos / Recibo / Notificar */}
                         <td style={{ padding: "0.75rem 1rem", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedPaymentForAbonos(p)}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.35rem",
-                              backgroundColor: p.paidAmount > 0 ? "rgba(0, 196, 140, 0.12)" : "rgba(47, 128, 237, 0.08)",
-                              color: p.paidAmount > 0 ? "#00A877" : "#2F80ED",
-                              border: p.paidAmount > 0 ? "1px solid rgba(0, 196, 140, 0.25)" : "1px solid rgba(47, 128, 237, 0.2)",
-                              padding: "0.35rem 0.75rem",
-                              borderRadius: "0.5rem",
-                              fontSize: "0.75rem",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              transition: "all 0.15s ease",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            <FileText size={13} /> {p.paidAmount > 0 ? "Ver Abonos" : "Detalle"}
-                          </button>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPaymentForAbonos(p)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                                backgroundColor: p.paidAmount > 0 ? "rgba(0, 196, 140, 0.12)" : "rgba(47, 128, 237, 0.08)",
+                                color: p.paidAmount > 0 ? "#00A877" : "#2F80ED",
+                                border: p.paidAmount > 0 ? "1px solid rgba(0, 196, 140, 0.25)" : "1px solid rgba(47, 128, 237, 0.2)",
+                                padding: "0.35rem 0.65rem",
+                                borderRadius: "0.5rem",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              <FileText size={13} /> {p.paidAmount > 0 ? "Abonos" : "Detalle"}
+                            </button>
+
+                            {p.status === "ATRASADO" && (
+                              <button
+                                type="button"
+                                onClick={() => handleSendOverdueNotice(p)}
+                                title="Enviar aviso formal de mora con intereses por correo"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.3rem",
+                                  backgroundColor: "#FEF2F2",
+                                  color: "#DC2626",
+                                  border: "1px solid #FECACA",
+                                  padding: "0.35rem 0.6rem",
+                                  borderRadius: "0.5rem",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                <AlertTriangle size={12} /> Notificar Mora
+                              </button>
+                            )}
+
+                            {p.status === "PENDIENTE" && (
+                              <button
+                                type="button"
+                                onClick={() => handleSendPaymentReminder(p)}
+                                title="Enviar recordatorio preventivo de pago por correo"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.3rem",
+                                  backgroundColor: "rgba(47, 128, 237, 0.08)",
+                                  color: "#2F80ED",
+                                  border: "1px solid rgba(47, 128, 237, 0.25)",
+                                  padding: "0.35rem 0.6rem",
+                                  borderRadius: "0.5rem",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                <Send size={12} /> Recordar
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
