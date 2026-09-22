@@ -149,8 +149,177 @@ export default function SettingsPage() {
     setShowAddEditPlanModal(true);
   };
 
+  // Cálculos de validación en tiempo real y sugerencias de corrección para el plan de pagos en Settings
+  const planValidation = useMemo(() => {
+    const down = Number(planForm.downPaymentPct) || 0;
+    const settlement = Number(planForm.balloonLiquidationPct) || 0;
+    const plazos = Number(planForm.installmentsCount) || 0;
+    const sumDownSettlement = down + settlement;
+    const remainingPct = 100 - sumDownSettlement;
+    const totalPct = down + (plazos > 0 ? Math.max(0, remainingPct) : 0) + settlement;
+
+    if (!planForm.name.trim()) {
+      return {
+        isValid: false,
+        errorTitle: "Nombre requerido",
+        errorMessage: "Ingresa un nombre para identificar este plan de pago.",
+        fixes: [] as { label: string; action: () => void }[],
+        downPct: down,
+        installmentsPct: Math.max(0, remainingPct),
+        settlementPct: settlement,
+        totalPct,
+      };
+    }
+
+    if (down <= 0) {
+      return {
+        isValid: false,
+        errorTitle: "Enganche requerido",
+        errorMessage: "El enganche debe ser mayor a 0% para un esquema de pagos.",
+        fixes: [
+          {
+            label: "Asignar 20% de Enganche",
+            action: () => setPlanForm((prev) => ({
+              ...prev,
+              downPaymentPct: 20,
+              balloonLiquidationPct: Math.min(prev.balloonLiquidationPct, 80),
+            })),
+          },
+          {
+            label: "Plan 100% Contado (100% Enganche)",
+            action: () => setPlanForm((prev) => ({
+              ...prev,
+              downPaymentPct: 100,
+              balloonLiquidationPct: 0,
+              installmentsCount: 0,
+            })),
+          },
+        ],
+        downPct: down,
+        installmentsPct: Math.max(0, remainingPct),
+        settlementPct: settlement,
+        totalPct,
+      };
+    }
+
+    if (sumDownSettlement > 100) {
+      const excess = sumDownSettlement - 100;
+      return {
+        isValid: false,
+        errorTitle: "Porcentajes excedidos (>100%)",
+        errorMessage: `El Enganche (${down}%) y la Liquidación (${settlement}%) suman ${sumDownSettlement}%, excediendo el 100% total por ${excess}%. Las mensualidades quedarían en ${remainingPct}%, lo cual es inválido.`,
+        fixes: [
+          {
+            label: `Ajustar Liquidación a ${Math.max(0, 100 - down)}%`,
+            action: () => setPlanForm((prev) => ({
+              ...prev,
+              balloonLiquidationPct: Math.max(0, 100 - down),
+            })),
+          },
+          {
+            label: `Ajustar Enganche a ${Math.max(0, 100 - settlement)}%`,
+            action: () => setPlanForm((prev) => ({
+              ...prev,
+              downPaymentPct: Math.max(0, 100 - settlement),
+            })),
+          },
+          {
+            label: `Distribuir: ${down}% Enganche / ${Math.floor((100 - down) / 2)}% Mensualidades / ${100 - down - Math.floor((100 - down) / 2)}% Liquidación`,
+            action: () => {
+              const half = Math.floor((100 - down) / 2);
+              setPlanForm((prev) => ({
+                ...prev,
+                balloonLiquidationPct: 100 - down - half,
+                installmentsCount: plazos > 0 ? plazos : 12,
+              }));
+            },
+          },
+        ],
+        downPct: down,
+        installmentsPct: remainingPct,
+        settlementPct: settlement,
+        totalPct: sumDownSettlement,
+      };
+    }
+
+    if (sumDownSettlement === 100 && plazos > 0) {
+      return {
+        isValid: false,
+        errorTitle: "Plazos sin porcentaje asignado (0%)",
+        errorMessage: `Definiste ${plazos} mensualidades, pero el Enganche (${down}%) y la Liquidación (${settlement}%) ya suman el 100%. No queda porcentaje para las mensualidades.`,
+        fixes: [
+          {
+            label: `Reducir Liquidación para dejar 40% en ${plazos} mensualidades (${(40 / plazos).toFixed(1)}% c/u)`,
+            action: () => setPlanForm((prev) => ({
+              ...prev,
+              balloonLiquidationPct: Math.max(0, 100 - down - 40),
+            })),
+          },
+          {
+            label: "Cambiar Mensualidades a 0 (Solo Enganche y Liquidación)",
+            action: () => setPlanForm((prev) => ({
+              ...prev,
+              installmentsCount: 0,
+            })),
+          },
+        ],
+        downPct: down,
+        installmentsPct: 0,
+        settlementPct: settlement,
+        totalPct: 100,
+      };
+    }
+
+    if (sumDownSettlement < 100 && plazos === 0) {
+      return {
+        isValid: false,
+        errorTitle: "Porcentaje flotante sin mensualidades",
+        errorMessage: `Queda un ${remainingPct}% pendiente de asignar porque el número de mensualidades es 0. Debes asignar mensualidades o sumar el ${remainingPct}% a la liquidación.`,
+        fixes: [
+          {
+            label: `Sumar ${remainingPct}% a la Liquidación (Total: ${settlement + remainingPct}%)`,
+            action: () => setPlanForm((prev) => ({
+              ...prev,
+              balloonLiquidationPct: 100 - down,
+            })),
+          },
+          {
+            label: `Asignar 12 mensualidades para cubrir el ${remainingPct}% (${(remainingPct / 12).toFixed(1)}% c/u)`,
+            action: () => setPlanForm((prev) => ({
+              ...prev,
+              installmentsCount: 12,
+            })),
+          },
+          {
+            label: `Asignar 24 mensualidades para cubrir el ${remainingPct}% (${(remainingPct / 24).toFixed(1)}% c/u)`,
+            action: () => setPlanForm((prev) => ({
+              ...prev,
+              installmentsCount: 24,
+            })),
+          },
+        ],
+        downPct: down,
+        installmentsPct: remainingPct,
+        settlementPct: settlement,
+        totalPct: sumDownSettlement,
+      };
+    }
+
+    return {
+      isValid: true,
+      errorTitle: null,
+      errorMessage: null,
+      fixes: [] as { label: string; action: () => void }[],
+      downPct: down,
+      installmentsPct: remainingPct,
+      settlementPct: settlement,
+      totalPct: 100,
+    };
+  }, [planForm]);
+
   const handleSavePlan = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!planValidation.isValid) return;
     if (!planForm.name.trim()) {
       alert("Por favor ingresa un nombre para el plan.");
       return;
@@ -2578,32 +2747,101 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Live Schema Balance Card */}
-                {(() => {
-                  const monthlyPct = Math.max(0, 100 - planForm.downPaymentPct - planForm.balloonLiquidationPct);
-                  const isBalanced = planForm.downPaymentPct + planForm.balloonLiquidationPct <= 100;
-                  return (
-                    <div
-                      style={{
-                        padding: "0.75rem 1rem",
-                        borderRadius: "0.65rem",
-                        backgroundColor: isBalanced ? "#F8FAFC" : "#FFF5F5",
-                        border: isBalanced ? "1px solid #E2E8F0" : "1px solid #FEE2E2",
-                        fontSize: "0.78rem",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
-                        <span style={{ fontWeight: 700, color: "#1F3652" }}>Estructura del Plan:</span>
-                        <strong style={{ color: isBalanced ? "#00C48C" : "#EF4444" }}>
-                          {isBalanced ? "✓ Cuadra al 100%" : "⚠ Enganche + Liquidación supera el 100%"}
-                        </strong>
+                {/* Live Schema Balance Card & Distribution */}
+                <div
+                  style={{
+                    padding: "0.85rem 1rem",
+                    borderRadius: "0.65rem",
+                    backgroundColor: planValidation.isValid ? "#F8FAFC" : "#FFF5F5",
+                    border: planValidation.isValid ? "1px solid #E2E8F0" : "1px solid #FCA5A5",
+                    fontSize: "0.78rem",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                    <span style={{ fontWeight: 700, color: "#1F3652" }}>
+                      Distribución: Enganche ({planForm.downPaymentPct}%) + {planForm.installmentsCount > 0 ? `${planForm.installmentsCount} Mensualidades (${planValidation.installmentsPct}%)` : "Sin mensualidades"} + Liquidación ({planForm.balloonLiquidationPct}%)
+                    </span>
+                    <strong style={{ color: planValidation.isValid ? "#00C48C" : "#EF4444" }}>
+                      {planValidation.isValid ? "✓ Total: 100%" : `⚠ Total: ${planValidation.totalPct}%`}
+                    </strong>
+                  </div>
+                  <div style={{ height: "8px", backgroundColor: "#E2E8F0", borderRadius: "4px", display: "flex", overflow: "hidden", marginBottom: "0.4rem" }}>
+                    <div style={{ width: `${Math.max(0, Math.min(100, planForm.downPaymentPct))}%`, backgroundColor: "#2F80ED" }} title={`Enganche: ${planForm.downPaymentPct}%`} />
+                    <div style={{ width: `${Math.max(0, Math.min(100, planValidation.installmentsPct))}%`, backgroundColor: "#F2C94C" }} title={`Mensualidades: ${planValidation.installmentsPct}%`} />
+                    <div style={{ width: `${Math.max(0, Math.min(100, planForm.balloonLiquidationPct))}%`, backgroundColor: "#00C48C" }} title={`Liquidación: ${planForm.balloonLiquidationPct}%`} />
+                  </div>
+                  {planValidation.isValid && planForm.installmentsCount > 0 && planValidation.installmentsPct > 0 && (
+                    <span style={{ color: "#64748B", fontSize: "0.74rem" }}>
+                      Cada mensualidad es del {(planValidation.installmentsPct / planForm.installmentsCount).toFixed(2)}% del valor del inmueble.
+                    </span>
+                  )}
+                </div>
+
+                {/* ALERTA DE ERROR Y SUGERENCIAS DE CORRECCIÓN RÁPIDA (1-CLIC) */}
+                {!planValidation.isValid && planValidation.errorMessage && (
+                  <div
+                    style={{
+                      backgroundColor: "#FEF2F2",
+                      border: "1px solid #F87171",
+                      borderRadius: "0.65rem",
+                      padding: "0.85rem 1rem",
+                      animation: "fadeIn 0.2s ease-in-out",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem" }}>
+                      <AlertCircle size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: "2px" }} />
+                      <div style={{ flex: 1 }}>
+                        <h5 style={{ margin: "0 0 0.2rem", fontSize: "0.84rem", fontWeight: 700, color: "#991B1B" }}>
+                          {planValidation.errorTitle}
+                        </h5>
+                        <p style={{ margin: 0, fontSize: "0.78rem", color: "#B91C1C", lineHeight: 1.4 }}>
+                          {planValidation.errorMessage}
+                        </p>
+
+                        {planValidation.fixes.length > 0 && (
+                          <div style={{ marginTop: "0.6rem" }}>
+                            <span style={{ fontSize: "0.73rem", fontWeight: 700, color: "#7F1D1D", display: "block", marginBottom: "0.35rem" }}>
+                              💡 Sugerencias de corrección rápida (1-clic):
+                            </span>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                              {planValidation.fixes.map((fix, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={fix.action}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.35rem",
+                                    backgroundColor: "#FFFFFF",
+                                    border: "1px solid #FCA5A5",
+                                    color: "#991B1B",
+                                    borderRadius: "6px",
+                                    padding: "0.35rem 0.65rem",
+                                    fontSize: "0.74rem",
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                    transition: "all 0.15s ease",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = "#FEE2E2";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = "#FFFFFF";
+                                  }}
+                                >
+                                  <Sparkles size={13} color="#DC2626" />
+                                  {fix.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <span style={{ color: "#64748B" }}>
-                        {planForm.downPaymentPct}% Enganche + {planForm.installmentsCount} Mensualidades ({monthlyPct}%) + {planForm.balloonLiquidationPct}% Liquidación = 100%
-                      </span>
                     </div>
-                  );
-                })()}
+                  </div>
+                )}
 
                 {/* Descripción / Notas */}
                 <div>
@@ -2657,6 +2895,7 @@ export default function SettingsPage() {
                   </button>
                   <button
                     type="submit"
+                    disabled={!planValidation.isValid}
                     style={{
                       padding: "0.6rem 1.5rem",
                       borderRadius: "9999px",
@@ -2665,7 +2904,8 @@ export default function SettingsPage() {
                       fontSize: "0.82rem",
                       fontWeight: 700,
                       border: "none",
-                      cursor: "pointer",
+                      cursor: planValidation.isValid ? "pointer" : "not-allowed",
+                      opacity: planValidation.isValid ? 1 : 0.45,
                     }}
                   >
                     {editingPlanId ? "Guardar Cambios" : "Crear Plan"}

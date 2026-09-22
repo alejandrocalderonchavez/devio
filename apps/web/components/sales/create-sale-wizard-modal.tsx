@@ -460,10 +460,155 @@ export default function CreateSaleWizardModal({
     return `${y}-${m}-${dayStr}`;
   };
 
+  // Cálculos de validación en tiempo real y sugerencias de corrección para el plan de pagos de venta
+  const planValidation = useMemo(() => {
+    const down = Number(downPaymentPct) || 0;
+    const settlement = Number(balloonLiquidationPct) || 0;
+    const plazos = Number(installmentsCount) || 0;
+    const sumDownSettlement = down + settlement;
+    const remainingPct = 100 - sumDownSettlement;
+    const totalPct = down + (plazos > 0 ? Math.max(0, remainingPct) : 0) + settlement;
+
+    if (down <= 0) {
+      return {
+        isValid: false,
+        errorTitle: "Enganche requerido",
+        errorMessage: "El enganche debe ser mayor a 0% para el esquema de pago.",
+        fixes: [
+          {
+            label: "Asignar 20% de Enganche",
+            action: () => {
+              setDownPaymentPct(20);
+              setBalloonLiquidationPct((prev) => Math.min(prev, 80));
+              setSelectedPlanId("custom");
+              setCustomPlanName("Plan Personalizado");
+            },
+          },
+        ],
+        downPct: down,
+        installmentsPct: Math.max(0, remainingPct),
+        settlementPct: settlement,
+        totalPct,
+      };
+    }
+
+    if (sumDownSettlement > 100) {
+      const excess = sumDownSettlement - 100;
+      return {
+        isValid: false,
+        errorTitle: "Porcentajes excedidos (>100%)",
+        errorMessage: `El Enganche (${down}%) y la Liquidación (${settlement}%) suman ${sumDownSettlement}%, excediendo el 100% total por ${excess}%.`,
+        fixes: [
+          {
+            label: `Ajustar Liquidación a ${Math.max(0, 100 - down)}%`,
+            action: () => {
+              setBalloonLiquidationPct(Math.max(0, 100 - down));
+              setSelectedPlanId("custom");
+              setCustomPlanName("Plan Personalizado");
+            },
+          },
+          {
+            label: `Ajustar Enganche a ${Math.max(0, 100 - settlement)}%`,
+            action: () => {
+              setDownPaymentPct(Math.max(0, 100 - settlement));
+              setSelectedPlanId("custom");
+              setCustomPlanName("Plan Personalizado");
+            },
+          },
+          {
+            label: `Distribuir: ${down}% Enganche / ${Math.floor((100 - down) / 2)}% Mensualidades / ${100 - down - Math.floor((100 - down) / 2)}% Liquidación`,
+            action: () => {
+              const half = Math.floor((100 - down) / 2);
+              setBalloonLiquidationPct(100 - down - half);
+              setInstallmentsCount(plazos > 0 ? plazos : 12);
+              setSelectedPlanId("custom");
+              setCustomPlanName("Plan Personalizado");
+            },
+          },
+        ],
+        downPct: down,
+        installmentsPct: remainingPct,
+        settlementPct: settlement,
+        totalPct: sumDownSettlement,
+      };
+    }
+
+    if (sumDownSettlement === 100 && plazos > 0) {
+      return {
+        isValid: false,
+        errorTitle: "Plazos sin porcentaje asignado (0%)",
+        errorMessage: `Definiste ${plazos} mensualidades, pero el Enganche (${down}%) y la Liquidación (${settlement}%) ya suman el 100%. No queda porcentaje para mensualidades.`,
+        fixes: [
+          {
+            label: `Reducir Liquidación para dejar 40% en ${plazos} mensualidades (${(40 / plazos).toFixed(1)}% c/u)`,
+            action: () => {
+              setBalloonLiquidationPct(Math.max(0, 100 - down - 40));
+              setSelectedPlanId("custom");
+              setCustomPlanName("Plan Personalizado");
+            },
+          },
+          {
+            label: "Cambiar Mensualidades a 0",
+            action: () => {
+              setInstallmentsCount(0);
+              setSelectedPlanId("custom");
+              setCustomPlanName("Plan Personalizado");
+            },
+          },
+        ],
+        downPct: down,
+        installmentsPct: 0,
+        settlementPct: settlement,
+        totalPct: 100,
+      };
+    }
+
+    if (sumDownSettlement < 100 && plazos === 0) {
+      return {
+        isValid: false,
+        errorTitle: "Porcentaje flotante sin mensualidades",
+        errorMessage: `Queda un ${remainingPct}% pendiente de asignar porque el número de mensualidades es 0.`,
+        fixes: [
+          {
+            label: `Sumar ${remainingPct}% a la Liquidación (Total: ${settlement + remainingPct}%)`,
+            action: () => {
+              setBalloonLiquidationPct(100 - down);
+              setSelectedPlanId("custom");
+              setCustomPlanName("Plan Personalizado");
+            },
+          },
+          {
+            label: `Asignar 12 mensualidades para cubrir el ${remainingPct}% (${(remainingPct / 12).toFixed(1)}% c/u)`,
+            action: () => {
+              setInstallmentsCount(12);
+              setSelectedPlanId("custom");
+              setCustomPlanName("Plan Personalizado");
+            },
+          },
+        ],
+        downPct: down,
+        installmentsPct: remainingPct,
+        settlementPct: settlement,
+        totalPct: sumDownSettlement,
+      };
+    }
+
+    return {
+      isValid: true,
+      errorTitle: null,
+      errorMessage: null,
+      fixes: [] as { label: string; action: () => void }[],
+      downPct: down,
+      installmentsPct: remainingPct,
+      settlementPct: settlement,
+      totalPct: 100,
+    };
+  }, [downPaymentPct, balloonLiquidationPct, installmentsCount]);
+
   const generateSchedule = () => {
     const downPayment = Math.round(netTotalSaleAmount * (downPaymentPct / 100));
     const liquidation = Math.round(netTotalSaleAmount * (balloonLiquidationPct / 100));
-    const remainingForInstallments = netTotalSaleAmount - downPayment - liquidation;
+    const remainingForInstallments = Math.max(0, netTotalSaleAmount - downPayment - liquidation);
     const monthlyAmount = installmentsCount > 0 ? remainingForInstallments / installmentsCount : 0;
 
     const rows: PaymentRow[] = [];
@@ -1821,12 +1966,110 @@ export default function CreateSaleWizardModal({
                     />
                   </div>
 
+                  {/* Live Schema Balance Card & Distribution */}
+                  <div
+                    style={{
+                      gridColumn: "1 / -1",
+                      padding: "0.85rem 1rem",
+                      borderRadius: "0.65rem",
+                      backgroundColor: planValidation.isValid ? "rgba(255, 255, 255, 0.8)" : "#FFF5F5",
+                      border: planValidation.isValid ? "1px solid var(--devio-neutral-2)" : "1px solid #FCA5A5",
+                      fontSize: "0.78rem",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                      <span style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                        Distribución: Enganche ({downPaymentPct}%) + {installmentsCount > 0 ? `${installmentsCount} Mensualidades (${planValidation.installmentsPct}%)` : "Sin mensualidades"} + Liquidación ({balloonLiquidationPct}%)
+                      </span>
+                      <strong style={{ color: planValidation.isValid ? "var(--devio-green)" : "var(--devio-red)" }}>
+                        {planValidation.isValid ? "✓ Total: 100%" : `⚠ Total: ${planValidation.totalPct}%`}
+                      </strong>
+                    </div>
+                    <div style={{ height: "8px", backgroundColor: "#E2E8F0", borderRadius: "4px", display: "flex", overflow: "hidden", marginBottom: "0.4rem" }}>
+                      <div style={{ width: `${Math.max(0, Math.min(100, downPaymentPct))}%`, backgroundColor: "#2F80ED" }} title={`Enganche: ${downPaymentPct}%`} />
+                      <div style={{ width: `${Math.max(0, Math.min(100, planValidation.installmentsPct))}%`, backgroundColor: "#F2C94C" }} title={`Mensualidades: ${planValidation.installmentsPct}%`} />
+                      <div style={{ width: `${Math.max(0, Math.min(100, balloonLiquidationPct))}%`, backgroundColor: "#00C48C" }} title={`Liquidación: ${balloonLiquidationPct}%`} />
+                    </div>
+                    {planValidation.isValid && installmentsCount > 0 && planValidation.installmentsPct > 0 && (
+                      <span style={{ color: "var(--text-muted)", fontSize: "0.74rem" }}>
+                        Cada mensualidad es del {(planValidation.installmentsPct / installmentsCount).toFixed(2)}% del valor neto a liquidar.
+                      </span>
+                    )}
+                  </div>
+
+                  {/* ALERTA DE ERROR Y SUGERENCIAS DE CORRECCIÓN RÁPIDA (1-CLIC) */}
+                  {!planValidation.isValid && planValidation.errorMessage && (
+                    <div
+                      style={{
+                        gridColumn: "1 / -1",
+                        backgroundColor: "#FEF2F2",
+                        border: "1px solid #F87171",
+                        borderRadius: "0.65rem",
+                        padding: "0.85rem 1rem",
+                        animation: "fadeIn 0.2s ease-in-out",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem" }}>
+                        <AlertCircle size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: "2px" }} />
+                        <div style={{ flex: 1 }}>
+                          <h5 style={{ margin: "0 0 0.2rem", fontSize: "0.84rem", fontWeight: 700, color: "#991B1B" }}>
+                            {planValidation.errorTitle}
+                          </h5>
+                          <p style={{ margin: 0, fontSize: "0.78rem", color: "#B91C1C", lineHeight: 1.4 }}>
+                            {planValidation.errorMessage}
+                          </p>
+
+                          {planValidation.fixes.length > 0 && (
+                            <div style={{ marginTop: "0.6rem" }}>
+                              <span style={{ fontSize: "0.73rem", fontWeight: 700, color: "#7F1D1D", display: "block", marginBottom: "0.35rem" }}>
+                                💡 Sugerencias de corrección rápida (1-clic):
+                              </span>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                                {planValidation.fixes.map((fix, idx) => (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={fix.action}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.35rem",
+                                      backgroundColor: "#FFFFFF",
+                                      border: "1px solid #FCA5A5",
+                                      color: "#991B1B",
+                                      borderRadius: "6px",
+                                      padding: "0.35rem 0.65rem",
+                                      fontSize: "0.74rem",
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                      transition: "all 0.15s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.backgroundColor = "#FEE2E2";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.backgroundColor = "#FFFFFF";
+                                    }}
+                                  >
+                                    <Sparkles size={13} color="#DC2626" />
+                                    {fix.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Discount Scope Option */}
                   {discountPct > 0 && (
                     <div
                       style={{
                         gridColumn: "1 / -1",
-                        marginTop: "0.75rem",
+                        marginTop: "0.25rem",
                         padding: "0.75rem 1rem",
                         borderRadius: "0.65rem",
                         backgroundColor: "rgba(47, 128, 237, 0.05)",
@@ -2445,6 +2688,12 @@ export default function CreateSaleWizardModal({
                   }
                   if (isCoOwnership && !isOwnershipBalanced) {
                     alert(`El porcentaje total de copropiedad debe sumar 100%. Actualmente suma ${totalOwnershipPct}%.`);
+                    return;
+                  }
+                }
+                if (currentStep === 3) {
+                  if (!planValidation.isValid) {
+                    alert(planValidation.errorMessage || "Por favor corrige la distribución de porcentajes del plan de pago.");
                     return;
                   }
                 }
