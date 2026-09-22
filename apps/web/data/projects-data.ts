@@ -143,8 +143,44 @@ export interface ProjectItem {
   unitsInventory: UnitItem[];
   additionals?: ProjectAdditional[];
   sales?: SaleRecord[];
+  quotes?: QuoteRecord[];
   floorPlans?: ProjectFloorPlan[];
   documents?: ProjectDocument[];
+}
+
+export interface QuoteRecord {
+  id: string;
+  folio: string;
+  projectId: string;
+  projectName: string;
+  unit: string;
+  unitType: string;
+  superficieM2: number;
+  deliveryDate?: string;
+  clientName: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  clientRfc?: string;
+  advisorName: string;
+  advisorEmail?: string;
+  advisorPhone?: string;
+  listPrice: number;
+  discountPct: number;
+  discountAmount: number;
+  totalQuoteAmount: number;
+  planName: string;
+  downPaymentPct: number;
+  downPaymentAmount: number;
+  installmentsCount: number;
+  installmentAmount: number;
+  periodicity: string;
+  settlementPct: number;
+  settlementAmount: number;
+  additionals?: Array<{ id?: string; name: string; price: number }>;
+  status: "VIGENTE" | "EXPIRADA" | "CONVERTIDA_A_VENTA" | "RECHAZADA";
+  createdAt: string; // ISO format
+  expiresAt: string; // ISO format
+  pdfUrl?: string;
 }
 
 export interface ClientOwnedUnit {
@@ -1096,6 +1132,104 @@ export const INITIAL_PROJECTS: ProjectItem[] = [
         acabadosPct: 5,
         targetScope: "PROJECT",
         emailSent: true,
+      },
+    ],
+    quotes: [
+      {
+        id: "quote-1",
+        folio: "COT-2026-1048",
+        projectId: "p-1",
+        projectName: "Castellana Residencial",
+        unit: "1A",
+        unitType: "Departamento",
+        superficieM2: 75,
+        deliveryDate: "15/05/2028",
+        clientName: "Hugo Heredia Horner",
+        clientEmail: "hheredia@hyhconsultores.com",
+        clientPhone: "3322567568",
+        clientRfc: "HEHH820412AA1",
+        advisorName: "Lizbeth Balderas",
+        advisorEmail: "ventas@castellana.mx",
+        advisorPhone: "3331234567",
+        listPrice: 2444597,
+        discountPct: 0,
+        discountAmount: 0,
+        totalQuoteAmount: 2444597,
+        planName: "Plan Preventa",
+        downPaymentPct: 20,
+        downPaymentAmount: 488919,
+        installmentsCount: 12,
+        installmentAmount: 101858,
+        periodicity: "Mensual",
+        settlementPct: 30,
+        settlementAmount: 733379,
+        status: "VIGENTE",
+        createdAt: "2026-09-18T10:00:00.000Z",
+        expiresAt: "2026-10-18T10:00:00.000Z",
+      },
+      {
+        id: "quote-2",
+        folio: "COT-2026-1035",
+        projectId: "p-1",
+        projectName: "Castellana Residencial",
+        unit: "2A",
+        unitType: "Departamento",
+        superficieM2: 75,
+        deliveryDate: "15/05/2028",
+        clientName: "Inigo Heredia Horner",
+        clientEmail: "0242573@up.edu.mx",
+        clientPhone: "3322567499",
+        clientRfc: "HEHI950718BB2",
+        advisorName: "Carlos Mendoza",
+        advisorEmail: "carlos@castellana.mx",
+        advisorPhone: "3339876543",
+        listPrice: 2550000,
+        discountPct: 0,
+        discountAmount: 0,
+        totalQuoteAmount: 2550000,
+        planName: "Plan Inversionista",
+        downPaymentPct: 50,
+        downPaymentAmount: 1275000,
+        installmentsCount: 24,
+        installmentAmount: 53125,
+        periodicity: "Mensual",
+        settlementPct: 0,
+        settlementAmount: 0,
+        status: "CONVERTIDA_A_VENTA",
+        createdAt: "2026-09-12T14:30:00.000Z",
+        expiresAt: "2026-10-12T14:30:00.000Z",
+      },
+      {
+        id: "quote-3",
+        folio: "COT-2026-1012",
+        projectId: "p-1",
+        projectName: "Castellana Residencial",
+        unit: "4A",
+        unitType: "Departamento",
+        superficieM2: 85,
+        deliveryDate: "15/05/2028",
+        clientName: "Mariana Soto Valenzuela",
+        clientEmail: "mariana.soto@gmail.com",
+        clientPhone: "3315559988",
+        clientRfc: "SOVM880415ABC",
+        advisorName: "Lizbeth Balderas",
+        advisorEmail: "ventas@castellana.mx",
+        advisorPhone: "3331234567",
+        listPrice: 2890000,
+        discountPct: 0,
+        discountAmount: 0,
+        totalQuoteAmount: 2890000,
+        planName: "Plan Tradicional",
+        downPaymentPct: 30,
+        downPaymentAmount: 867000,
+        installmentsCount: 18,
+        installmentAmount: 80277,
+        periodicity: "Mensual",
+        settlementPct: 20,
+        settlementAmount: 578000,
+        status: "EXPIRADA",
+        createdAt: "2026-08-10T09:15:00.000Z",
+        expiresAt: "2026-09-10T09:15:00.000Z",
       },
     ],
   },

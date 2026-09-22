@@ -33,8 +33,7 @@ import {
 import { DevioDatePicker } from "../ui/devio-date-picker";
 import PhoneInput from "../ui/phone-input";
 import CurrencyInput from "../ui/currency-input";
-import { UnitItem } from "./bulk-price-modal";
-import { CoOwner, ProjectAdditional } from "../../data/projects-data";
+import { CoOwner, ProjectAdditional, QuoteRecord, UnitItem } from "../../data/projects-data";
 import { useProject } from "../../context/project-context";
 import { generateQuotePDF } from "../../lib/pdf-generator";
 
@@ -42,6 +41,7 @@ export interface QuoteUnitWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
   unit: UnitItem | null;
+  projectId?: string;
   projectName?: string;
   currency?: "MXN" | "USD";
   initialAdditionals?: ProjectAdditional[];
@@ -66,6 +66,7 @@ export default function QuoteUnitWizardModal({
   isOpen,
   onClose,
   unit,
+  projectId,
   projectName = "Proyecto",
   currency = "MXN",
   initialAdditionals = [],
@@ -205,7 +206,7 @@ export default function QuoteUnitWizardModal({
   // --------------------------------------------------------------------------
   // STEP 3: PLAN DE PAGO
   // --------------------------------------------------------------------------
-  const { paymentPlans = [] } = useProject();
+  const { paymentPlans = [], addQuote, projects = [], userName = "Asesor Comercial", userEmail = "ventas@devio.mx" } = useProject();
   const activeDeveloperPlans = useMemo(() => paymentPlans.filter((p) => p.isActive), [paymentPlans]);
 
   const [selectedPlanId, setSelectedPlanId] = useState<string>("custom");
@@ -513,6 +514,73 @@ export default function QuoteUnitWizardModal({
 
   const handleSendQuote = () => {
     setIsSending(true);
+    const targetProjId = projectId || (projects.length > 0 && projects[0]?.id ? projects[0].id : "p-1");
+    const targetProj = projects.find((p) => p.id === targetProjId);
+    const projName = projectName !== "Proyecto" ? projectName : (targetProj?.name || "Proyecto");
+
+    const downPaymentAmt = Math.round(netTotalQuoteAmount * (downPaymentPct / 100));
+    const settlementAmt = Math.round(netTotalQuoteAmount * (balloonLiquidationPct / 100));
+    const instAmt = installmentsCount > 0
+      ? Math.round(((netTotalQuoteAmount - downPaymentAmt - settlementAmt) / installmentsCount) * 100) / 100
+      : 0;
+
+    const newQuoteRecord: QuoteRecord = {
+      id: `quote-${Date.now()}`,
+      folio: quoteFolio,
+      projectId: targetProjId,
+      projectName: projName,
+      unit: unit.unit,
+      unitType: unit.type || "Departamento",
+      superficieM2: unit.areaM2 || 0,
+      deliveryDate: unit.deliveryDate,
+      clientName: primaryClient.name || "Cliente",
+      clientEmail: primaryClient.email || "",
+      clientPhone: primaryClient.phone || "",
+      clientRfc: primaryClient.rfc || "",
+      advisorName: userName || "Asesor Comercial",
+      advisorEmail: userEmail || "ventas@devio.mx",
+      listPrice: unitBasePrice,
+      discountPct,
+      discountAmount,
+      totalQuoteAmount: netTotalQuoteAmount,
+      planName: customPlanName || "Plan Personalizado",
+      downPaymentPct,
+      downPaymentAmount: downPaymentAmt,
+      installmentsCount,
+      installmentAmount: instAmt,
+      periodicity: "Mensual",
+      settlementPct: balloonLiquidationPct,
+      settlementAmount: settlementAmt,
+      additionals: selectedAdditionals.map((a) => ({ id: a.id, name: a.name, price: a.price })),
+      status: "VIGENTE",
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+
+    if (addQuote) {
+      addQuote(targetProjId, newQuoteRecord);
+    }
+
+    if (sendEmail && primaryClient.email) {
+      fetch("/api/notifications/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: primaryClient.email,
+          templateAlias: "nueva-cotizacion",
+          templateModel: {
+            nombre_cliente: primaryClient.name || "Cliente",
+            unidad: unit.unit,
+            proyecto: projName,
+            monto_total: netTotalQuoteAmount,
+            folio_cotizacion: quoteFolio,
+            nombre_asesor: userName || "Asesor Devio",
+            anio: new Date().getFullYear().toString(),
+          },
+        }),
+      }).catch((err) => console.error("Error sending quote notification:", err));
+    }
+
     setTimeout(() => {
       setIsSending(false);
       setIsSentSuccess(true);
@@ -524,6 +592,7 @@ export default function QuoteUnitWizardModal({
           coOwners: allOwnersCombined,
           total: netTotalQuoteAmount,
           schedule: paymentSchedule.map((row, idx) => ({ ...row, id: `quote-${unit.unit}-${row.id || idx}` })),
+          quoteRecord: newQuoteRecord,
         });
       }
     }, 700);

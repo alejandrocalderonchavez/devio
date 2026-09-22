@@ -15,6 +15,7 @@ import {
   ProjectFloorPlan,
   ProjectConstructionAdvance,
   ProjectDocument,
+  QuoteRecord,
 } from "../data/projects-data";
 import { PostventaIncident, INITIAL_INCIDENTS } from "../data/postventa-data";
 import {
@@ -178,6 +179,9 @@ interface ProjectContextType {
   updateProjectDocuments: (projectId: string, documents: ProjectDocument[]) => void;
   addProjectDocument: (projectId: string, doc: ProjectDocument) => void;
   deleteProjectDocument: (projectId: string, docId: string) => void;
+  addQuote: (projectId: string, quote: QuoteRecord) => void;
+  updateQuote: (projectId: string, quoteId: string, updatedFields: Partial<QuoteRecord>) => void;
+  deleteQuote: (projectId: string, quoteId: string) => void;
   postventaIncidents: PostventaIncident[];
   addPostventaIncident: (incident: PostventaIncident) => void;
   updatePostventaIncident: (incident: PostventaIncident) => void;
@@ -1991,6 +1995,45 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     showToast("Incidencia Eliminada", "El ticket fue eliminado.", "info");
   };
 
+  const addQuote = (projectId: string, quote: QuoteRecord) => {
+    const updated = projects.map((p) => {
+      if (p.id !== projectId) return p;
+      const current = p.quotes || [];
+      return {
+        ...p,
+        quotes: [quote, ...current.filter((q) => q.id !== quote.id)],
+      };
+    });
+    saveProjects(updated);
+    showToast("Cotización Guardada", `Folio ${quote.folio} para unidad ${quote.unit} guardado.`);
+  };
+
+  const updateQuote = (projectId: string, quoteId: string, updatedFields: Partial<QuoteRecord>) => {
+    const updated = projects.map((p) => {
+      if (p.id !== projectId) return p;
+      const current = p.quotes || [];
+      return {
+        ...p,
+        quotes: current.map((q) => (q.id === quoteId ? { ...q, ...updatedFields } : q)),
+      };
+    });
+    saveProjects(updated);
+    showToast("Cotización Actualizada", "El estado de la cotización se actualizó con éxito.");
+  };
+
+  const deleteQuote = (projectId: string, quoteId: string) => {
+    const updated = projects.map((p) => {
+      if (p.id !== projectId) return p;
+      const current = p.quotes || [];
+      return {
+        ...p,
+        quotes: current.filter((q) => q.id !== quoteId),
+      };
+    });
+    saveProjects(updated);
+    showToast("Cotización Eliminada", "La cotización fue eliminada.", "info");
+  };
+
   const logout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("devio_user_session");
@@ -2052,6 +2095,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         updateProjectDocuments,
         addProjectDocument,
         deleteProjectDocument,
+        addQuote,
+        updateQuote,
+        deleteQuote,
         postventaIncidents,
         addPostventaIncident,
         updatePostventaIncident,

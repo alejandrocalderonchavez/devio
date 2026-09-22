@@ -45,8 +45,9 @@ import {
 } from "lucide-react";
 import AppLayout from "../../../../../components/layout/app-layout";
 import { useProject } from "../../../../../context/project-context";
-import { INITIAL_CLIENTS, ClientProfile, ClientOwnedUnit } from "../../../../../data/projects-data";
+import { INITIAL_CLIENTS, ClientProfile, ClientOwnedUnit, QuoteRecord } from "../../../../../data/projects-data";
 import { exportTableToExcel, exportTableToPDF } from "../../../../../lib/export-utils";
+import { generateQuotePDF } from "../../../../../lib/pdf-generator";
 import { InfoTooltip } from "../../../../../components/ui/tooltip";
 import CurrencyInput from "../../../../../components/ui/currency-input";
 import { DevioDatePicker } from "../../../../../components/ui/devio-date-picker";
@@ -355,8 +356,19 @@ export default function ClientDetailPage() {
   // Co-ownership view mode: "global" (100% of unit) vs "proportional" (client's share %)
   const [coOwnershipViewMode, setCoOwnershipViewMode] = useState<"global" | "proportional">("global");
 
-  // Active View Tab: "statement" (Estado de Cuenta) vs "payments" (Pagos)
-  const [activeTab, setActiveTab] = useState<"statement" | "payments">("statement");
+  // Active View Tab: "statement" (Estado de Cuenta) vs "payments" (Pagos) vs "quotes" (Cotizaciones)
+  const [activeTab, setActiveTab] = useState<"statement" | "payments" | "quotes">("statement");
+
+  // Client Quotes
+  const clientQuotes = useMemo<QuoteRecord[]>(() => {
+    if (!project || !project.quotes) return [];
+    return project.quotes.filter(
+      (q) =>
+        q.clientName?.toLowerCase() === rawClient.name?.toLowerCase() ||
+        (q.clientEmail && rawClient.email && q.clientEmail.toLowerCase() === rawClient.email.toLowerCase()) ||
+        (rawClient.ownedUnits && rawClient.ownedUnits.some((ou) => ou.unit === q.unit))
+    );
+  }, [project, rawClient]);
 
   // Sorting state for Statement Table
   const [statementSortField, setStatementSortField] = useState<keyof InstallmentItem>("fechaProgramada");
@@ -1522,6 +1534,27 @@ export default function ClientDetailPage() {
           >
             <CreditCard size={15} /> Pagos Realizados ({paymentsList.length})
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("quotes")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.5rem 1.15rem",
+              borderRadius: "9999px",
+              fontSize: "0.82rem",
+              fontWeight: 700,
+              border: "none",
+              cursor: "pointer",
+              backgroundColor: activeTab === "quotes" ? "#1B3047" : "#FFFFFF",
+              color: activeTab === "quotes" ? "#FFFFFF" : "#64748B",
+              boxShadow: activeTab === "quotes" ? "0 2px 6px rgba(27, 48, 71, 0.2)" : "0 1px 3px rgba(0,0,0,0.03)",
+            }}
+          >
+            <FileText size={15} /> Cotizaciones ({clientQuotes.length})
+          </button>
         </div>
 
         {/* CONTENIDO PRINCIPAL: VISTA ESTADO DE CUENTA vs VISTA PAGOS */}
@@ -2195,6 +2228,174 @@ export default function ClientDetailPage() {
                             }}
                           >
                             <ExternalLink size={13} /> Abrir
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* PESTAÑA 3: COTIZACIONES DEL CLIENTE                            */}
+        {/* ============================================================== */}
+        {activeTab === "quotes" && (
+          <div
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: "1.25rem",
+              padding: "1.5rem",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+              border: "1px solid rgba(22, 43, 63, 0.05)",
+              marginBottom: "1.5rem",
+            }}
+          >
+            {/* Header del Bloque */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                  Cotizaciones Emitidas para este Cliente
+                </h3>
+                <InfoTooltip
+                  title="Historial de Cotizaciones"
+                  content="Propuestas comerciales y planes de amortización elaborados para este cliente o prospecto."
+                />
+              </div>
+
+              <span style={{ fontSize: "0.82rem", color: "#64748B" }}>
+                Total: <strong>{clientQuotes.length}</strong> cotizaciones
+              </span>
+            </div>
+
+            {/* TABLA DE COTIZACIONES */}
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, textAlign: "left", fontSize: "0.82rem" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#1B3047", color: "#FFFFFF" }}>
+                    <th style={{ padding: "0.85rem 1.25rem", borderTopLeftRadius: "0.75rem", borderBottomLeftRadius: "0.75rem" }}>
+                      Folio
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem" }}>Unidad</th>
+                    <th style={{ padding: "0.85rem 1rem" }}>Plan Financiero</th>
+                    <th style={{ padding: "0.85rem 1rem", textAlign: "right" }}>Monto Cotizado</th>
+                    <th style={{ padding: "0.85rem 1rem" }}>Asesor</th>
+                    <th style={{ padding: "0.85rem 1rem" }}>Vigencia</th>
+                    <th style={{ padding: "0.85rem 1rem", textAlign: "center" }}>Estado</th>
+                    <th style={{ padding: "0.85rem 1.25rem", borderTopRightRadius: "0.75rem", borderBottomRightRadius: "0.75rem", textAlign: "center" }}>
+                      Acción
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientQuotes.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ padding: "3rem 1rem", textAlign: "center", color: "#94A3B8" }}>
+                        No hay cotizaciones registradas específicamente para este cliente o sus unidades en este proyecto.
+                      </td>
+                    </tr>
+                  ) : (
+                    clientQuotes.map((q) => (
+                      <tr key={q.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                        <td style={{ padding: "1rem 1.25rem", fontWeight: 700, color: "#1F3652" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                            <FileText size={14} color="#2F80ED" />
+                            {q.folio}
+                          </div>
+                        </td>
+                        <td style={{ padding: "1rem 1rem", fontWeight: 700, color: "#1F3652" }}>
+                          {q.unit} <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 500 }}>({q.unitType})</span>
+                        </td>
+                        <td style={{ padding: "1rem 1rem", color: "#475569" }}>
+                          <strong>{q.planName}</strong>
+                          <div style={{ fontSize: "0.72rem", color: "#64748B" }}>
+                            Eng: {q.downPaymentPct}% • {q.installmentsCount} m. • Liq: {q.settlementPct}%
+                          </div>
+                        </td>
+                        <td style={{ padding: "1rem 1rem", fontWeight: 700, color: "#1F3652", textAlign: "right" }}>
+                          {formatMoney(q.totalQuoteAmount)}
+                        </td>
+                        <td style={{ padding: "1rem 1rem", color: "#475569" }}>{q.advisorName}</td>
+                        <td style={{ padding: "1rem 1rem", color: "#64748B" }}>
+                          {new Date(q.expiresAt).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}
+                        </td>
+                        <td style={{ padding: "1rem 1rem", textAlign: "center" }}>
+                          <span
+                            style={{
+                              fontSize: "0.72rem",
+                              fontWeight: 800,
+                              padding: "0.2rem 0.6rem",
+                              borderRadius: "9999px",
+                              backgroundColor:
+                                q.status === "VIGENTE"
+                                  ? "rgba(0, 196, 140, 0.12)"
+                                  : q.status === "CONVERTIDA_A_VENTA"
+                                  ? "rgba(47, 128, 237, 0.12)"
+                                  : "rgba(242, 153, 74, 0.12)",
+                              color:
+                                q.status === "VIGENTE"
+                                  ? "#00C48C"
+                                  : q.status === "CONVERTIDA_A_VENTA"
+                                  ? "#2F80ED"
+                                  : "#F2994A",
+                            }}
+                          >
+                            {q.status === "VIGENTE" ? "● Vigente" : q.status === "CONVERTIDA_A_VENTA" ? "✓ Vendida" : q.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: "0.75rem 1.25rem", textAlign: "center" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              generateQuotePDF({
+                                quoteFolio: q.folio,
+                                unitNumber: q.unit,
+                                unitType: q.unitType,
+                                superficieM2: q.superficieM2,
+                                projectName: project.name,
+                                listPrice: q.listPrice || q.totalQuoteAmount,
+                                discountPct: q.discountPct,
+                                discountAmount: q.discountAmount,
+                                totalQuoteAmount: q.totalQuoteAmount,
+                                planName: q.planName,
+                                downPaymentAmount: q.downPaymentAmount,
+                                downPaymentPct: q.downPaymentPct,
+                                installmentsCount: q.installmentsCount,
+                                installmentAmount: q.installmentAmount,
+                                settlementAmount: q.settlementAmount,
+                                settlementPct: q.settlementPct,
+                                additionals: q.additionals || [],
+                                client: {
+                                  name: q.clientName,
+                                  email: q.clientEmail,
+                                  phone: q.clientPhone,
+                                  rfc: q.clientRfc,
+                                },
+                                advisor: {
+                                  name: q.advisorName,
+                                  role: "Asesor Comercial",
+                                },
+                                brandColor: "#1F3652",
+                              });
+                              showToast("PDF Generado", `Descargando cotización ${q.folio}...`);
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              backgroundColor: "#1B3047",
+                              color: "#FFFFFF",
+                              padding: "0.4rem 0.9rem",
+                              borderRadius: "9999px",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              border: "none",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Download size={13} /> PDF
                           </button>
                         </td>
                       </tr>
