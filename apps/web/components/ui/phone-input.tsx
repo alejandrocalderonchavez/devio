@@ -35,9 +35,9 @@ export default function PhoneInput({
   id,
   name,
   label,
-  value = "",
+  value,
   countryCode = "+52",
-  phoneNumber = "",
+  phoneNumber,
   placeholder,
   disabled = false,
   required = false,
@@ -69,7 +69,7 @@ export default function PhoneInput({
     parsedFromValue?.dialCode || countryCode || "+52"
   );
   const [localNumber, setLocalNumber] = useState<string>(
-    parsedFromValue?.number !== undefined ? parsedFromValue.number : phoneNumber || value || ""
+    parsedFromValue?.number !== undefined ? parsedFromValue.number : (phoneNumber ?? value ?? "")
   );
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -83,7 +83,7 @@ export default function PhoneInput({
       setLocalNumber(parsedFromValue.number);
     } else if (phoneNumber !== undefined && phoneNumber !== localNumber) {
       setLocalNumber(phoneNumber);
-    } else if (value !== undefined && !value.startsWith("+") && value !== localNumber) {
+    } else if (value !== undefined && value !== "" && value !== localNumber) {
       setLocalNumber(value);
     }
   }, [value, phoneNumber, parsedFromValue]);

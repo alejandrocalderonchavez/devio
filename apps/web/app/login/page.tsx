@@ -41,29 +41,34 @@ function LoginContent() {
       let loggedUser: any = null;
       let sessionToken = "";
 
-      // 1. Intentar autenticar contra el backend NestJS (localhost:4000 / API_URL)
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      try {
-        const response = await fetch(`${apiUrl}/v1/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: cleanEmail, password }),
-        });
+      // 1. Intentar autenticar contra el backend NestJS (si está configurado y seguro)
+      const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
+      const isPublicHost = typeof window !== "undefined" && !window.location.hostname.includes("localhost") && !window.location.hostname.includes("127.0.0.1");
+      const apiUrl = configuredApiUrl || (isPublicHost ? "" : "http://localhost:4000");
 
-        if (response.ok) {
-          const data = await response.json();
-          loggedUser = {
-            id: data.user?.id,
-            fullName: data.user?.fullName || "Administrador",
-            email: data.user?.email || cleanEmail,
-            phone: data.user?.phone || "",
-            roleTitle: "Director / Administrador",
-            activeDeveloper: data.activeDeveloper?.name || "Mi Desarrolladora",
-          };
-          sessionToken = data.token || `devio_session_${Date.now()}`;
+      if (apiUrl) {
+        try {
+          const response = await fetch(`${apiUrl}/v1/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: cleanEmail, password }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            loggedUser = {
+              id: data.user?.id,
+              fullName: data.user?.fullName || "Administrador",
+              email: data.user?.email || cleanEmail,
+              phone: data.user?.phone || "",
+              roleTitle: "Director / Administrador",
+              activeDeveloper: data.activeDeveloper?.name || "Mi Desarrolladora",
+            };
+            sessionToken = data.token || `devio_session_${Date.now()}`;
+          }
+        } catch (apiErr) {
+          // Backend no disponible o offline; proceder a verificar en registro local
         }
-      } catch (apiErr) {
-        // Backend no disponible o offline; proceder a verificar en registro local
       }
 
       // 2. Si no respondió el backend, verificar contra la cuenta registrada localmente

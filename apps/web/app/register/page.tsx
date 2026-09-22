@@ -119,19 +119,24 @@ function RegisterContent() {
     const cleanEmail = email.trim().toLowerCase();
     const phoneFull = `${phoneCountry} ${phoneNumber}`;
 
-    // 1. Enviar registro al backend NestJS
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-    fetch(`${apiUrl}/v1/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fullName,
-        email: cleanEmail,
-        phone: phoneFull,
-        roleTitle,
-        password,
-      }),
-    }).catch(() => {});
+    // 1. Enviar registro al backend NestJS (si está configurado)
+    const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
+    const isPublicHost = typeof window !== "undefined" && !window.location.hostname.includes("localhost") && !window.location.hostname.includes("127.0.0.1");
+    const apiUrl = configuredApiUrl || (isPublicHost ? "" : "http://localhost:4000");
+
+    if (apiUrl) {
+      fetch(`${apiUrl}/v1/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName,
+          email: cleanEmail,
+          phone: phoneFull,
+          roleTitle,
+          password,
+        }),
+      }).catch(() => {});
+    }
 
     // 2. Guardar información del usuario superadmin en sesión local para el flujo de onboarding
     const userSession = {
