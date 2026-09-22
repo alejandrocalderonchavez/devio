@@ -7,7 +7,7 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    // Prisma Client generation must also work before local secrets exist.
-    url: process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/devio",
+    // Migrations and CLI use direct connection when available, falling back to DATABASE_URL
+    url: process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/devio",
   },
 });
