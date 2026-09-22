@@ -1190,6 +1190,13 @@ export default function CreateSaleWizardModal({
         const projName = currentProject?.name || "Proyecto Inmobiliario";
         const devName = currentProject?.name ? `${currentProject.name} (Desarrolladora)` : "Desarrolladora Inmobiliaria";
 
+        const projLogo =
+          currentProject?.image && currentProject.image.startsWith("http")
+            ? currentProject.image
+            : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+        const devLogo =
+          "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+
         // 1. Envío obligatorio de credenciales de acceso al portal de clientes
         sendAndLogNotification({
           to: owner.email,
@@ -1201,6 +1208,9 @@ export default function CreateSaleWizardModal({
             login_link: loginLink,
             proyecto: projName,
             unidad: selectedUnitNumber,
+            desarrolladora: devName,
+            logo_proyecto: projLogo,
+            logo_desarrolladora: devLogo,
             año: new Date().getFullYear().toString(),
           },
           triggerKey: "auth.welcome_client",
@@ -1223,6 +1233,9 @@ export default function CreateSaleWizardModal({
               tipo: currentProject?.type || "Departamento",
               fecha_entrega: unitEstimatedDelivery || "Mayo 2028",
               login_link: loginLink,
+              desarrolladora: devName,
+              logo_proyecto: projLogo,
+              logo_desarrolladora: devLogo,
               año: new Date().getFullYear().toString(),
             },
             triggerKey: "sales.unit_assigned",
@@ -1254,6 +1267,9 @@ export default function CreateSaleWizardModal({
                   : "Depósito Bancario",
               fecha_pago: new Date().toLocaleDateString("es-MX"),
               saldo_pendiente: formatMoney(Math.max(0, netTotalSaleAmount - initialPaymentAmount)),
+              desarrolladora: devName,
+              logo_proyecto: projLogo,
+              logo_desarrolladora: devLogo,
               año: new Date().getFullYear().toString(),
             },
             triggerKey: "payments.payment_receipt",
