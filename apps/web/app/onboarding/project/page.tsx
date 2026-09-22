@@ -602,12 +602,25 @@ export default function ProjectOnboardingPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(STORAGE_KEY_GLOBAL_PLANS);
+      const stored = localStorage.getItem(STORAGE_KEY_GLOBAL_PLANS) || localStorage.getItem("devio_developer_payment_plans");
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            setGlobalPlanLibrary(parsed);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const normalized: PaymentPlanItem[] = parsed.map((p: any) => ({
+              id: p.id || `plan-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              name: p.name || "Plan de Pago",
+              paymentType: p.paymentType || (p.installmentsCount === 0 ? "CONTADO" : "ESQUEMA"),
+              downPaymentPercentage: p.downPaymentPercentage ?? p.downPaymentPct ?? 20,
+              installmentsCount: p.installmentsCount ?? 12,
+              periodicity: p.periodicity || "Mensual",
+              settlementPercentage: p.settlementPercentage ?? p.balloonLiquidationPct ?? 20,
+              interestPercentage: p.interestPercentage ?? p.moratoryRatePct ?? 0,
+              discountPercentage: p.discountPercentage ?? p.discountPct ?? 0,
+              internalNotes: p.internalNotes || p.description || "",
+            }));
+            setGlobalPlanLibrary(normalized);
+            setSelectedPlanIds(normalized.map((p) => p.id));
           }
         } catch (e) {}
       }
@@ -618,6 +631,22 @@ export default function ProjectOnboardingPage() {
     setGlobalPlanLibrary(newLibrary);
     if (typeof window !== "undefined") {
       localStorage.setItem(STORAGE_KEY_GLOBAL_PLANS, JSON.stringify(newLibrary));
+      sessionStorage.setItem(STORAGE_KEY_GLOBAL_PLANS, JSON.stringify(newLibrary));
+
+      const mappedDevPlans = newLibrary.map((p) => ({
+        id: p.id,
+        name: p.name,
+        downPaymentPct: p.downPaymentPercentage,
+        installmentsCount: p.installmentsCount,
+        balloonLiquidationPct: p.settlementPercentage,
+        discountPct: p.discountPercentage || 0,
+        isActive: true,
+        description: p.internalNotes || `${p.downPaymentPercentage}% Enganche, ${p.installmentsCount} Mensualidades (${Math.max(0, 100 - p.downPaymentPercentage - p.settlementPercentage)}%), ${p.settlementPercentage}% Liquidación`,
+        moratoryRatePct: p.interestPercentage || 3.0,
+      }));
+      localStorage.setItem("devio_developer_payment_plans", JSON.stringify(mappedDevPlans));
+      sessionStorage.setItem("devio_developer_payment_plans", JSON.stringify(mappedDevPlans));
+      window.dispatchEvent(new Event("devio_payment_plans_updated"));
     }
   };
 
@@ -1315,6 +1344,17 @@ export default function ProjectOnboardingPage() {
       additionals: mappedAdditionals,
       team: teamMembers.filter((m) => m.assigned),
       floorPlans: onboardingFloorPlans.length > 0 ? onboardingFloorPlans : undefined,
+      paymentPlans: (globalPlanLibrary.length > 0 ? globalPlanLibrary : []).map((p) => ({
+        id: p.id || `plan-${Date.now()}`,
+        name: p.name,
+        downPaymentPct: p.downPaymentPercentage,
+        installmentsCount: p.installmentsCount,
+        balloonLiquidationPct: p.settlementPercentage,
+        discountPct: p.discountPercentage || 0,
+        isActive: selectedPlanIds.includes(p.id) || selectedPlanIds.length === 0,
+        description: p.internalNotes || `${p.downPaymentPercentage}% Enganche, ${p.installmentsCount} Mensualidades (${Math.max(0, 100 - p.downPaymentPercentage - p.settlementPercentage)}%), ${p.settlementPercentage}% Liquidación`,
+        moratoryRatePct: p.interestPercentage || 3.0,
+      })),
     };
 
     if (typeof window !== "undefined") {
@@ -1331,6 +1371,14 @@ export default function ProjectOnboardingPage() {
       sessionStorage.setItem("devio_projects_state", JSON.stringify(updatedList));
       localStorage.removeItem("devio_is_new_user");
       sessionStorage.removeItem("devio_is_new_user");
+
+      // Synchronize created payment plans
+      if (newProject.paymentPlans && newProject.paymentPlans.length > 0) {
+        localStorage.setItem("devio_developer_payment_plans", JSON.stringify(newProject.paymentPlans));
+        sessionStorage.setItem("devio_developer_payment_plans", JSON.stringify(newProject.paymentPlans));
+        window.dispatchEvent(new Event("devio_payment_plans_updated"));
+      }
+
       window.dispatchEvent(new Event("devio_projects_updated"));
     }
 

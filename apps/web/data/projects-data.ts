@@ -146,6 +146,7 @@ export interface ProjectItem {
   quotes?: QuoteRecord[];
   floorPlans?: ProjectFloorPlan[];
   documents?: ProjectDocument[];
+  paymentPlans?: any[];
 }
 
 export interface QuoteRecord {

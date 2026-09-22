@@ -207,7 +207,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<UserRole>("Super Admin");
   const [userPermissions, setUserPermissions] = useState<string[]>(["all"]);
-  const [paymentPlans, setPaymentPlans] = useState<DeveloperPaymentPlan[]>(DEFAULT_DEVELOPER_PAYMENT_PLANS);
+  const [paymentPlans, setPaymentPlans] = useState<DeveloperPaymentPlan[]>([]);
   const [postventaIncidents, setPostventaIncidents] = useState<PostventaIncident[]>(INITIAL_INCIDENTS);
   const [toast, setToast] = useState<{ title: string; desc: string; type?: "success" | "info" | "warning" } | null>(null);
 
@@ -221,6 +221,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
     const storedUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
     const storedPlans = localStorage.getItem("devio_developer_payment_plans") || sessionStorage.getItem("devio_developer_payment_plans");
+    const storedLibraryPlans = localStorage.getItem("devio_payment_plans_library") || sessionStorage.getItem("devio_payment_plans_library");
     const storedIncidents = localStorage.getItem("devio_postventa_incidents") || sessionStorage.getItem("devio_postventa_incidents");
 
     if (storedProjects) {
@@ -241,10 +242,53 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     if (storedPlans) {
       try {
         const parsed = JSON.parse(storedPlans);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setPaymentPlans(parsed);
         }
-      } catch (e) {}
+      } catch (e) {
+        setPaymentPlans([]);
+      }
+    } else if (storedLibraryPlans) {
+      try {
+        const parsedLib = JSON.parse(storedLibraryPlans);
+        if (Array.isArray(parsedLib) && parsedLib.length > 0) {
+          const mapped: DeveloperPaymentPlan[] = parsedLib.map((p: any) => ({
+            id: p.id || `plan-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            name: p.name || "Plan de Pago",
+            downPaymentPct: p.downPaymentPercentage ?? p.downPaymentPct ?? 20,
+            installmentsCount: p.installmentsCount ?? 12,
+            balloonLiquidationPct: p.settlementPercentage ?? p.balloonLiquidationPct ?? 20,
+            discountPct: p.discountPercentage ?? p.discountPct ?? 0,
+            isActive: true,
+            description: p.internalNotes || p.description || `${p.downPaymentPercentage ?? 20}% Enganche, ${p.installmentsCount ?? 12} Mensualidades (${Math.max(0, 100 - (p.downPaymentPercentage ?? 20) - (p.settlementPercentage ?? 20))}%), ${p.settlementPercentage ?? 20}% Liquidación`,
+            moratoryRatePct: p.interestPercentage ?? p.moratoryRatePct ?? 3.0,
+          }));
+          setPaymentPlans(mapped);
+          localStorage.setItem("devio_developer_payment_plans", JSON.stringify(mapped));
+        } else {
+          setPaymentPlans([]);
+        }
+      } catch (e) {
+        setPaymentPlans([]);
+      }
+    } else if (isNewUser === "true" || storedDev) {
+      setPaymentPlans([]);
+    } else {
+      let foundPlans: DeveloperPaymentPlan[] = [];
+      if (storedProjects) {
+        try {
+          const parsedProjects = JSON.parse(storedProjects);
+          if (Array.isArray(parsedProjects)) {
+            for (const pr of parsedProjects) {
+              if (Array.isArray(pr.paymentPlans) && pr.paymentPlans.length > 0) {
+                foundPlans = pr.paymentPlans;
+                break;
+              }
+            }
+          }
+        } catch (e) {}
+      }
+      setPaymentPlans(foundPlans);
     }
 
     if (storedIncidents) {
@@ -353,24 +397,34 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   const resetToCleanState = () => {
     setProjects([]);
+    setPaymentPlans([]);
     setDeveloperName("Mi Desarrolladora");
     if (typeof window !== "undefined") {
       localStorage.setItem("devio_projects_state", JSON.stringify([]));
       sessionStorage.setItem("devio_projects_state", JSON.stringify([]));
+      localStorage.setItem("devio_developer_payment_plans", JSON.stringify([]));
+      sessionStorage.setItem("devio_developer_payment_plans", JSON.stringify([]));
+      localStorage.removeItem("devio_payment_plans_library");
+      sessionStorage.removeItem("devio_payment_plans_library");
       localStorage.setItem("devio_is_new_user", "true");
       sessionStorage.setItem("devio_is_new_user", "true");
+      window.dispatchEvent(new Event("devio_payment_plans_updated"));
     }
     showToast("Cuenta Limpia", "Se eliminaron los datos de muestra. Puedes registrar tus proyectos desde cero.", "info");
   };
 
   const loadDemoData = () => {
     setProjects(INITIAL_PROJECTS);
+    setPaymentPlans(DEFAULT_DEVELOPER_PAYMENT_PLANS);
     setDeveloperName("Mainstreet Desarrollos");
     if (typeof window !== "undefined") {
       localStorage.setItem("devio_projects_state", JSON.stringify(INITIAL_PROJECTS));
       sessionStorage.setItem("devio_projects_state", JSON.stringify(INITIAL_PROJECTS));
+      localStorage.setItem("devio_developer_payment_plans", JSON.stringify(DEFAULT_DEVELOPER_PAYMENT_PLANS));
+      sessionStorage.setItem("devio_developer_payment_plans", JSON.stringify(DEFAULT_DEVELOPER_PAYMENT_PLANS));
       localStorage.removeItem("devio_is_new_user");
       sessionStorage.removeItem("devio_is_new_user");
+      window.dispatchEvent(new Event("devio_payment_plans_updated"));
     }
     showToast("Datos Demo Cargados", "Se restauraron los proyectos de demostración (Tradere, Torre Paseo).", "success");
   };
