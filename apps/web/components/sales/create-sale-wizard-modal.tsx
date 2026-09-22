@@ -390,25 +390,44 @@ export default function CreateSaleWizardModal({
   const activeDeveloperPlans = useMemo(() => paymentPlans.filter((p) => p.isActive), [paymentPlans]);
 
   const [selectedPlanId, setSelectedPlanId] = useState<string>("custom");
-  const [customPlanName, setCustomPlanName] = useState("Plan Personalizado");
+  const [customPlanName, setCustomPlanName] = useState("Plan Personalizado de Venta");
+  const [paymentType, setPaymentType] = useState<"ESQUEMA" | "CONTADO">("ESQUEMA");
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [monthlyCutoffDay, setMonthlyCutoffDay] = useState<number>(() => new Date().getDate());
   const [discountPct, setDiscountPct] = useState(0);
   const [discountAppliesTo, setDiscountAppliesTo] = useState<"total" | "unit_only">("total");
   const [downPaymentPct, setDownPaymentPct] = useState(20);
   const [installmentsCount, setInstallmentsCount] = useState(12);
+  const [periodicity, setPeriodicity] = useState<string>("Mensual");
   const [balloonLiquidationPct, setBalloonLiquidationPct] = useState(30);
-  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [interestPct, setInterestPct] = useState<number>(0);
+  const [internalPlanNotes, setInternalPlanNotes] = useState<string>("");
+
+  // Modal para personalizar plan de pago exclusivo de la venta
+  const [isCustomPlanModalOpen, setIsCustomPlanModalOpen] = useState(false);
+  const [customModalForm, setCustomModalForm] = useState({
+    name: "Plan Personalizado de Venta",
+    paymentType: "ESQUEMA" as "ESQUEMA" | "CONTADO",
+    downPaymentPercentage: 20,
+    installmentsCount: 12,
+    periodicity: "Mensual",
+    settlementPercentage: 30,
+    discountPercentage: 0,
+    interestPercentage: 0,
+    internalNotes: "",
+  });
 
   // Initialize with first active developer plan if available
   useEffect(() => {
-    if (activeDeveloperPlans.length > 0 && selectedPlanId === "custom" && customPlanName === "Plan Personalizado") {
+    if (activeDeveloperPlans.length > 0 && selectedPlanId === "custom" && customPlanName === "Plan Personalizado de Venta") {
       const firstPlan = activeDeveloperPlans[0];
       if (firstPlan) {
         setSelectedPlanId(firstPlan.id);
         setCustomPlanName(firstPlan.name);
+        setPaymentType("ESQUEMA");
         setDownPaymentPct(firstPlan.downPaymentPct);
         setInstallmentsCount(firstPlan.installmentsCount);
+        setPeriodicity("Mensual");
         setBalloonLiquidationPct(firstPlan.balloonLiquidationPct);
         setDiscountPct(firstPlan.discountPct);
       }
@@ -460,8 +479,194 @@ export default function CreateSaleWizardModal({
     return `${y}-${m}-${dayStr}`;
   };
 
-  // Cálculos de validación en tiempo real y sugerencias de corrección para el plan de pagos de venta
+  // Helper de cálculo de fechas de cuotas según periodicidad
+  const calculateInstallmentDate = (baseDateStr: string, index: number, period: string, cutoffDay?: number) => {
+    const { year, month, day } = parseYearMonthDay(baseDateStr);
+    const safeDay = cutoffDay && cutoffDay > 0 ? Math.min(cutoffDay, 28) : day;
+
+    if (period === "Semanal") {
+      const d = new Date(year, month, day + index * 7);
+      return formatDateISO(d.getFullYear(), d.getMonth(), d.getDate());
+    } else if (period === "Quincenal") {
+      const d = new Date(year, month, day + index * 15);
+      return formatDateISO(d.getFullYear(), d.getMonth(), d.getDate());
+    } else if (period === "Bimestral") {
+      return formatDateISO(year, month + index * 2, safeDay);
+    } else if (period === "Trimestral") {
+      return formatDateISO(year, month + index * 3, safeDay);
+    } else if (period === "Semestral") {
+      return formatDateISO(year, month + index * 6, safeDay);
+    } else if (period === "Anual") {
+      return formatDateISO(year + index, month, safeDay);
+    } else {
+      // Mensual por default
+      return formatDateISO(year, month + index, safeDay);
+    }
+  };
+
+  // Validación de plan para el modal de personalización
+  const modalPlanValidation = useMemo(() => {
+    if (customModalForm.paymentType === "CONTADO") {
+      return {
+        isValid: customModalForm.name.trim().length > 0,
+        errorTitle: customModalForm.name.trim().length === 0 ? "Nombre requerido" : null,
+        errorMessage: customModalForm.name.trim().length === 0 ? "Ingresa un nombre para identificar este plan de contado." : null,
+        fixes: [] as { label: string; action: () => void }[],
+        downPct: 100,
+        installmentsPct: 0,
+        settlementPct: 0,
+        totalPct: 100,
+      };
+    }
+
+    const down = Number(customModalForm.downPaymentPercentage) || 0;
+    const settlement = Number(customModalForm.settlementPercentage) || 0;
+    const plazos = Number(customModalForm.installmentsCount) || 0;
+    const sumDownSettlement = down + settlement;
+    const remainingPct = 100 - sumDownSettlement;
+    const totalPct = down + (plazos > 0 ? Math.max(0, remainingPct) : 0) + settlement;
+
+    if (!customModalForm.name.trim()) {
+      return {
+        isValid: false,
+        errorTitle: "Nombre requerido",
+        errorMessage: "Ingresa un nombre descriptivo para identificar este esquema de pago.",
+        fixes: [
+          {
+            label: "Nombrar como 'Plan Personalizado'",
+            action: () => setCustomModalForm((prev) => ({ ...prev, name: "Plan Personalizado" })),
+          },
+        ],
+        downPct: down,
+        installmentsPct: Math.max(0, remainingPct),
+        settlementPct: settlement,
+        totalPct,
+      };
+    }
+
+    if (down <= 0) {
+      return {
+        isValid: false,
+        errorTitle: "Enganche requerido",
+        errorMessage: "El enganche debe ser mayor a 0% para el esquema de financiamiento.",
+        fixes: [
+          {
+            label: "Asignar 20% de Enganche",
+            action: () => setCustomModalForm((prev) => ({ ...prev, downPaymentPercentage: 20, settlementPercentage: Math.min(prev.settlementPercentage, 80) })),
+          },
+        ],
+        downPct: down,
+        installmentsPct: Math.max(0, remainingPct),
+        settlementPct: settlement,
+        totalPct,
+      };
+    }
+
+    if (sumDownSettlement > 100) {
+      const excess = sumDownSettlement - 100;
+      return {
+        isValid: false,
+        errorTitle: "Porcentajes excedidos (>100%)",
+        errorMessage: `El Enganche (${down}%) y la Liquidación (${settlement}%) suman ${sumDownSettlement}%, excediendo el 100% total por ${excess}%.`,
+        fixes: [
+          {
+            label: `Ajustar Liquidación a ${Math.max(0, 100 - down)}%`,
+            action: () => setCustomModalForm((prev) => ({ ...prev, settlementPercentage: Math.max(0, 100 - down) })),
+          },
+          {
+            label: `Ajustar Enganche a ${Math.max(0, 100 - settlement)}%`,
+            action: () => setCustomModalForm((prev) => ({ ...prev, downPaymentPercentage: Math.max(0, 100 - settlement) })),
+          },
+          {
+            label: `Distribuir: ${down}% Enganche / ${Math.floor((100 - down) / 2)}% Cuotas / ${100 - down - Math.floor((100 - down) / 2)}% Liquidación`,
+            action: () => {
+              const half = Math.floor((100 - down) / 2);
+              setCustomModalForm((prev) => ({
+                ...prev,
+                settlementPercentage: 100 - down - half,
+                installmentsCount: plazos > 0 ? plazos : 12,
+              }));
+            },
+          },
+        ],
+        downPct: down,
+        installmentsPct: remainingPct,
+        settlementPct: settlement,
+        totalPct: sumDownSettlement,
+      };
+    }
+
+    if (sumDownSettlement === 100 && plazos > 0) {
+      return {
+        isValid: false,
+        errorTitle: "Plazos sin porcentaje asignado (0%)",
+        errorMessage: `Definiste ${plazos} parcialidades, pero el Enganche (${down}%) y la Liquidación (${settlement}%) ya suman el 100%. No queda porcentaje para parcialidades.`,
+        fixes: [
+          {
+            label: `Reducir Liquidación para dejar 40% en ${plazos} cuotas (${(40 / plazos).toFixed(1)}% c/u)`,
+            action: () => setCustomModalForm((prev) => ({ ...prev, settlementPercentage: Math.max(0, 100 - down - 40) })),
+          },
+          {
+            label: "Cambiar Cuotas a 0 (Solo Enganche y Liquidación)",
+            action: () => setCustomModalForm((prev) => ({ ...prev, installmentsCount: 0 })),
+          },
+        ],
+        downPct: down,
+        installmentsPct: 0,
+        settlementPct: settlement,
+        totalPct: 100,
+      };
+    }
+
+    if (sumDownSettlement < 100 && plazos === 0) {
+      return {
+        isValid: false,
+        errorTitle: "Porcentaje flotante sin cuotas",
+        errorMessage: `Queda un ${remainingPct}% pendiente de asignar porque el número de parcialidades es 0.`,
+        fixes: [
+          {
+            label: `Sumar ${remainingPct}% a la Liquidación (Total: ${settlement + remainingPct}%)`,
+            action: () => setCustomModalForm((prev) => ({ ...prev, settlementPercentage: 100 - down })),
+          },
+          {
+            label: `Asignar 12 cuotas para cubrir el ${remainingPct}% (${(remainingPct / 12).toFixed(1)}% c/u)`,
+            action: () => setCustomModalForm((prev) => ({ ...prev, installmentsCount: 12 })),
+          },
+        ],
+        downPct: down,
+        installmentsPct: remainingPct,
+        settlementPct: settlement,
+        totalPct: sumDownSettlement,
+      };
+    }
+
+    return {
+      isValid: true,
+      errorTitle: null,
+      errorMessage: null,
+      fixes: [] as { label: string; action: () => void }[],
+      downPct: down,
+      installmentsPct: remainingPct,
+      settlementPct: settlement,
+      totalPct: 100,
+    };
+  }, [customModalForm]);
+
+  // Cálculos de validación en tiempo real para el plan activo de la venta
   const planValidation = useMemo(() => {
+    if (paymentType === "CONTADO") {
+      return {
+        isValid: true,
+        errorTitle: null,
+        errorMessage: null,
+        fixes: [] as { label: string; action: () => void }[],
+        downPct: 100,
+        installmentsPct: 0,
+        settlementPct: 0,
+        totalPct: 100,
+      };
+    }
+
     const down = Number(downPaymentPct) || 0;
     const settlement = Number(balloonLiquidationPct) || 0;
     const plazos = Number(installmentsCount) || 0;
@@ -516,7 +721,7 @@ export default function CreateSaleWizardModal({
             },
           },
           {
-            label: `Distribuir: ${down}% Enganche / ${Math.floor((100 - down) / 2)}% Mensualidades / ${100 - down - Math.floor((100 - down) / 2)}% Liquidación`,
+            label: `Distribuir: ${down}% Enganche / ${Math.floor((100 - down) / 2)}% Cuotas / ${100 - down - Math.floor((100 - down) / 2)}% Liquidación`,
             action: () => {
               const half = Math.floor((100 - down) / 2);
               setBalloonLiquidationPct(100 - down - half);
@@ -537,10 +742,10 @@ export default function CreateSaleWizardModal({
       return {
         isValid: false,
         errorTitle: "Plazos sin porcentaje asignado (0%)",
-        errorMessage: `Definiste ${plazos} mensualidades, pero el Enganche (${down}%) y la Liquidación (${settlement}%) ya suman el 100%. No queda porcentaje para mensualidades.`,
+        errorMessage: `Definiste ${plazos} cuotas, pero el Enganche (${down}%) y la Liquidación (${settlement}%) ya suman el 100%. No queda porcentaje para cuotas.`,
         fixes: [
           {
-            label: `Reducir Liquidación para dejar 40% en ${plazos} mensualidades (${(40 / plazos).toFixed(1)}% c/u)`,
+            label: `Reducir Liquidación para dejar 40% en ${plazos} cuotas (${(40 / plazos).toFixed(1)}% c/u)`,
             action: () => {
               setBalloonLiquidationPct(Math.max(0, 100 - down - 40));
               setSelectedPlanId("custom");
@@ -548,7 +753,7 @@ export default function CreateSaleWizardModal({
             },
           },
           {
-            label: "Cambiar Mensualidades a 0",
+            label: "Cambiar Cuotas a 0",
             action: () => {
               setInstallmentsCount(0);
               setSelectedPlanId("custom");
@@ -566,8 +771,8 @@ export default function CreateSaleWizardModal({
     if (sumDownSettlement < 100 && plazos === 0) {
       return {
         isValid: false,
-        errorTitle: "Porcentaje flotante sin mensualidades",
-        errorMessage: `Queda un ${remainingPct}% pendiente de asignar porque el número de mensualidades es 0.`,
+        errorTitle: "Porcentaje flotante sin cuotas",
+        errorMessage: `Queda un ${remainingPct}% pendiente de asignar porque el número de cuotas es 0.`,
         fixes: [
           {
             label: `Sumar ${remainingPct}% a la Liquidación (Total: ${settlement + remainingPct}%)`,
@@ -578,7 +783,7 @@ export default function CreateSaleWizardModal({
             },
           },
           {
-            label: `Asignar 12 mensualidades para cubrir el ${remainingPct}% (${(remainingPct / 12).toFixed(1)}% c/u)`,
+            label: `Asignar 12 cuotas para cubrir el ${remainingPct}% (${(remainingPct / 12).toFixed(1)}% c/u)`,
             action: () => {
               setInstallmentsCount(12);
               setSelectedPlanId("custom");
@@ -603,17 +808,27 @@ export default function CreateSaleWizardModal({
       settlementPct: settlement,
       totalPct: 100,
     };
-  }, [downPaymentPct, balloonLiquidationPct, installmentsCount]);
+  }, [downPaymentPct, balloonLiquidationPct, installmentsCount, paymentType]);
 
   const generateSchedule = () => {
+    const rows: PaymentRow[] = [];
+    const { year, month, day: startDay } = parseYearMonthDay(saleDate);
+
+    if (paymentType === "CONTADO") {
+      rows.push({
+        id: "row-contado",
+        concept: "Pago de Contado (100%)",
+        date: saleDate || formatDateISO(year, month, startDay),
+        amount: netTotalSaleAmount,
+      });
+      setPaymentSchedule(rows);
+      return;
+    }
+
     const downPayment = Math.round(netTotalSaleAmount * (downPaymentPct / 100));
     const liquidation = Math.round(netTotalSaleAmount * (balloonLiquidationPct / 100));
     const remainingForInstallments = Math.max(0, netTotalSaleAmount - downPayment - liquidation);
-    const monthlyAmount = installmentsCount > 0 ? remainingForInstallments / installmentsCount : 0;
-
-    const rows: PaymentRow[] = [];
-    const { year, month, day: startDay } = parseYearMonthDay(saleDate);
-    const dayToUse = monthlyCutoffDay > 0 ? Math.min(monthlyCutoffDay, 28) : startDay;
+    const installmentAmount = installmentsCount > 0 ? remainingForInstallments / installmentsCount : 0;
 
     // 1. Enganche row (Fecha inicial / Hoy)
     rows.push({
@@ -623,24 +838,23 @@ export default function CreateSaleWizardModal({
       amount: downPayment,
     });
 
-    // 2. Mensualidades
+    // 2. Parcialidades
     for (let i = 1; i <= installmentsCount; i++) {
-      const formattedDate = formatDateISO(year, month + i, dayToUse);
-
+      const formattedDate = calculateInstallmentDate(saleDate, i, periodicity, monthlyCutoffDay);
       rows.push({
-        id: `row-mensual-${i}`,
-        concept: `Mensualidad ${i}`,
+        id: `row-cuota-${i}`,
+        concept: `Cuota ${i} (${periodicity})`,
         date: formattedDate,
-        amount: Math.round(monthlyAmount * 100) / 100,
+        amount: Math.round(installmentAmount * 100) / 100,
       });
     }
 
     // 3. Liquidación row
     if (balloonLiquidationPct > 0) {
-      const deliveryDate = formatDateISO(year, month + installmentsCount + 1, dayToUse);
+      const deliveryDate = calculateInstallmentDate(saleDate, installmentsCount + 1, periodicity, monthlyCutoffDay);
       rows.push({
         id: "row-liquidacion",
-        concept: "Liquidación",
+        concept: "Liquidación Final",
         date: deliveryDate,
         amount: liquidation,
       });
@@ -652,23 +866,57 @@ export default function CreateSaleWizardModal({
   const handleSelectPlan = (planId: string) => {
     setSelectedPlanId(planId);
     if (planId === "custom") {
-      setCustomPlanName("Plan Personalizado");
-      setShowAdvancedSettings(true);
+      setCustomPlanName("Plan Personalizado de Venta");
+      handleOpenCustomPlanModal();
       return;
     }
     const plan = activeDeveloperPlans.find((p) => p.id === planId);
     if (plan) {
+      setPaymentType("ESQUEMA");
       setDownPaymentPct(plan.downPaymentPct);
       setInstallmentsCount(plan.installmentsCount);
+      setPeriodicity("Mensual");
       setBalloonLiquidationPct(plan.balloonLiquidationPct);
       setDiscountPct(plan.discountPct);
       setCustomPlanName(plan.name);
     }
   };
 
+  const handleOpenCustomPlanModal = () => {
+    setCustomModalForm({
+      name: customPlanName || "Plan Personalizado de Venta",
+      paymentType: paymentType || "ESQUEMA",
+      downPaymentPercentage: downPaymentPct,
+      installmentsCount: installmentsCount,
+      periodicity: periodicity || "Mensual",
+      settlementPercentage: balloonLiquidationPct,
+      discountPercentage: discountPct,
+      interestPercentage: interestPct,
+      internalNotes: internalPlanNotes || "",
+    });
+    setIsCustomPlanModalOpen(true);
+  };
+
+  const handleApplyCustomPlanFromModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!modalPlanValidation.isValid) return;
+
+    setCustomPlanName(customModalForm.name.trim() || "Plan Personalizado");
+    setPaymentType(customModalForm.paymentType);
+    setDownPaymentPct(customModalForm.paymentType === "CONTADO" ? 100 : customModalForm.downPaymentPercentage);
+    setInstallmentsCount(customModalForm.paymentType === "CONTADO" ? 0 : customModalForm.installmentsCount);
+    setPeriodicity(customModalForm.periodicity);
+    setBalloonLiquidationPct(customModalForm.paymentType === "CONTADO" ? 0 : customModalForm.settlementPercentage);
+    setDiscountPct(customModalForm.discountPercentage);
+    setInterestPct(customModalForm.interestPercentage);
+    setInternalPlanNotes(customModalForm.internalNotes);
+    setSelectedPlanId("custom");
+    setIsCustomPlanModalOpen(false);
+  };
+
   useEffect(() => {
     generateSchedule();
-  }, [selectedPlanId, netTotalSaleAmount, downPaymentPct, installmentsCount, balloonLiquidationPct, discountPct, discountAppliesTo, saleDate, monthlyCutoffDay]);
+  }, [selectedPlanId, paymentType, netTotalSaleAmount, downPaymentPct, installmentsCount, periodicity, balloonLiquidationPct, discountPct, discountAppliesTo, saleDate, monthlyCutoffDay]);
 
   const totalScheduleSum = useMemo(() => {
     return paymentSchedule.reduce((acc, row) => acc + (Number(row.amount) || 0), 0);
@@ -714,9 +962,9 @@ export default function CreateSaleWizardModal({
       prev.map((row, idx) => {
         if (idx === 0) return row; // Keep down payment date
         if (row.id === "row-liquidacion") {
-          return { ...row, date: formatDateISO(year, month + installmentsCount + 1, safeDay) };
+          return { ...row, date: calculateInstallmentDate(saleDate, installmentsCount + 1, periodicity, safeDay) };
         }
-        return { ...row, date: formatDateISO(year, month + idx, safeDay) };
+        return { ...row, date: calculateInstallmentDate(saleDate, idx, periodicity, safeDay) };
       })
     );
   };
@@ -752,6 +1000,52 @@ export default function CreateSaleWizardModal({
       const targetProjId = selectedProjectId || currentProject?.id || projects[0]?.id || "p-1";
       const clientTargetId = primaryClient.id || "primary-1";
 
+      // Register / persist new users in devio_system_users
+      if (typeof window !== "undefined") {
+        try {
+          const stored = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
+          let usersList: any[] = [];
+          if (stored) {
+            usersList = JSON.parse(stored);
+          }
+
+          allOwnersCombined.forEach((owner) => {
+            if (!owner.email) return;
+            const existingIdx = usersList.findIndex((u) => u.email?.toLowerCase() === owner.email.toLowerCase());
+            if (existingIdx === -1) {
+              // Create new system user account for client portal & mobile app
+              usersList.push({
+                id: owner.id || `client-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                name: owner.name,
+                email: owner.email,
+                phone: owner.phone,
+                rfc: owner.rfc,
+                role: "CLIENT",
+                status: "ACTIVO",
+                portalAccess: true,
+                mobileAppAccess: true,
+                sendCredentialsEmail: true,
+                initialDeveloperRegistration: {
+                  name: owner.name,
+                  email: owner.email,
+                  phone: owner.phone,
+                  rfc: owner.rfc,
+                  projectId: targetProjId,
+                  projectName: currentProject?.name || "Proyecto",
+                  registeredAt: new Date().toISOString(),
+                },
+                createdAt: new Date().toISOString(),
+              });
+            }
+          });
+
+          localStorage.setItem("devio_system_users", JSON.stringify(usersList));
+          sessionStorage.setItem("devio_system_users", JSON.stringify(usersList));
+        } catch (err) {
+          console.error("Error saving client users to devio_system_users:", err);
+        }
+      }
+
       const finalSalePayload = {
         folio: `VTA-2026-${Math.floor(100 + Math.random() * 900)}`,
         createdAt: new Date().toISOString(),
@@ -784,9 +1078,12 @@ export default function CreateSaleWizardModal({
           discountAmount,
           totalSale: netTotalSaleAmount,
           netTotalSale: netTotalSaleAmount,
+          paymentType,
           downPaymentPct,
           installmentsCount,
+          periodicity,
           balloonLiquidationPct,
+          interestPct,
           planName: customPlanName || (selectedPlanId === "custom" ? "Plan Personalizado" : selectedPlanId),
         },
         schedule: paymentSchedule.map((row, idx) => ({
@@ -1174,7 +1471,52 @@ export default function CreateSaleWizardModal({
                   gap: "0.85rem",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {/* Selector rápido de cliente existente */}
+                {existingClients.length > 0 && (
+                  <div>
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-neutral-4)", display: "block", marginBottom: "0.25rem" }}>
+                      Seleccionar de clientes registrados ({existingClients.length}):
+                    </label>
+                    <select
+                      onChange={(e) => {
+                        const found = existingClients.find(
+                          (c) => (c.email || c.name).toLowerCase() === e.target.value.toLowerCase()
+                        );
+                        if (found) {
+                          setPrimaryClient((prev) => ({
+                            ...prev,
+                            name: found.name,
+                            email: found.email,
+                            phone: found.phone,
+                            rfc: found.rfc,
+                          }));
+                          setIsPrimaryFound(true);
+                        }
+                      }}
+                      defaultValue=""
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.85rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid var(--devio-neutral-2)",
+                        fontSize: "0.85rem",
+                        backgroundColor: "#FFFFFF",
+                        color: "var(--devio-blue-dark)",
+                        outline: "none",
+                        fontWeight: 600,
+                      }}
+                    >
+                      <option value="">-- Buscar o seleccionar cliente existente --</option>
+                      {existingClients.map((c, idx) => (
+                        <option key={idx} value={c.email || c.name}>
+                          {c.name} ({c.email || "Sin correo"}{c.phone ? ` • ${c.phone}` : ""})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: existingClients.length > 0 ? "1px solid var(--devio-neutral-1)" : "none", paddingTop: existingClients.length > 0 ? "0.6rem" : "0" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span
                       style={{
@@ -1193,6 +1535,35 @@ export default function CreateSaleWizardModal({
                     <strong style={{ fontSize: "0.88rem", color: "var(--devio-blue-dark)" }}>
                       Responsable Financiero y Firmante
                     </strong>
+                    {isPrimaryFound ? (
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          fontWeight: 800,
+                          backgroundColor: "rgba(0, 196, 140, 0.12)",
+                          color: "var(--devio-green)",
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: "9999px",
+                          border: "1px solid rgba(0, 196, 140, 0.3)",
+                        }}
+                      >
+                        ✓ Cliente Existente
+                      </span>
+                    ) : primaryClient.email.trim() ? (
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          fontWeight: 800,
+                          backgroundColor: "rgba(47, 128, 237, 0.1)",
+                          color: "var(--devio-blue)",
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: "9999px",
+                          border: "1px solid rgba(47, 128, 237, 0.25)",
+                        }}
+                      >
+                        + Nuevo Comprador
+                      </span>
+                    ) : null}
                   </div>
 
                   {isCoOwnership && (
@@ -1225,6 +1596,55 @@ export default function CreateSaleWizardModal({
                     </div>
                   )}
                 </div>
+
+                {/* Status Notice (Existing Client Isolation vs New Client Creation) */}
+                {isPrimaryFound ? (
+                  <div
+                    style={{
+                      backgroundColor: "rgba(47, 128, 237, 0.05)",
+                      border: "1px solid rgba(47, 128, 237, 0.2)",
+                      borderRadius: "0.6rem",
+                      padding: "0.65rem 0.85rem",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "0.5rem",
+                      fontSize: "0.76rem",
+                      color: "var(--devio-blue-dark)",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <Info size={16} style={{ color: "var(--devio-blue)", flexShrink: 0, marginTop: "1px" }} />
+                    <div>
+                      <strong>Información precargada:</strong> Puedes modificar el nombre, teléfono o RFC para este contrato/proyecto.
+                      <div style={{ color: "var(--devio-neutral-3)", marginTop: "2px" }}>
+                        * Los cambios realizados aquí se guardarán exclusivamente para este proyecto sin alterar el perfil global del cliente ni registros en otros desarrollos.
+                      </div>
+                    </div>
+                  </div>
+                ) : primaryClient.email.trim() ? (
+                  <div
+                    style={{
+                      backgroundColor: "rgba(0, 196, 140, 0.06)",
+                      border: "1px solid rgba(0, 196, 140, 0.25)",
+                      borderRadius: "0.6rem",
+                      padding: "0.65rem 0.85rem",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "0.5rem",
+                      fontSize: "0.76rem",
+                      color: "var(--devio-blue-dark)",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <Sparkles size={16} style={{ color: "var(--devio-green)", flexShrink: 0, marginTop: "1px" }} />
+                    <div>
+                      <strong>Nuevo Cliente en Devio:</strong> Al crear la venta se generará su cuenta de usuario y se le enviarán sus accesos para ingresar a Devio (Portal Web y App Móvil).
+                      <div style={{ color: "var(--devio-neutral-3)", marginTop: "2px" }}>
+                        * La información que captures quedará resguardada para tu desarrolladora; si el cliente actualiza su nombre en su portal, tu expediente conservará tus registros.
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
                   <div style={{ gridColumn: "span 2" }}>
@@ -1814,8 +2234,11 @@ export default function CreateSaleWizardModal({
               </div>
 
               {/* Plan Preset Selector Header */}
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: "260px" }}>
+                  <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                    Plan de Pago Seleccionado
+                  </label>
                   <select
                     value={selectedPlanId}
                     onChange={(e) => handleSelectPlan(e.target.value)}
@@ -1836,280 +2259,201 @@ export default function CreateSaleWizardModal({
                         {plan.name} ({plan.downPaymentPct}% Enganche, {plan.installmentsCount} Mensualidades, {plan.balloonLiquidationPct}% Liquidación{plan.discountPct > 0 ? ` - ${plan.discountPct}% Desc` : ""})
                       </option>
                     ))}
-                    <option value="custom">Esquema Personalizado (Libre)</option>
+                    <option value="custom">✨ Plan Personalizado Exclusivo de esta Venta</option>
                   </select>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    padding: "0.7rem 1.1rem",
-                    borderRadius: "0.6rem",
-                    backgroundColor: showAdvancedSettings ? "var(--devio-blue)" : "var(--devio-blue-dark)",
-                    color: "var(--devio-white)",
-                    fontSize: "0.85rem",
-                    fontWeight: 700,
-                    border: "none",
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  <Edit2 size={14} />
-                  {showAdvancedSettings ? "Ocultar Personalización" : "Personalizar"}
-                </button>
-              </div>
-
-              {/* Advanced Parameters Drawer */}
-              {showAdvancedSettings && (
-                <div
-                  style={{
-                    backgroundColor: "rgba(31, 54, 82, 0.04)",
-                    border: "1px solid var(--devio-neutral-1)",
-                    borderRadius: "0.85rem",
-                    padding: "1rem 1.25rem",
-                    display: "grid",
-                    gridTemplateColumns: "repeat(4, 1fr)",
-                    gap: "1rem",
-                  }}
-                >
-                  <div>
-                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                      Enganche %
-                    </label>
-                    <input
-                      type="number"
-                      value={downPaymentPct}
-                      onChange={(e) => {
-                        setDownPaymentPct(Number(e.target.value));
-                        setSelectedPlanId("custom");
-                        setCustomPlanName("Plan Personalizado");
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "0.5rem",
-                        borderRadius: "0.5rem",
-                        border: "1px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 700,
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                      Mensualidades
-                    </label>
-                    <input
-                      type="number"
-                      value={installmentsCount}
-                      onChange={(e) => {
-                        setInstallmentsCount(Number(e.target.value));
-                        setSelectedPlanId("custom");
-                        setCustomPlanName("Plan Personalizado");
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "0.5rem",
-                        borderRadius: "0.5rem",
-                        border: "1px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 700,
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                      Liquidación %
-                    </label>
-                    <input
-                      type="number"
-                      value={balloonLiquidationPct}
-                      onChange={(e) => {
-                        setBalloonLiquidationPct(Number(e.target.value));
-                        setSelectedPlanId("custom");
-                        setCustomPlanName("Plan Personalizado");
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "0.5rem",
-                        borderRadius: "0.5rem",
-                        border: "1px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 700,
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                      Descuento %
-                    </label>
-                    <input
-                      type="number"
-                      value={discountPct}
-                      onChange={(e) => {
-                        setDiscountPct(Number(e.target.value));
-                        setSelectedPlanId("custom");
-                        setCustomPlanName("Plan Personalizado");
-                      }}
-                      style={{
-                        width: "100%",
-                        padding: "0.5rem",
-                        borderRadius: "0.5rem",
-                        border: "1px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 700,
-                      }}
-                    />
-                  </div>
-
-                  {/* Live Schema Balance Card & Distribution */}
-                  <div
+                <div style={{ alignSelf: "flex-end" }}>
+                  <button
+                    type="button"
+                    onClick={handleOpenCustomPlanModal}
                     style={{
-                      gridColumn: "1 / -1",
-                      padding: "0.85rem 1rem",
-                      borderRadius: "0.65rem",
-                      backgroundColor: planValidation.isValid ? "rgba(255, 255, 255, 0.8)" : "#FFF5F5",
-                      border: planValidation.isValid ? "1px solid var(--devio-neutral-2)" : "1px solid #FCA5A5",
-                      fontSize: "0.78rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      padding: "0.75rem 1.25rem",
+                      borderRadius: "0.6rem",
+                      backgroundColor: "var(--devio-blue-dark)",
+                      color: "var(--devio-white)",
+                      fontSize: "0.88rem",
+                      fontWeight: 700,
+                      border: "none",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      boxShadow: "0 2px 8px rgba(31, 54, 82, 0.2)",
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = "var(--devio-blue)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "var(--devio-blue-dark)";
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
-                      <span style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>
-                        Distribución: Enganche ({downPaymentPct}%) + {installmentsCount > 0 ? `${installmentsCount} Mensualidades (${planValidation.installmentsPct}%)` : "Sin mensualidades"} + Liquidación ({balloonLiquidationPct}%)
+                    <Edit2 size={15} />
+                    Personalizar Plan de Pago
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Plan Highlights Card */}
+              <div
+                style={{
+                  backgroundColor: "rgba(31, 54, 82, 0.03)",
+                  border: "1px solid var(--devio-neutral-1)",
+                  borderRadius: "0.85rem",
+                  padding: "1rem 1.25rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.75rem",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "var(--devio-blue-dark)" }}>
+                      {customPlanName || "Plan de Pago"}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.7rem",
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: "9999px",
+                        fontWeight: 700,
+                        backgroundColor: paymentType === "CONTADO" ? "rgba(0, 196, 140, 0.15)" : "rgba(47, 128, 237, 0.15)",
+                        color: paymentType === "CONTADO" ? "var(--devio-green)" : "var(--devio-blue)",
+                      }}
+                    >
+                      {paymentType === "CONTADO" ? "⚡ Pago de Contado (100%)" : "🗓 Esquema en Plazos"}
+                    </span>
+                  </div>
+
+                  <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)", fontStyle: "italic" }}>
+                    * Los cambios al plan aplican exclusivamente a esta venta y no modifican el catálogo general.
+                  </span>
+                </div>
+
+                {/* Metrics Badges */}
+                <div style={{ display: "grid", gridTemplateColumns: paymentType === "CONTADO" ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "0.65rem" }}>
+                  {paymentType === "CONTADO" ? (
+                    <>
+                      <div style={{ backgroundColor: "#FFFFFF", padding: "0.6rem 0.85rem", borderRadius: "0.5rem", border: "1px solid var(--devio-neutral-1)" }}>
+                        <span style={{ fontSize: "0.7rem", color: "var(--devio-neutral-3)", display: "block" }}>Pago Total en 1 Exhibición</span>
+                        <strong style={{ fontSize: "0.95rem", color: "var(--devio-blue-dark)" }}>
+                          100% ({formatMoney(netTotalSaleAmount)})
+                        </strong>
+                      </div>
+                      <div style={{ backgroundColor: "#FFFFFF", padding: "0.6rem 0.85rem", borderRadius: "0.5rem", border: "1px solid var(--devio-neutral-1)" }}>
+                        <span style={{ fontSize: "0.7rem", color: "var(--devio-neutral-3)", display: "block" }}>Descuento por Contado</span>
+                        <strong style={{ fontSize: "0.95rem", color: discountPct > 0 ? "var(--devio-green)" : "var(--devio-neutral-3)" }}>
+                          {discountPct > 0 ? `${discountPct}% (${formatMoney(discountAmount)})` : "Sin descuento"}
+                        </strong>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ backgroundColor: "#FFFFFF", padding: "0.6rem 0.85rem", borderRadius: "0.5rem", border: "1px solid var(--devio-neutral-1)" }}>
+                        <span style={{ fontSize: "0.7rem", color: "var(--devio-neutral-3)", display: "block" }}>Enganche Inicial</span>
+                        <strong style={{ fontSize: "0.92rem", color: "#2F80ED" }}>
+                          {downPaymentPct}% ({formatMoney(Math.round(netTotalSaleAmount * (downPaymentPct / 100)))})
+                        </strong>
+                      </div>
+
+                      <div style={{ backgroundColor: "#FFFFFF", padding: "0.6rem 0.85rem", borderRadius: "0.5rem", border: "1px solid var(--devio-neutral-1)" }}>
+                        <span style={{ fontSize: "0.7rem", color: "var(--devio-neutral-3)", display: "block" }}>
+                          {installmentsCount} Cuotas ({periodicity})
+                        </span>
+                        <strong style={{ fontSize: "0.92rem", color: "#D97706" }}>
+                          {planValidation.installmentsPct}% ({installmentsCount > 0 ? `${formatMoney(Math.round(((netTotalSaleAmount * (planValidation.installmentsPct / 100)) / installmentsCount) * 100) / 100)} c/u` : "$0"})
+                        </strong>
+                      </div>
+
+                      <div style={{ backgroundColor: "#FFFFFF", padding: "0.6rem 0.85rem", borderRadius: "0.5rem", border: "1px solid var(--devio-neutral-1)" }}>
+                        <span style={{ fontSize: "0.7rem", color: "var(--devio-neutral-3)", display: "block" }}>Liquidación Final</span>
+                        <strong style={{ fontSize: "0.92rem", color: "#00C48C" }}>
+                          {balloonLiquidationPct}% ({formatMoney(Math.round(netTotalSaleAmount * (balloonLiquidationPct / 100)))})
+                        </strong>
+                      </div>
+
+                      <div style={{ backgroundColor: "#FFFFFF", padding: "0.6rem 0.85rem", borderRadius: "0.5rem", border: "1px solid var(--devio-neutral-1)" }}>
+                        <span style={{ fontSize: "0.7rem", color: "var(--devio-neutral-3)", display: "block" }}>Descuento / Interés</span>
+                        <strong style={{ fontSize: "0.92rem", color: discountPct > 0 ? "var(--devio-green)" : "var(--devio-neutral-3)" }}>
+                          {discountPct > 0 ? `-${discountPct}%` : "0%"} {interestPct > 0 ? ` / +${interestPct}% Int.` : ""}
+                        </strong>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Live Schema Distribution Bar */}
+                {paymentType === "ESQUEMA" && (
+                  <div
+                    style={{
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "0.5rem",
+                      backgroundColor: planValidation.isValid ? "rgba(255, 255, 255, 0.7)" : "#FFF5F5",
+                      border: planValidation.isValid ? "1px solid var(--devio-neutral-2)" : "1px solid #FCA5A5",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+                      <span style={{ fontWeight: 600, color: "var(--devio-blue-dark)" }}>
+                        Distribución: Enganche ({downPaymentPct}%) + {installmentsCount > 0 ? `${installmentsCount} (${planValidation.installmentsPct}%)` : "Sin cuotas"} + Liquidación ({balloonLiquidationPct}%)
                       </span>
                       <strong style={{ color: planValidation.isValid ? "var(--devio-green)" : "var(--devio-red)" }}>
                         {planValidation.isValid ? "✓ Total: 100%" : `⚠ Total: ${planValidation.totalPct}%`}
                       </strong>
                     </div>
-                    <div style={{ height: "8px", backgroundColor: "#E2E8F0", borderRadius: "4px", display: "flex", overflow: "hidden", marginBottom: "0.4rem" }}>
+                    <div style={{ height: "6px", backgroundColor: "#E2E8F0", borderRadius: "3px", display: "flex", overflow: "hidden" }}>
                       <div style={{ width: `${Math.max(0, Math.min(100, downPaymentPct))}%`, backgroundColor: "#2F80ED" }} title={`Enganche: ${downPaymentPct}%`} />
-                      <div style={{ width: `${Math.max(0, Math.min(100, planValidation.installmentsPct))}%`, backgroundColor: "#F2C94C" }} title={`Mensualidades: ${planValidation.installmentsPct}%`} />
+                      <div style={{ width: `${Math.max(0, Math.min(100, planValidation.installmentsPct))}%`, backgroundColor: "#F2C94C" }} title={`Cuotas: ${planValidation.installmentsPct}%`} />
                       <div style={{ width: `${Math.max(0, Math.min(100, balloonLiquidationPct))}%`, backgroundColor: "#00C48C" }} title={`Liquidación: ${balloonLiquidationPct}%`} />
                     </div>
-                    {planValidation.isValid && installmentsCount > 0 && planValidation.installmentsPct > 0 && (
-                      <span style={{ color: "var(--text-muted)", fontSize: "0.74rem" }}>
-                        Cada mensualidad es del {(planValidation.installmentsPct / installmentsCount).toFixed(2)}% del valor neto a liquidar.
-                      </span>
-                    )}
                   </div>
+                )}
 
-                  {/* ALERTA DE ERROR Y SUGERENCIAS DE CORRECCIÓN RÁPIDA (1-CLIC) */}
-                  {!planValidation.isValid && planValidation.errorMessage && (
-                    <div
-                      style={{
-                        gridColumn: "1 / -1",
-                        backgroundColor: "#FEF2F2",
-                        border: "1px solid #F87171",
-                        borderRadius: "0.65rem",
-                        padding: "0.85rem 1rem",
-                        animation: "fadeIn 0.2s ease-in-out",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem" }}>
-                        <AlertCircle size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: "2px" }} />
-                        <div style={{ flex: 1 }}>
-                          <h5 style={{ margin: "0 0 0.2rem", fontSize: "0.84rem", fontWeight: 700, color: "#991B1B" }}>
-                            {planValidation.errorTitle}
-                          </h5>
-                          <p style={{ margin: 0, fontSize: "0.78rem", color: "#B91C1C", lineHeight: 1.4 }}>
-                            {planValidation.errorMessage}
-                          </p>
-
-                          {planValidation.fixes.length > 0 && (
-                            <div style={{ marginTop: "0.6rem" }}>
-                              <span style={{ fontSize: "0.73rem", fontWeight: 700, color: "#7F1D1D", display: "block", marginBottom: "0.35rem" }}>
-                                💡 Sugerencias de corrección rápida (1-clic):
-                              </span>
-                              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-                                {planValidation.fixes.map((fix, idx) => (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onClick={fix.action}
-                                    style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "0.35rem",
-                                      backgroundColor: "#FFFFFF",
-                                      border: "1px solid #FCA5A5",
-                                      color: "#991B1B",
-                                      borderRadius: "6px",
-                                      padding: "0.35rem 0.65rem",
-                                      fontSize: "0.74rem",
-                                      fontWeight: 600,
-                                      cursor: "pointer",
-                                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                                      transition: "all 0.15s ease",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.backgroundColor = "#FEE2E2";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.backgroundColor = "#FFFFFF";
-                                    }}
-                                  >
-                                    <Sparkles size={13} color="#DC2626" />
-                                    {fix.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                {/* Discount Scope Option if discount > 0 */}
+                {discountPct > 0 && (
+                  <div
+                    style={{
+                      padding: "0.6rem 0.85rem",
+                      borderRadius: "0.5rem",
+                      backgroundColor: "rgba(47, 128, 237, 0.05)",
+                      border: "1px solid rgba(47, 128, 237, 0.15)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: "0.6rem",
+                    }}
+                  >
+                    <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                      Aplicar Descuento del {discountPct}% ({formatMoney(discountAmount)}) sobre:
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.76rem", cursor: "pointer", fontWeight: discountAppliesTo === "total" ? 700 : 500, color: "var(--devio-blue-dark)" }}>
+                        <input
+                          type="radio"
+                          name="discountAppliesTo"
+                          checked={discountAppliesTo === "total"}
+                          onChange={() => setDiscountAppliesTo("total")}
+                          style={{ accentColor: "var(--devio-blue)" }}
+                        />
+                        <span>Total del Plan (Unidad + Adicionales)</span>
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.76rem", cursor: "pointer", fontWeight: discountAppliesTo === "unit_only" ? 700 : 500, color: "var(--devio-blue-dark)" }}>
+                        <input
+                          type="radio"
+                          name="discountAppliesTo"
+                          checked={discountAppliesTo === "unit_only"}
+                          onChange={() => setDiscountAppliesTo("unit_only")}
+                          style={{ accentColor: "var(--devio-blue)" }}
+                        />
+                        <span>Solo Precio de la Unidad</span>
+                      </label>
                     </div>
-                  )}
-
-                  {/* Discount Scope Option */}
-                  {discountPct > 0 && (
-                    <div
-                      style={{
-                        gridColumn: "1 / -1",
-                        marginTop: "0.25rem",
-                        padding: "0.75rem 1rem",
-                        borderRadius: "0.65rem",
-                        backgroundColor: "rgba(47, 128, 237, 0.05)",
-                        border: "1px solid rgba(47, 128, 237, 0.15)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        flexWrap: "wrap",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
-                        Aplicar Descuento del {discountPct}% ({formatMoney(discountAmount)}) sobre:
-                      </span>
-                      <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", cursor: "pointer", fontWeight: discountAppliesTo === "total" ? 700 : 500, color: "var(--devio-blue-dark)" }}>
-                          <input
-                            type="radio"
-                            name="discountAppliesTo"
-                            checked={discountAppliesTo === "total"}
-                            onChange={() => setDiscountAppliesTo("total")}
-                            style={{ accentColor: "var(--devio-blue)" }}
-                          />
-                          <span>Total del Plan (Unidad + Adicionales)</span>
-                        </label>
-                        <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", cursor: "pointer", fontWeight: discountAppliesTo === "unit_only" ? 700 : 500, color: "var(--devio-blue-dark)" }}>
-                          <input
-                            type="radio"
-                            name="discountAppliesTo"
-                            checked={discountAppliesTo === "unit_only"}
-                            onChange={() => setDiscountAppliesTo("unit_only")}
-                            style={{ accentColor: "var(--devio-blue)" }}
-                          />
-                          <span>Solo Precio de la Unidad</span>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
 
               {/* Payment Schedule Date Controls */}
               <div
@@ -2746,6 +3090,495 @@ export default function CreateSaleWizardModal({
           )}
         </div>
       </div>
+
+      {/* ================================================================== */}
+      {/* MODAL: PERSONALIZAR PLAN DE PAGO EXCLUSIVO DE LA VENTA */}
+      {/* ================================================================== */}
+      {isCustomPlanModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(10, 25, 47, 0.78)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100000,
+            padding: "1rem",
+            animation: "fadeIn 0.15s ease-out",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--devio-white)",
+              borderRadius: "1.25rem",
+              width: "100%",
+              maxWidth: "680px",
+              maxHeight: "92vh",
+              overflowY: "auto",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
+              border: "1px solid var(--devio-neutral-1)",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: "1.25rem 1.5rem",
+                borderBottom: "1px solid var(--devio-neutral-1)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: "#FAFBFD",
+              }}
+            >
+              <div>
+                <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: "0 0 0.2rem" }}>
+                  Personalizar Plan de Pago
+                </h3>
+                <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--devio-neutral-3)" }}>
+                  Este esquema aplicará exclusivamente a esta venta (no altera el catálogo global de planes).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCustomPlanModalOpen(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--devio-neutral-3)",
+                  padding: "0.4rem",
+                  borderRadius: "0.4rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            <form onSubmit={handleApplyCustomPlanFromModal} style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              <div>
+                <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
+                  Nombre descriptivo del Plan *
+                </label>
+                <input
+                  type="text"
+                  value={customModalForm.name}
+                  onChange={(e) => setCustomModalForm({ ...customModalForm, name: e.target.value })}
+                  placeholder="Ej. Plan Personalizado 15/85 - Cliente Especial"
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "0.55rem",
+                    border: "1.5px solid var(--devio-neutral-2)",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                  }}
+                  required
+                />
+              </div>
+
+              {/* ¿Cómo se pagará este plan? */}
+              <div>
+                <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.5rem", textAlign: "center" }}>
+                  ¿Cómo se pagará este plan?
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <div
+                    onClick={() => setCustomModalForm({ ...customModalForm, paymentType: "ESQUEMA" })}
+                    style={{
+                      padding: "0.85rem 1rem",
+                      borderRadius: "0.75rem",
+                      border: customModalForm.paymentType === "ESQUEMA" ? "2px solid var(--devio-blue)" : "1.5px solid var(--devio-neutral-2)",
+                      backgroundColor: customModalForm.paymentType === "ESQUEMA" ? "rgba(47, 128, 237, 0.05)" : "#FFFFFF",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.25rem" }}>
+                      <input
+                        type="radio"
+                        checked={customModalForm.paymentType === "ESQUEMA"}
+                        onChange={() => setCustomModalForm({ ...customModalForm, paymentType: "ESQUEMA" })}
+                        style={{ accentColor: "var(--devio-blue)" }}
+                      />
+                      <strong style={{ fontSize: "0.86rem", color: "var(--devio-blue-dark)" }}>Esquema de pago</strong>
+                    </div>
+                    <p style={{ fontSize: "0.73rem", color: "var(--devio-neutral-3)", margin: 0, lineHeight: 1.35 }}>
+                      El cliente pagará mediante enganche, parcialidades y liquidación final.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setCustomModalForm({ ...customModalForm, paymentType: "CONTADO" })}
+                    style={{
+                      padding: "0.85rem 1rem",
+                      borderRadius: "0.75rem",
+                      border: customModalForm.paymentType === "CONTADO" ? "2px solid var(--devio-blue)" : "1.5px solid var(--devio-neutral-2)",
+                      backgroundColor: customModalForm.paymentType === "CONTADO" ? "rgba(47, 128, 237, 0.05)" : "#FFFFFF",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.25rem" }}>
+                      <input
+                        type="radio"
+                        checked={customModalForm.paymentType === "CONTADO"}
+                        onChange={() => setCustomModalForm({ ...customModalForm, paymentType: "CONTADO" })}
+                        style={{ accentColor: "var(--devio-blue)" }}
+                      />
+                      <strong style={{ fontSize: "0.86rem", color: "var(--devio-blue-dark)" }}>Pago de contado</strong>
+                    </div>
+                    <p style={{ fontSize: "0.73rem", color: "var(--devio-neutral-3)", margin: 0, lineHeight: 1.35 }}>
+                      El cliente liquidará el total en una sola exhibición con o sin descuento.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ESQUEMA: Inputs de Enganche, Plazos, Periodicidad y Liquidación */}
+              {customModalForm.paymentType === "ESQUEMA" && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.65rem" }}>
+                    <div>
+                      <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                        Enganche % *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={customModalForm.downPaymentPercentage}
+                        onChange={(e) => setCustomModalForm({ ...customModalForm, downPaymentPercentage: parseFloat(e.target.value) || 0 })}
+                        style={{
+                          width: "100%",
+                          padding: "0.55rem 0.65rem",
+                          borderRadius: "0.5rem",
+                          border: "1.5px solid var(--devio-neutral-2)",
+                          fontSize: "0.85rem",
+                          fontWeight: 700,
+                        }}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                        Plazos / Cuotas
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="120"
+                        value={customModalForm.installmentsCount}
+                        onChange={(e) => setCustomModalForm({ ...customModalForm, installmentsCount: parseInt(e.target.value) || 0 })}
+                        style={{
+                          width: "100%",
+                          padding: "0.55rem 0.65rem",
+                          borderRadius: "0.5rem",
+                          border: "1.5px solid var(--devio-neutral-2)",
+                          fontSize: "0.85rem",
+                          fontWeight: 700,
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                        Periodicidad
+                      </label>
+                      <select
+                        value={customModalForm.periodicity}
+                        onChange={(e) => setCustomModalForm({ ...customModalForm, periodicity: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.55rem 0.5rem",
+                          borderRadius: "0.5rem",
+                          border: "1.5px solid var(--devio-neutral-2)",
+                          fontSize: "0.82rem",
+                          fontWeight: 700,
+                          backgroundColor: "#FFFFFF",
+                        }}
+                      >
+                        <option value="Semanal">Semanal</option>
+                        <option value="Quincenal">Quincenal</option>
+                        <option value="Mensual">Mensual</option>
+                        <option value="Bimestral">Bimestral</option>
+                        <option value="Trimestral">Trimestral</option>
+                        <option value="Semestral">Semestral</option>
+                        <option value="Anual">Anual</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                        Liquidación % *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={customModalForm.settlementPercentage}
+                        onChange={(e) => setCustomModalForm({ ...customModalForm, settlementPercentage: parseFloat(e.target.value) || 0 })}
+                        style={{
+                          width: "100%",
+                          padding: "0.55rem 0.65rem",
+                          borderRadius: "0.5rem",
+                          border: "1.5px solid var(--devio-neutral-2)",
+                          fontSize: "0.85rem",
+                          fontWeight: 700,
+                        }}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Barra Visual de Distribución Financiera 100% */}
+                  <div
+                    style={{
+                      padding: "0.85rem 1rem",
+                      borderRadius: "0.65rem",
+                      backgroundColor: modalPlanValidation.isValid ? "rgba(255, 255, 255, 0.8)" : "#FFF5F5",
+                      border: modalPlanValidation.isValid ? "1px solid var(--devio-neutral-2)" : "1px solid #FCA5A5",
+                      fontSize: "0.78rem",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                      <span style={{ fontWeight: 600, color: "var(--devio-blue-dark)" }}>
+                        Distribución: Enganche ({modalPlanValidation.downPct}%) + {customModalForm.installmentsCount > 0 ? `${customModalForm.installmentsCount} Cuotas (${modalPlanValidation.installmentsPct}%)` : "Sin cuotas"} + Liquidación ({modalPlanValidation.settlementPct}%)
+                      </span>
+                      <strong style={{ color: modalPlanValidation.isValid ? "var(--devio-green)" : "var(--devio-red)" }}>
+                        {modalPlanValidation.isValid ? "✓ Total: 100%" : `⚠ Total: ${modalPlanValidation.totalPct}%`}
+                      </strong>
+                    </div>
+                    <div style={{ height: "8px", backgroundColor: "#E2E8F0", borderRadius: "4px", display: "flex", overflow: "hidden", marginBottom: "0.35rem" }}>
+                      <div style={{ width: `${Math.max(0, Math.min(100, modalPlanValidation.downPct))}%`, backgroundColor: "#2F80ED" }} title={`Enganche: ${modalPlanValidation.downPct}%`} />
+                      <div style={{ width: `${Math.max(0, Math.min(100, modalPlanValidation.installmentsPct))}%`, backgroundColor: "#F2C94C" }} title={`Cuotas: ${modalPlanValidation.installmentsPct}%`} />
+                      <div style={{ width: `${Math.max(0, Math.min(100, modalPlanValidation.settlementPct))}%`, backgroundColor: "#00C48C" }} title={`Liquidación: ${modalPlanValidation.settlementPct}%`} />
+                    </div>
+                    {modalPlanValidation.isValid && customModalForm.installmentsCount > 0 && modalPlanValidation.installmentsPct > 0 && (
+                      <span style={{ color: "var(--devio-neutral-3)", fontSize: "0.74rem" }}>
+                        Cada cuota ({customModalForm.periodicity}) es del {(modalPlanValidation.installmentsPct / customModalForm.installmentsCount).toFixed(2)}% del valor neto.
+                      </span>
+                    )}
+                  </div>
+
+                  {/* ALERTA DE ERROR Y SUGERENCIAS DE CORRECCIÓN RÁPIDA (1-CLIC) */}
+                  {!modalPlanValidation.isValid && modalPlanValidation.errorMessage && (
+                    <div
+                      style={{
+                        backgroundColor: "#FEF2F2",
+                        border: "1px solid #F87171",
+                        borderRadius: "0.65rem",
+                        padding: "0.85rem 1rem",
+                        animation: "fadeIn 0.2s ease-in-out",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem" }}>
+                        <AlertCircle size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: "2px" }} />
+                        <div style={{ flex: 1 }}>
+                          <h5 style={{ margin: "0 0 0.2rem", fontSize: "0.84rem", fontWeight: 700, color: "#991B1B" }}>
+                            {modalPlanValidation.errorTitle}
+                          </h5>
+                          <p style={{ margin: 0, fontSize: "0.78rem", color: "#B91C1C", lineHeight: 1.4 }}>
+                            {modalPlanValidation.errorMessage}
+                          </p>
+
+                          {modalPlanValidation.fixes.length > 0 && (
+                            <div style={{ marginTop: "0.6rem" }}>
+                              <span style={{ fontSize: "0.73rem", fontWeight: 700, color: "#7F1D1D", display: "block", marginBottom: "0.35rem" }}>
+                                💡 Sugerencias de corrección rápida (1-clic):
+                              </span>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                                {modalPlanValidation.fixes.map((fix, idx) => (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={fix.action}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.35rem",
+                                      backgroundColor: "#FFFFFF",
+                                      border: "1px solid #FCA5A5",
+                                      color: "#991B1B",
+                                      borderRadius: "6px",
+                                      padding: "0.35rem 0.65rem",
+                                      fontSize: "0.74rem",
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                                      transition: "all 0.15s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.backgroundColor = "#FEE2E2";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.backgroundColor = "#FFFFFF";
+                                    }}
+                                  >
+                                    <Sparkles size={13} color="#DC2626" />
+                                    {fix.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Interés y Descuento */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <div>
+                      <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                        Interés %
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={customModalForm.interestPercentage}
+                        onChange={(e) => setCustomModalForm({ ...customModalForm, interestPercentage: parseFloat(e.target.value) || 0 })}
+                        style={{
+                          width: "100%",
+                          padding: "0.55rem 0.65rem",
+                          borderRadius: "0.5rem",
+                          border: "1.5px solid var(--devio-neutral-2)",
+                          fontSize: "0.85rem",
+                          fontWeight: 700,
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                        Descuento %
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={customModalForm.discountPercentage}
+                        onChange={(e) => setCustomModalForm({ ...customModalForm, discountPercentage: parseFloat(e.target.value) || 0 })}
+                        style={{
+                          width: "100%",
+                          padding: "0.55rem 0.65rem",
+                          borderRadius: "0.5rem",
+                          border: "1.5px solid var(--devio-neutral-2)",
+                          fontSize: "0.85rem",
+                          fontWeight: 700,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* CONTADO: Input de Descuento */}
+              {customModalForm.paymentType === "CONTADO" && (
+                <div>
+                  <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                    Descuento por Pago de Contado (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={customModalForm.discountPercentage}
+                    onChange={(e) => setCustomModalForm({ ...customModalForm, discountPercentage: parseFloat(e.target.value) || 0 })}
+                    placeholder="Ej. 10"
+                    style={{
+                      width: "100%",
+                      padding: "0.55rem 0.65rem",
+                      borderRadius: "0.5rem",
+                      border: "1.5px solid var(--devio-neutral-2)",
+                      fontSize: "0.85rem",
+                      fontWeight: 700,
+                    }}
+                  />
+                  <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", marginTop: "0.25rem", display: "block" }}>
+                    El comprador liquida el 100% en una sola exhibición con este descuento.
+                  </span>
+                </div>
+              )}
+
+              {/* Notas Internas */}
+              <div>
+                <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                  Notas Internas del Plan
+                </label>
+                <textarea
+                  value={customModalForm.internalNotes}
+                  onChange={(e) => setCustomModalForm({ ...customModalForm, internalNotes: e.target.value })}
+                  placeholder="Detalles sobre acuerdos comerciales o condiciones especiales..."
+                  rows={2}
+                  style={{
+                    width: "100%",
+                    padding: "0.55rem 0.75rem",
+                    borderRadius: "0.5rem",
+                    border: "1.5px solid var(--devio-neutral-2)",
+                    fontSize: "0.82rem",
+                    fontFamily: "inherit",
+                  }}
+                />
+              </div>
+
+              {/* Modal Actions */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setIsCustomPlanModalOpen(false)}
+                  style={{
+                    padding: "0.6rem 1.25rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid var(--devio-neutral-2)",
+                    backgroundColor: "#FFFFFF",
+                    color: "var(--devio-neutral-4)",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!modalPlanValidation.isValid}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.6rem 1.4rem",
+                    borderRadius: "0.5rem",
+                    backgroundColor: modalPlanValidation.isValid ? "var(--devio-blue-dark)" : "#94A3B8",
+                    color: "var(--devio-white)",
+                    fontSize: "0.85rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: modalPlanValidation.isValid ? "pointer" : "not-allowed",
+                    boxShadow: modalPlanValidation.isValid ? "0 4px 12px rgba(31, 54, 82, 0.25)" : "none",
+                  }}
+                >
+                  <CheckCircle2 size={16} /> Aplicar a esta Venta
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

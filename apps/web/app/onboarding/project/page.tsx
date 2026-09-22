@@ -3536,10 +3536,13 @@ export default function ProjectOnboardingPage() {
                         onChange={(e) => setModalPlanData({ ...modalPlanData, periodicity: e.target.value })}
                         className="form-select"
                       >
+                        <option value="Semanal">Semanal</option>
+                        <option value="Quincenal">Quincenal</option>
                         <option value="Mensual">Mensual</option>
                         <option value="Bimestral">Bimestral</option>
                         <option value="Trimestral">Trimestral</option>
                         <option value="Semestral">Semestral</option>
+                        <option value="Anual">Anual</option>
                       </select>
                     </div>
 
