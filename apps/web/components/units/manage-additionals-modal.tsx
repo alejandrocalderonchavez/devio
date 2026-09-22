@@ -17,7 +17,8 @@ import {
   Search,
   SlidersHorizontal,
   Home,
-  Save
+  Save,
+  Lock
 } from "lucide-react";
 
 export interface ProjectAdditional {
@@ -92,6 +93,10 @@ export default function ManageAdditionalsModal({
 
     let updatedList: ProjectAdditional[] = [];
     if (editingItem) {
+      if (editingItem.status !== "DISPONIBLE") {
+        alert(`No se puede modificar '${editingItem.name}' porque no está disponible (estatus: ${editingItem.status}).`);
+        return;
+      }
       updatedList = additionals.map((item) =>
         item.id === editingItem.id
           ? {
@@ -128,7 +133,7 @@ export default function ManageAdditionalsModal({
   const handleDeleteItem = (id: string) => {
     const target = additionals.find((i) => i.id === id);
     if (target && target.status !== "DISPONIBLE") {
-      alert(`No se puede eliminar ${target.name} porque ya está asignado a la unidad ${target.assignedToUnit}.`);
+      alert(`No se puede eliminar ${target.name} porque ya está asignado a la unidad ${target.assignedToUnit || ""} o no está disponible.`);
       return;
     }
     const updatedList = additionals.filter((i) => i.id !== id);
@@ -137,6 +142,10 @@ export default function ManageAdditionalsModal({
   };
 
   const handleEditClick = (item: ProjectAdditional) => {
+    if (item.status !== "DISPONIBLE") {
+      alert(`Solo se pueden editar adicionales con estatus Disponible. Este adicional está: ${item.status}.`);
+      return;
+    }
     setEditingItem(item);
     setNewItemName(item.name);
     setNewItemCategory(item.category);
@@ -563,37 +572,56 @@ export default function ManageAdditionalsModal({
                       </td>
 
                       <td style={{ padding: "0.65rem 0.75rem", textAlign: "right" }}>
-                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.4rem" }}>
-                          <button
-                            type="button"
-                            onClick={() => handleEditClick(item)}
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: "var(--devio-blue)",
-                              cursor: "pointer",
-                              padding: "0.25rem",
-                            }}
-                            title="Editar adicional"
-                          >
-                            <Edit2 size={14} />
-                          </button>
+                        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.4rem" }}>
+                          {isAvailable ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleEditClick(item)}
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  color: "var(--devio-blue)",
+                                  cursor: "pointer",
+                                  padding: "0.25rem",
+                                }}
+                                title="Editar adicional"
+                              >
+                                <Edit2 size={14} />
+                              </button>
 
-                          {isAvailable && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteItem(item.id)}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteItem(item.id)}
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  color: "var(--devio-red)",
+                                  cursor: "pointer",
+                                  padding: "0.25rem",
+                                }}
+                                title="Eliminar adicional disponible"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </>
+                          ) : (
+                            <span
                               style={{
-                                background: "none",
-                                border: "none",
-                                color: "var(--devio-red)",
-                                cursor: "pointer",
-                                padding: "0.25rem",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.25rem",
+                                fontSize: "0.72rem",
+                                color: "var(--devio-neutral-3)",
+                                padding: "0.2rem 0.45rem",
+                                backgroundColor: "#F1F5F9",
+                                borderRadius: "4px",
+                                fontWeight: 600,
                               }}
-                              title="Eliminar adicional disponible"
+                              title="No se puede modificar ni eliminar porque no está disponible"
                             >
-                              <Trash2 size={14} />
-                            </button>
+                              <Lock size={11} /> Bloqueado
+                            </span>
                           )}
                         </div>
                       </td>

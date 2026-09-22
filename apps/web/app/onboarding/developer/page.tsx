@@ -287,6 +287,11 @@ export default function DeveloperOnboardingPage() {
   };
 
   const removeTeamMember = (index: number) => {
+    const target = teamMembers[index];
+    if (target && (target.role === "Super Admin" || target.role?.toLowerCase().includes("super admin"))) {
+      alert("El Super Admin es el usuario principal de la desarrolladora y no puede ser eliminado.");
+      return;
+    }
     setTeamMembers((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -914,7 +919,7 @@ export default function DeveloperOnboardingPage() {
                       <span style={{ fontSize: "0.75rem", color: "var(--devio-green)", fontWeight: 600 }}>
                         Acceso listo para despacho
                       </span>
-                      {teamMembers.length > 1 && (
+                      {teamMembers.length > 1 && !(member.role === "Super Admin" || member.role?.toLowerCase().includes("super admin")) && (
                         <button
                           type="button"
                           onClick={() => removeTeamMember(idx)}
@@ -924,6 +929,7 @@ export default function DeveloperOnboardingPage() {
                             color: "var(--devio-red)",
                             cursor: "pointer",
                           }}
+                          title="Eliminar colaborador"
                         >
                           <Trash2 size={16} />
                         </button>

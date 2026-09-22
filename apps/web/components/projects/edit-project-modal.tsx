@@ -178,9 +178,30 @@ export default function EditProjectModal({
     { id: "MIXED", title: "Mixto", subtitle: "Usos mixtos", icon: Layers },
   ];
 
+  const isSuperAdminRole = (role?: string) => {
+    if (!role) return false;
+    const r = role.toLowerCase().trim();
+    return (
+      r === "super admin" ||
+      r === "superadmin" ||
+      r === "super administrador" ||
+      r === "super_admin" ||
+      r === "super-admin"
+    );
+  };
+
   const handleToggleMember = (id: string) => {
     setTeamMembers((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, assigned: !m.assigned } : m))
+      prev.map((m) => {
+        if (m.id === id) {
+          if (isSuperAdminRole(m.role)) {
+            // El Super Admin siempre debe estar asignado
+            return { ...m, assigned: true };
+          }
+          return { ...m, assigned: !m.assigned };
+        }
+        return m;
+      })
     );
   };
 
@@ -852,51 +873,62 @@ export default function EditProjectModal({
 
               {/* Members List with Checkboxes */}
               <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-                {teamMembers.map((member) => (
-                  <label
-                    key={member.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "0.85rem 1.25rem",
-                      backgroundColor: member.assigned ? "rgba(31, 54, 82, 0.04)" : "#F8FAFC",
-                      borderRadius: "0.6rem",
-                      cursor: "pointer",
-                      border: member.assigned ? "1.5px solid var(--devio-blue)" : "1px solid var(--devio-neutral-1)",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      <input
-                        type="checkbox"
-                        checked={member.assigned}
-                        onChange={() => handleToggleMember(member.id)}
-                        style={{ width: "18px", height: "18px", accentColor: "var(--devio-blue)" }}
-                      />
-                      <div>
-                        <strong style={{ fontSize: "0.88rem", color: "var(--devio-blue-dark)", display: "block" }}>
-                          {member.name}
-                        </strong>
-                        <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)" }}>
-                          {member.email} • <span style={{ fontWeight: 600, color: "var(--devio-blue)" }}>{member.role}</span>
-                        </span>
-                      </div>
-                    </div>
-                    <span
+                {teamMembers.map((member) => {
+                  const isSuperAdmin = isSuperAdminRole(member.role);
+                  const isAssigned = isSuperAdmin ? true : member.assigned;
+
+                  return (
+                    <label
+                      key={member.id}
                       style={{
-                        fontSize: "0.72rem",
-                        fontWeight: 700,
-                        padding: "0.2rem 0.5rem",
-                        borderRadius: "0.35rem",
-                        backgroundColor: member.assigned ? "rgba(111, 172, 156, 0.15)" : "#E2E8F0",
-                        color: member.assigned ? "var(--devio-green)" : "#64748B",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "0.85rem 1.25rem",
+                        backgroundColor: isAssigned ? "rgba(31, 54, 82, 0.04)" : "#F8FAFC",
+                        borderRadius: "0.6rem",
+                        cursor: isSuperAdmin ? "default" : "pointer",
+                        border: isAssigned ? "1.5px solid var(--devio-blue)" : "1px solid var(--devio-neutral-1)",
+                        transition: "all 0.15s ease",
                       }}
+                      title={isSuperAdmin ? "El Super Admin tiene acceso global obligatorio a todos los proyectos." : undefined}
                     >
-                      {member.assigned ? "Asignado" : "No asignado"}
-                    </span>
-                  </label>
-                ))}
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                        <input
+                          type="checkbox"
+                          checked={isAssigned}
+                          disabled={isSuperAdmin}
+                          onChange={() => {
+                            if (!isSuperAdmin) {
+                              handleToggleMember(member.id);
+                            }
+                          }}
+                          style={{ width: "18px", height: "18px", accentColor: "var(--devio-blue)", cursor: isSuperAdmin ? "not-allowed" : "pointer" }}
+                        />
+                        <div>
+                          <strong style={{ fontSize: "0.88rem", color: "var(--devio-blue-dark)", display: "block" }}>
+                            {member.name}
+                          </strong>
+                          <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)" }}>
+                            {member.email} • <span style={{ fontWeight: 600, color: isSuperAdmin ? "var(--devio-blue-dark)" : "var(--devio-blue)" }}>{member.role}</span>
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          padding: "0.2rem 0.5rem",
+                          borderRadius: "0.35rem",
+                          backgroundColor: isSuperAdmin ? "rgba(31, 54, 82, 0.12)" : (isAssigned ? "rgba(111, 172, 156, 0.15)" : "#E2E8F0"),
+                          color: isSuperAdmin ? "var(--devio-blue-dark)" : (isAssigned ? "var(--devio-green)" : "#64748B"),
+                        }}
+                      >
+                        {isSuperAdmin ? "Acceso Global Permanente" : (isAssigned ? "Asignado" : "No asignado")}
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
             </div>
           )}

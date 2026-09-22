@@ -191,14 +191,40 @@ export default function ProjectOnboardingPage() {
     }
   }, []);
 
+  const isSuperAdminRole = (role?: string) => {
+    if (!role) return false;
+    const r = role.toLowerCase().trim();
+    return (
+      r === "super admin" ||
+      r === "superadmin" ||
+      r === "super administrador" ||
+      r === "super_admin" ||
+      r === "super-admin"
+    );
+  };
+
   const handleToggleAssignMember = (id: string) => {
     setTeamMembers((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, assigned: !m.assigned } : m))
+      prev.map((m) => {
+        if (m.id === id) {
+          if (isSuperAdminRole(m.role)) {
+            // El Super Admin siempre debe estar asignado a todos los proyectos de la desarrolladora
+            return { ...m, assigned: true };
+          }
+          return { ...m, assigned: !m.assigned };
+        }
+        return m;
+      })
     );
   };
 
   const handleSelectAllMembers = (assigned: boolean) => {
-    setTeamMembers((prev) => prev.map((m) => ({ ...m, assigned })));
+    setTeamMembers((prev) =>
+      prev.map((m) => ({
+        ...m,
+        assigned: isSuperAdminRole(m.role) ? true : assigned,
+      }))
+    );
   };
 
   const handleAddNewTeamMember = (e: React.FormEvent) => {
@@ -3038,7 +3064,8 @@ export default function ProjectOnboardingPage() {
                     }}
                   >
                     {teamMembers.map((member) => {
-                      const isAssigned = member.assigned;
+                      const isSuperAdmin = isSuperAdminRole(member.role);
+                      const isAssigned = isSuperAdmin ? true : member.assigned;
                       const initials = member.name
                         .split(" ")
                         .map((n) => n[0])
@@ -3049,7 +3076,11 @@ export default function ProjectOnboardingPage() {
                       return (
                         <div
                           key={member.id}
-                          onClick={() => handleToggleAssignMember(member.id)}
+                          onClick={() => {
+                            if (!isSuperAdmin) {
+                              handleToggleAssignMember(member.id);
+                            }
+                          }}
                           style={{
                             display: "flex",
                             alignItems: "center",
@@ -3058,9 +3089,10 @@ export default function ProjectOnboardingPage() {
                             borderRadius: "0.65rem",
                             border: `1.5px solid ${isAssigned ? "var(--devio-blue)" : "var(--border-subtle)"}`,
                             backgroundColor: isAssigned ? "rgba(31, 54, 82, 0.02)" : "var(--devio-white)",
-                            cursor: "pointer",
+                            cursor: isSuperAdmin ? "default" : "pointer",
                             transition: "all 0.15s ease",
                           }}
+                          title={isSuperAdmin ? "El Super Admin tiene acceso global obligatorio a todos los proyectos de la desarrolladora." : undefined}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                             <div
@@ -3068,7 +3100,7 @@ export default function ProjectOnboardingPage() {
                                 width: "36px",
                                 height: "36px",
                                 borderRadius: "50%",
-                                backgroundColor: isAssigned ? "var(--devio-blue)" : "var(--devio-neutral-2)",
+                                backgroundColor: isSuperAdmin ? "#1F3652" : (isAssigned ? "var(--devio-blue)" : "var(--devio-neutral-2)"),
                                 color: "var(--devio-white)",
                                 display: "flex",
                                 alignItems: "center",
@@ -3081,7 +3113,7 @@ export default function ProjectOnboardingPage() {
                               {initials}
                             </div>
                             <div>
-                              <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                              <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                                 {member.name}
                               </div>
                               <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
@@ -3097,8 +3129,8 @@ export default function ProjectOnboardingPage() {
                                 fontWeight: 700,
                                 padding: "0.2rem 0.55rem",
                                 borderRadius: "999px",
-                                backgroundColor: isAssigned ? "rgba(31, 54, 82, 0.1)" : "rgba(0,0,0,0.05)",
-                                color: isAssigned ? "var(--devio-blue-dark)" : "var(--text-muted)",
+                                backgroundColor: isSuperAdmin ? "rgba(31, 54, 82, 0.12)" : (isAssigned ? "rgba(31, 54, 82, 0.1)" : "rgba(0,0,0,0.05)"),
+                                color: "var(--devio-blue-dark)",
                               }}
                             >
                               {member.role}
@@ -3106,9 +3138,15 @@ export default function ProjectOnboardingPage() {
                             <input
                               type="checkbox"
                               checked={isAssigned}
-                              onChange={() => handleToggleAssignMember(member.id)}
+                              disabled={isSuperAdmin}
+                              onChange={() => {
+                                if (!isSuperAdmin) {
+                                  handleToggleAssignMember(member.id);
+                                }
+                              }}
                               onClick={(e) => e.stopPropagation()}
-                              style={{ cursor: "pointer", width: "16px", height: "16px", accentColor: "var(--devio-blue)" }}
+                              title={isSuperAdmin ? "Acceso global permanente a todos los proyectos" : ""}
+                              style={{ cursor: isSuperAdmin ? "not-allowed" : "pointer", width: "16px", height: "16px", accentColor: "var(--devio-blue)", opacity: isSuperAdmin ? 0.85 : 1 }}
                             />
                           </div>
                         </div>

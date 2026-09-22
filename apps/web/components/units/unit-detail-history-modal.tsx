@@ -216,6 +216,11 @@ export default function UnitDetailHistoryModal({
   // Guardar nuevo precio individual desde el submodal
   const handleSaveIndividualPriceChange = (e: React.FormEvent) => {
     e.preventDefault();
+    const isAvailable = (unitStatus || "").toUpperCase() === "DISPONIBLE";
+    if (!isAvailable) {
+      alert(`Solo se puede ajustar el precio de unidades con estado Disponible. Esta unidad se encuentra en estado '${unitStatus}'.`);
+      return;
+    }
     if (!newPriceInput || newPriceInput <= 0) {
       alert("Por favor introduce un monto válido.");
       return;
@@ -636,24 +641,32 @@ export default function UnitDetailHistoryModal({
             <button
               type="button"
               onClick={() => {
+                const isAvailable = (unitStatus || "").toUpperCase() === "DISPONIBLE";
+                if (!isAvailable) {
+                  alert(`Solo se puede ajustar el precio de unidades con estado Disponible. Esta unidad se encuentra en estado "${unitStatus}".`);
+                  return;
+                }
                 setNewPriceInput(currentPrice);
                 setShowChangePriceSubModal(true);
               }}
+              disabled={(unitStatus || "").toUpperCase() !== "DISPONIBLE"}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "0.4rem",
                 padding: "0.45rem 0.85rem",
                 borderRadius: "0.5rem",
-                backgroundColor: "var(--devio-white)",
-                color: "var(--devio-blue-dark)",
+                backgroundColor: (unitStatus || "").toUpperCase() === "DISPONIBLE" ? "var(--devio-white)" : "#F1F5F9",
+                color: (unitStatus || "").toUpperCase() === "DISPONIBLE" ? "var(--devio-blue-dark)" : "#94A3B8",
                 border: "1px solid var(--devio-neutral-2)",
                 fontSize: "0.8rem",
                 fontWeight: 700,
-                cursor: "pointer",
+                cursor: (unitStatus || "").toUpperCase() === "DISPONIBLE" ? "pointer" : "not-allowed",
+                opacity: (unitStatus || "").toUpperCase() === "DISPONIBLE" ? 1 : 0.6,
               }}
+              title={(unitStatus || "").toUpperCase() !== "DISPONIBLE" ? `El precio no se puede modificar porque la unidad está ${unitStatus}.` : "Ajustar precio de lista"}
             >
-              <TrendingUp size={14} style={{ color: "var(--devio-blue)" }} /> Ajustar Precio
+              <TrendingUp size={14} style={{ color: (unitStatus || "").toUpperCase() === "DISPONIBLE" ? "var(--devio-blue)" : "#94A3B8" }} /> Ajustar Precio
             </button>
           </div>
         </div>
@@ -981,14 +994,63 @@ export default function UnitDetailHistoryModal({
                   </div>
 
                   <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Precio de Lista Vigente *
-                    </label>
-                    <CurrencyInput
-                      value={currentPrice}
-                      onChange={(val) => setCurrentPrice(val)}
-                      currencySymbol="$"
-                    />
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                      <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                        Precio de Lista Vigente (Solo Lectura) *
+                      </label>
+                      {(unitStatus || "").toUpperCase() === "DISPONIBLE" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewPriceInput(currentPrice);
+                            setShowChangePriceSubModal(true);
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                            background: "none",
+                            border: "none",
+                            color: "var(--devio-blue)",
+                            fontSize: "0.74rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        >
+                          <TrendingUp size={12} /> Ajustar Precio
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 600 }}>
+                          <Lock size={11} style={{ display: "inline", verticalAlign: "middle", marginRight: "2px" }} />
+                          Bloqueado ({unitStatus})
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        width: "100%",
+                        padding: "0.65rem 0.85rem",
+                        borderRadius: "0.6rem",
+                        border: "1.5px solid var(--devio-neutral-2)",
+                        backgroundColor: "#F8FAFC",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        cursor: "not-allowed",
+                      }}
+                      title="El precio no se edita directamente en este formulario. Usa el botón 'Ajustar Precio'."
+                    >
+                      <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "var(--devio-blue-dark)" }}>
+                        {formatMoney(currentPrice)}
+                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 600 }}>
+                          {currency}
+                        </span>
+                        <Lock size={14} color="var(--devio-neutral-3)" />
+                      </div>
+                    </div>
                   </div>
 
                   <div>

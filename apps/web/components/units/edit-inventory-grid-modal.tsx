@@ -367,30 +367,15 @@ export default function EditInventoryGridModal({
                       />
                     </td>
 
-                    {/* Precio */}
-                    <td style={{ padding: "0.3rem 0.5rem", borderRight: "1px solid var(--devio-neutral-1)", backgroundColor: isLocked ? "rgba(31, 54, 82, 0.02)" : "transparent" }}>
-                      {isLocked ? (
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.25rem 0.4rem" }}>
-                          <span style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>{formatMoney(u.price)}</span>
-                          <Lock size={12} style={{ color: "var(--devio-neutral-2)" }} />
-                        </div>
-                      ) : (
-                        <input
-                          type="number"
-                          value={u.price || ""}
-                          onChange={(e) => handleUpdateUnitField(index, "price", parseFloat(e.target.value) || 0)}
-                          style={{
-                            width: "100%",
-                            border: "1px solid transparent",
-                            padding: "0.25rem 0.4rem",
-                            borderRadius: "4px",
-                            fontWeight: 700,
-                            color: "var(--devio-blue-dark)",
-                          }}
-                          onFocus={(e) => (e.currentTarget.style.border = "1px solid var(--devio-blue)")}
-                          onBlur={(e) => (e.currentTarget.style.border = "1px solid transparent")}
-                        />
-                      )}
+                    {/* Precio Lista (Solo Lectura) */}
+                    <td style={{ padding: "0.3rem 0.5rem", borderRight: "1px solid var(--devio-neutral-1)", backgroundColor: "rgba(31, 54, 82, 0.02)" }}>
+                      <div
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.25rem 0.4rem" }}
+                        title="Los precios se actualizan únicamente desde 'Ajustar Precio' o 'Actualizar Precios Masivamente'."
+                      >
+                        <span style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>{formatMoney(u.price)}</span>
+                        <Lock size={12} style={{ color: "var(--devio-neutral-3)" }} />
+                      </div>
                     </td>
 
                     {/* Fecha de entrega */}
