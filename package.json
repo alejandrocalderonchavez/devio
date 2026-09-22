@@ -9,6 +9,9 @@
   },
   "scripts": {
     "build": "turbo run build",
+    "start": "pnpm --filter @devio/web start",
+    "start:web": "pnpm --filter @devio/web start",
+    "start:api": "pnpm --filter @devio/api start",
     "dev": "turbo run dev --parallel",
     "dev:web": "pnpm --filter @devio/web dev",
     "dev:api": "pnpm --filter @devio/api dev",
