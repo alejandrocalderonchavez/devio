@@ -36,6 +36,7 @@ import {
   ExternalLink,
   ChevronRight,
   Filter,
+  ChevronDown,
 } from "lucide-react";
 import AppLayout from "../../../../components/layout/app-layout";
 import { useProject } from "../../../../context/project-context";
@@ -91,10 +92,15 @@ export default function ProjectSalesPage() {
   const [saleToEdit, setSaleToEdit] = useState<SaleRecord | null>(null);
   const [localSales, setLocalSales] = useState<SaleRecord[] | null>(null);
 
-  // Quotes States
+  // Quotes States & CRM Pipeline
   const [quoteSearchQuery, setQuoteSearchQuery] = useState("");
-  const [quoteStatusFilter, setQuoteStatusFilter] = useState<"ALL" | "VIGENTE" | "CONVERTIDA_A_VENTA" | "EXPIRADA" | "RECHAZADA">("ALL");
+  const [quoteStatusFilter, setQuoteStatusFilter] = useState<"ALL" | "VIGENTE" | "EN_ESPERA" | "CONVERTIDA_A_VENTA" | "PERDIDA" | "EXPIRADA" | "RECHAZADA">("ALL");
   const [selectedQuoteForDetail, setSelectedQuoteForDetail] = useState<QuoteRecord | null>(null);
+  const [selectedQuoteToConvert, setSelectedQuoteToConvert] = useState<QuoteRecord | null>(null);
+  const [statusMenuQuoteId, setStatusMenuQuoteId] = useState<string | null>(null);
+  const [lostReasonQuote, setLostReasonQuote] = useState<QuoteRecord | null>(null);
+  const [lostReasonCategory, setLostReasonCategory] = useState("Precio fuera de presupuesto");
+  const [lostReasonText, setLostReasonText] = useState("");
   const [showUnitPickerForQuote, setShowUnitPickerForQuote] = useState(false);
   const [selectedUnitForQuoteModal, setSelectedUnitForQuoteModal] = useState<UnitItem | null>(null);
   const [showQuoteWizardModal, setShowQuoteWizardModal] = useState(false);
@@ -177,7 +183,9 @@ export default function ProjectSalesPage() {
   const quotesMetrics = useMemo(() => {
     const totalCount = quotes.length;
     const vigentesCount = quotes.filter((q) => q.status === "VIGENTE").length;
+    const enEsperaCount = quotes.filter((q) => q.status === "EN_ESPERA").length;
     const convertidasCount = quotes.filter((q) => q.status === "CONVERTIDA_A_VENTA").length;
+    const perdidasCount = quotes.filter((q) => q.status === "PERDIDA").length;
     const expiradasCount = quotes.filter((q) => q.status === "EXPIRADA").length;
     const totalCotizadoMonto = quotes.reduce((acc, q) => acc + (q.totalQuoteAmount || 0), 0);
     const conversionRate = totalCount > 0 ? Math.round((convertidasCount / totalCount) * 100) : 0;
@@ -185,7 +193,9 @@ export default function ProjectSalesPage() {
     return {
       totalCount,
       vigentesCount,
+      enEsperaCount,
       convertidasCount,
+      perdidasCount,
       expiradasCount,
       totalCotizadoMonto,
       conversionRate,
@@ -353,15 +363,55 @@ export default function ProjectSalesPage() {
     setShowExportMenu(false);
   };
 
-  // Convert Quote to Direct Sale
+  // Update Quote CRM Status
+  const handleUpdateQuoteStatus = (quoteId: string, newStatus: QuoteRecord["status"], reason?: string) => {
+    if (!project || !updateQuote) return;
+    const updateData: Partial<QuoteRecord> = { status: newStatus };
+    if (reason !== undefined) {
+      updateData.lostReason = reason;
+    }
+    updateQuote(projectId, quoteId, updateData);
+    setStatusMenuQuoteId(null);
+    if (selectedQuoteForDetail && selectedQuoteForDetail.id === quoteId) {
+      setSelectedQuoteForDetail({
+        ...selectedQuoteForDetail,
+        status: newStatus,
+        ...(reason !== undefined ? { lostReason: reason } : {}),
+      });
+    }
+    const statusLabels: Record<string, string> = {
+      VIGENTE: "Vigente",
+      EN_ESPERA: "En Espera / Seguimiento",
+      CONVERTIDA_A_VENTA: "Convertida a Venta",
+      PERDIDA: "Perdida",
+      EXPIRADA: "Expirada",
+      RECHAZADA: "Rechazada",
+    };
+    showToast("Estado Actualizado", `La cotización cambió a estado "${statusLabels[newStatus] || newStatus}".`, "success");
+  };
+
+  const handleOpenLostReason = (quote: QuoteRecord) => {
+    setStatusMenuQuoteId(null);
+    setLostReasonQuote(quote);
+    setLostReasonCategory("Precio fuera de presupuesto");
+    setLostReasonText("");
+  };
+
+  const handleConfirmLostReason = () => {
+    if (!lostReasonQuote) return;
+    const finalReason = lostReasonText.trim()
+      ? `${lostReasonCategory} - ${lostReasonText.trim()}`
+      : lostReasonCategory;
+    handleUpdateQuoteStatus(lostReasonQuote.id, "PERDIDA", finalReason);
+    setLostReasonQuote(null);
+    setLostReasonText("");
+  };
+
+  // Convert Quote to Direct Sale (with flexible editable conditions)
   const handleConvertQuoteToSale = (quote: QuoteRecord) => {
     if (!project) return;
-    // 1. Mark quote as CONVERTIDA_A_VENTA
-    if (updateQuote) {
-      updateQuote(projectId, quote.id, { status: "CONVERTIDA_A_VENTA" });
-    }
+    setSelectedQuoteToConvert(quote);
     setSelectedQuoteForDetail(null);
-    showToast("Cotización Convertida", `La cotización ${quote.folio} para unidad ${quote.unit} fue marcada como Venta Concretada. Puedes formalizarla en el asistente.`, "success");
     setShowNewSaleModal(true);
   };
 
@@ -1119,43 +1169,51 @@ export default function ProjectSalesPage() {
         {activeTab === "QUOTES" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
             
-            {/* KPI METRICS ROW */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
+            {/* KPI METRICS DE COTIZACIONES (CRM FUNNEL) */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: "1rem",
+                marginBottom: "1.5rem",
+              }}
+            >
               {/* Total Cotizaciones */}
               <div
                 style={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: "1rem",
-                  padding: "1.25rem",
+                  padding: "1.1rem",
                   border: "1px solid rgba(22, 43, 63, 0.06)",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
                   display: "flex",
                   alignItems: "center",
-                  gap: "1rem",
+                  gap: "0.85rem",
                 }}
               >
                 <div
                   style={{
-                    width: "48px",
-                    height: "48px",
+                    width: "44px",
+                    height: "44px",
                     borderRadius: "12px",
                     backgroundColor: "rgba(47, 128, 237, 0.1)",
                     color: "#2F80ED",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
-                  <FileText size={24} />
+                  <FileText size={22} />
                 </div>
                 <div>
-                  <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", textTransform: "uppercase" }}>
-                    Total Cotizaciones
+                  <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "#64748B", textTransform: "uppercase" }}>
+                    Total Propuestas
                   </span>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "#1F3652", lineHeight: 1.1 }}>
+                  <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#1F3652", lineHeight: 1.1 }}>
                     {quotesMetrics.totalCount}
                   </div>
-                  <span style={{ fontSize: "0.72rem", color: "#94A3B8" }}>Propuestas comerciales</span>
+                  <span style={{ fontSize: "0.7rem", color: "#94A3B8" }}>Cotizaciones emitidas</span>
                 </div>
               </div>
 
@@ -1164,36 +1222,154 @@ export default function ProjectSalesPage() {
                 style={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: "1rem",
-                  padding: "1.25rem",
+                  padding: "1.1rem",
                   border: "1px solid rgba(22, 43, 63, 0.06)",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
                   display: "flex",
                   alignItems: "center",
-                  gap: "1rem",
+                  gap: "0.85rem",
                 }}
               >
                 <div
                   style={{
-                    width: "48px",
-                    height: "48px",
+                    width: "44px",
+                    height: "44px",
                     borderRadius: "12px",
                     backgroundColor: "rgba(0, 196, 140, 0.1)",
                     color: "#00C48C",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
-                  <Clock size={24} />
+                  <Clock size={22} />
                 </div>
                 <div>
-                  <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", textTransform: "uppercase" }}>
-                    Cotizaciones Vigentes
+                  <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "#64748B", textTransform: "uppercase" }}>
+                    Vigentes
                   </span>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "#00C48C", lineHeight: 1.1 }}>
+                  <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#00C48C", lineHeight: 1.1 }}>
                     {quotesMetrics.vigentesCount}
                   </div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748B" }}>En seguimiento activo</span>
+                  <span style={{ fontSize: "0.7rem", color: "#64748B" }}>En seguimiento activo</span>
+                </div>
+              </div>
+
+              {/* Cotizaciones En Espera */}
+              <div
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1rem",
+                  padding: "1.1rem",
+                  border: "1px solid rgba(22, 43, 63, 0.06)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.85rem",
+                }}
+              >
+                <div
+                  style={{
+                    width: "44px",
+                    height: "44px",
+                    borderRadius: "12px",
+                    backgroundColor: "rgba(242, 153, 74, 0.12)",
+                    color: "#F2994A",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Clock size={22} />
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "#64748B", textTransform: "uppercase" }}>
+                    En Espera
+                  </span>
+                  <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#F2994A", lineHeight: 1.1 }}>
+                    {quotesMetrics.enEsperaCount}
+                  </div>
+                  <span style={{ fontSize: "0.7rem", color: "#64748B" }}>Prospecto evaluando</span>
+                </div>
+              </div>
+
+              {/* Concretadas / Vendidas */}
+              <div
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1rem",
+                  padding: "1.1rem",
+                  border: "1px solid rgba(22, 43, 63, 0.06)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.85rem",
+                }}
+              >
+                <div
+                  style={{
+                    width: "44px",
+                    height: "44px",
+                    borderRadius: "12px",
+                    backgroundColor: "rgba(47, 128, 237, 0.12)",
+                    color: "#2F80ED",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <TrendingUp size={22} />
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "#64748B", textTransform: "uppercase" }}>
+                    Concretadas ({quotesMetrics.conversionRate}%)
+                  </span>
+                  <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#2F80ED", lineHeight: 1.1 }}>
+                    {quotesMetrics.convertidasCount}
+                  </div>
+                  <span style={{ fontSize: "0.7rem", color: "#00C48C", fontWeight: 600 }}>Convertidas a venta</span>
+                </div>
+              </div>
+
+              {/* Perdidas / Descartadas */}
+              <div
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1rem",
+                  padding: "1.1rem",
+                  border: "1px solid rgba(22, 43, 63, 0.06)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.85rem",
+                }}
+              >
+                <div
+                  style={{
+                    width: "44px",
+                    height: "44px",
+                    borderRadius: "12px",
+                    backgroundColor: "rgba(235, 87, 87, 0.1)",
+                    color: "#EB5757",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "#64748B", textTransform: "uppercase" }}>
+                    Perdidas
+                  </span>
+                  <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#EB5757", lineHeight: 1.1 }}>
+                    {quotesMetrics.perdidasCount}
+                  </div>
+                  <span style={{ fontSize: "0.7rem", color: "#94A3B8" }}>Oportunidades cerradas</span>
                 </div>
               </div>
 
@@ -1202,76 +1378,37 @@ export default function ProjectSalesPage() {
                 style={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: "1rem",
-                  padding: "1.25rem",
+                  padding: "1.1rem",
                   border: "1px solid rgba(22, 43, 63, 0.06)",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
                   display: "flex",
                   alignItems: "center",
-                  gap: "1rem",
+                  gap: "0.85rem",
                 }}
               >
                 <div
                   style={{
-                    width: "48px",
-                    height: "48px",
+                    width: "44px",
+                    height: "44px",
                     borderRadius: "12px",
                     backgroundColor: "rgba(31, 54, 82, 0.08)",
                     color: "#1F3652",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
-                  <DollarSign size={24} />
+                  <DollarSign size={22} />
                 </div>
                 <div>
-                  <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", textTransform: "uppercase" }}>
-                    Monto Cotizado
+                  <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "#64748B", textTransform: "uppercase" }}>
+                    Monto en Pipeline
                   </span>
-                  <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1F3652", lineHeight: 1.1 }}>
+                  <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#1F3652", lineHeight: 1.1 }}>
                     {formatMoney(quotesMetrics.totalCotizadoMonto)}
                   </div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748B" }}>Pipeline comercial</span>
-                </div>
-              </div>
-
-              {/* Tasa de Conversión */}
-              <div
-                style={{
-                  backgroundColor: "#FFFFFF",
-                  borderRadius: "1rem",
-                  padding: "1.25rem",
-                  border: "1px solid rgba(22, 43, 63, 0.06)",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "1rem",
-                }}
-              >
-                <div
-                  style={{
-                    width: "48px",
-                    height: "48px",
-                    borderRadius: "12px",
-                    backgroundColor: "rgba(111, 172, 156, 0.15)",
-                    color: "#1F3652",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <TrendingUp size={24} />
-                </div>
-                <div>
-                  <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", textTransform: "uppercase" }}>
-                    Tasa de Conversión
-                  </span>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "#1F3652", lineHeight: 1.1 }}>
-                    {quotesMetrics.conversionRate}%
-                  </div>
-                  <span style={{ fontSize: "0.72rem", color: "#00C48C", fontWeight: 600 }}>
-                    {quotesMetrics.convertidasCount} convertidas a venta
-                  </span>
+                  <span style={{ fontSize: "0.7rem", color: "#64748B" }}>Valor total cotizado</span>
                 </div>
               </div>
             </div>
@@ -1290,7 +1427,7 @@ export default function ProjectSalesPage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
                 
                 {/* Search Bar */}
-                <div style={{ position: "relative", flex: 1, minWidth: "260px", maxWidth: "380px" }}>
+                <div style={{ position: "relative", flex: 1, minWidth: "260px", maxWidth: "340px" }}>
                   <Search
                     size={18}
                     style={{
@@ -1338,12 +1475,14 @@ export default function ProjectSalesPage() {
                   )}
                 </div>
 
-                {/* Status Filter Pills */}
+                {/* Status Filter Pills (CRM Pipeline) */}
                 <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
                   {[
                     { key: "ALL", label: "Todas" },
                     { key: "VIGENTE", label: "Vigentes" },
+                    { key: "EN_ESPERA", label: "En Espera" },
                     { key: "CONVERTIDA_A_VENTA", label: "Convertidas" },
+                    { key: "PERDIDA", label: "Perdidas" },
                     { key: "EXPIRADA", label: "Expiradas" },
                     { key: "RECHAZADA", label: "Rechazadas" },
                   ].map((filter) => {
@@ -1354,7 +1493,7 @@ export default function ProjectSalesPage() {
                         type="button"
                         onClick={() => setQuoteStatusFilter(filter.key as any)}
                         style={{
-                          padding: "0.45rem 0.9rem",
+                          padding: "0.45rem 0.85rem",
                           borderRadius: "9999px",
                           fontSize: "0.78rem",
                           fontWeight: isActive ? 700 : 500,
@@ -1373,47 +1512,51 @@ export default function ProjectSalesPage() {
 
                 {/* Actions: + Nueva Cotización & Export */}
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowUnitPickerForQuote(true)}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.45rem",
-                      backgroundColor: "#1B3047",
-                      color: "#FFFFFF",
-                      padding: "0.6rem 1.25rem",
-                      borderRadius: "9999px",
-                      fontSize: "0.82rem",
-                      fontWeight: 700,
-                      border: "none",
-                      cursor: "pointer",
-                      boxShadow: "0 2px 6px rgba(27, 48, 71, 0.15)",
-                    }}
-                  >
-                    <Plus size={15} /> Nueva Cotización
-                  </button>
+                  {hasPermission("quotes.create") && (
+                    <button
+                      type="button"
+                      onClick={() => setShowUnitPickerForQuote(true)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.45rem",
+                        backgroundColor: "#1B3047",
+                        color: "#FFFFFF",
+                        padding: "0.6rem 1.25rem",
+                        borderRadius: "9999px",
+                        fontSize: "0.82rem",
+                        fontWeight: 700,
+                        border: "none",
+                        cursor: "pointer",
+                        boxShadow: "0 2px 6px rgba(27, 48, 71, 0.15)",
+                      }}
+                    >
+                      <Plus size={15} /> Nueva Cotización
+                    </button>
+                  )}
 
-                  <button
-                    type="button"
-                    onClick={handleExportExcel}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.45rem",
-                      backgroundColor: "#FFFFFF",
-                      color: "#1F3652",
-                      padding: "0.6rem 1.1rem",
-                      borderRadius: "9999px",
-                      fontSize: "0.82rem",
-                      fontWeight: 600,
-                      border: "1px solid #E2E8F0",
-                      cursor: "pointer",
-                    }}
-                    title="Descargar reporte en Excel"
-                  >
-                    <Download size={14} /> Exportar
-                  </button>
+                  {hasPermission("quotes.export") && (
+                    <button
+                      type="button"
+                      onClick={handleExportExcel}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.45rem",
+                        backgroundColor: "#FFFFFF",
+                        color: "#1F3652",
+                        padding: "0.6rem 1.1rem",
+                        borderRadius: "9999px",
+                        fontSize: "0.82rem",
+                        fontWeight: 600,
+                        border: "1px solid #E2E8F0",
+                        cursor: "pointer",
+                      }}
+                      title="Descargar reporte en Excel"
+                    >
+                      <Download size={14} /> Exportar
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1444,7 +1587,7 @@ export default function ProjectSalesPage() {
                         Vigencia
                       </th>
                       <th style={{ padding: "0.85rem 1rem", fontSize: "0.82rem", fontWeight: 700, textAlign: "center" }}>
-                        Estado
+                        Estado CRM
                       </th>
                       <th style={{ padding: "0.85rem 1.25rem", fontSize: "0.82rem", fontWeight: 700, borderTopRightRadius: "0.75rem", borderBottomRightRadius: "0.75rem", textAlign: "center" }}>
                         Acciones
@@ -1480,33 +1623,37 @@ export default function ProjectSalesPage() {
                                 ? "Intenta modificar los filtros o los términos de búsqueda."
                                 : "Genera tu primera propuesta comercial seleccionando una unidad disponible del inventario."}
                             </p>
-                            <button
-                              type="button"
-                              onClick={() => setShowUnitPickerForQuote(true)}
-                              style={{
-                                backgroundColor: "var(--devio-blue-dark)",
-                                color: "var(--devio-white)",
-                                padding: "0.6rem 1.4rem",
-                                borderRadius: "9999px",
-                                fontSize: "0.82rem",
-                                fontWeight: 700,
-                                border: "none",
-                                cursor: "pointer",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "0.5rem",
-                                boxShadow: "0 2px 6px rgba(27, 48, 71, 0.15)",
-                              }}
-                            >
-                              <Plus size={16} /> Crear Cotización
-                            </button>
+                            {hasPermission("quotes.create") && (
+                              <button
+                                type="button"
+                                onClick={() => setShowUnitPickerForQuote(true)}
+                                style={{
+                                  backgroundColor: "var(--devio-blue-dark)",
+                                  color: "var(--devio-white)",
+                                  padding: "0.6rem 1.4rem",
+                                  borderRadius: "9999px",
+                                  fontSize: "0.82rem",
+                                  fontWeight: 700,
+                                  border: "none",
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.5rem",
+                                  boxShadow: "0 2px 6px rgba(27, 48, 71, 0.15)",
+                                }}
+                              >
+                                <Plus size={16} /> Crear Cotización
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
                     ) : (
                       processedQuotes.map((quote) => {
                         const isVigente = quote.status === "VIGENTE";
+                        const isEnEspera = quote.status === "EN_ESPERA";
                         const isConvertida = quote.status === "CONVERTIDA_A_VENTA";
+                        const isPerdida = quote.status === "PERDIDA";
                         const isExpirada = quote.status === "EXPIRADA";
                         const isRechazada = quote.status === "RECHAZADA";
 
@@ -1514,9 +1661,20 @@ export default function ProjectSalesPage() {
                           <span style={{ fontSize: "0.72rem", fontWeight: 800, padding: "0.25rem 0.65rem", borderRadius: "9999px", backgroundColor: "rgba(0, 196, 140, 0.12)", color: "#00C48C", border: "1px solid rgba(0, 196, 140, 0.3)" }}>
                             ● Vigente
                           </span>
+                        ) : isEnEspera ? (
+                          <span style={{ fontSize: "0.72rem", fontWeight: 800, padding: "0.25rem 0.65rem", borderRadius: "9999px", backgroundColor: "rgba(242, 153, 74, 0.12)", color: "#F2994A", border: "1px solid rgba(242, 153, 74, 0.3)" }}>
+                            ⏳ En Espera
+                          </span>
                         ) : isConvertida ? (
                           <span style={{ fontSize: "0.72rem", fontWeight: 800, padding: "0.25rem 0.65rem", borderRadius: "9999px", backgroundColor: "rgba(47, 128, 237, 0.12)", color: "#2F80ED", border: "1px solid rgba(47, 128, 237, 0.3)" }}>
-                            ✓ Vendida
+                            ✓ Concretada
+                          </span>
+                        ) : isPerdida ? (
+                          <span
+                            title={quote.lostReason ? `Motivo: ${quote.lostReason}` : "Venta perdida"}
+                            style={{ fontSize: "0.72rem", fontWeight: 700, padding: "0.25rem 0.65rem", borderRadius: "9999px", backgroundColor: "rgba(100, 116, 139, 0.12)", color: "#475569", border: "1px solid rgba(100, 116, 139, 0.3)" }}
+                          >
+                            ✕ Perdida
                           </span>
                         ) : isExpirada ? (
                           <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "0.25rem 0.65rem", borderRadius: "9999px", backgroundColor: "rgba(242, 153, 74, 0.12)", color: "#F2994A", border: "1px solid rgba(242, 153, 74, 0.3)" }}>
@@ -1527,6 +1685,8 @@ export default function ProjectSalesPage() {
                             Rechazada
                           </span>
                         );
+
+                        const isStatusOpen = statusMenuQuoteId === quote.id;
 
                         return (
                           <tr
@@ -1603,9 +1763,95 @@ export default function ProjectSalesPage() {
                               </div>
                             </td>
 
-                            {/* Estado Badge */}
-                            <td style={{ padding: "1rem 1rem", textAlign: "center" }}>
-                              {statusBadge}
+                            {/* Estado CRM con Quick-Status Switcher */}
+                            <td style={{ padding: "1rem 1rem", textAlign: "center", position: "relative" }} onClick={(e) => e.stopPropagation()}>
+                              <div style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                                {statusBadge}
+                                {hasPermission("quotes.change_status") && (
+                                  <div style={{ position: "relative" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setStatusMenuQuoteId(isStatusOpen ? null : quote.id)}
+                                      style={{
+                                        border: "none",
+                                        background: "transparent",
+                                        color: "#64748B",
+                                        cursor: "pointer",
+                                        padding: "0.15rem",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        borderRadius: "4px",
+                                      }}
+                                      title="Cambiar estado CRM"
+                                    >
+                                      <ChevronDown size={14} />
+                                    </button>
+
+                                    {isStatusOpen && (
+                                      <div
+                                        style={{
+                                          position: "absolute",
+                                          top: "100%",
+                                          right: 0,
+                                          marginTop: "0.35rem",
+                                          backgroundColor: "#FFFFFF",
+                                          borderRadius: "0.75rem",
+                                          boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+                                          border: "1px solid #E2E8F0",
+                                          padding: "0.4rem",
+                                          zIndex: 50,
+                                          minWidth: "170px",
+                                          textAlign: "left",
+                                        }}
+                                      >
+                                        <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#94A3B8", padding: "0.25rem 0.5rem", textTransform: "uppercase" }}>
+                                          Cambiar Estado
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateQuoteStatus(quote.id, "VIGENTE")}
+                                          style={{ width: "100%", textAlign: "left", padding: "0.4rem 0.6rem", fontSize: "0.75rem", border: "none", background: "none", cursor: "pointer", borderRadius: "0.4rem", color: "#00C48C", fontWeight: 700 }}
+                                        >
+                                          ● Vigente
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateQuoteStatus(quote.id, "EN_ESPERA")}
+                                          style={{ width: "100%", textAlign: "left", padding: "0.4rem 0.6rem", fontSize: "0.75rem", border: "none", background: "none", cursor: "pointer", borderRadius: "0.4rem", color: "#F2994A", fontWeight: 700 }}
+                                        >
+                                          ⏳ En Espera
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenLostReason(quote)}
+                                          style={{ width: "100%", textAlign: "left", padding: "0.4rem 0.6rem", fontSize: "0.75rem", border: "none", background: "none", cursor: "pointer", borderRadius: "0.4rem", color: "#64748B", fontWeight: 600 }}
+                                        >
+                                          ✕ Marcar como Perdida
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateQuoteStatus(quote.id, "EXPIRADA")}
+                                          style={{ width: "100%", textAlign: "left", padding: "0.4rem 0.6rem", fontSize: "0.75rem", border: "none", background: "none", cursor: "pointer", borderRadius: "0.4rem", color: "#F2994A", fontWeight: 500 }}
+                                        >
+                                          Expirada
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateQuoteStatus(quote.id, "RECHAZADA")}
+                                          style={{ width: "100%", textAlign: "left", padding: "0.4rem 0.6rem", fontSize: "0.75rem", border: "none", background: "none", cursor: "pointer", borderRadius: "0.4rem", color: "#EB5757", fontWeight: 500 }}
+                                        >
+                                          Rechazada
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              {isPerdida && quote.lostReason && (
+                                <div style={{ fontSize: "0.68rem", color: "#94A3B8", marginTop: "0.15rem", maxWidth: "140px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={quote.lostReason}>
+                                  {quote.lostReason}
+                                </div>
+                              )}
                             </td>
 
                             {/* Acciones */}
@@ -1613,32 +1859,34 @@ export default function ProjectSalesPage() {
                               <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
                                 
                                 {/* Descargar PDF */}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDownloadQuotePDF(quote);
-                                  }}
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "0.25rem",
-                                    backgroundColor: "rgba(31, 54, 82, 0.06)",
-                                    color: "#1F3652",
-                                    border: "1px solid #E2E8F0",
-                                    padding: "0.35rem 0.65rem",
-                                    borderRadius: "0.5rem",
-                                    fontSize: "0.75rem",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                  title="Descargar carátula en PDF"
-                                >
-                                  <Download size={13} /> PDF
-                                </button>
+                                {hasPermission("quotes.export") && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDownloadQuotePDF(quote);
+                                    }}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.25rem",
+                                      backgroundColor: "rgba(31, 54, 82, 0.06)",
+                                      color: "#1F3652",
+                                      border: "1px solid #E2E8F0",
+                                      padding: "0.35rem 0.65rem",
+                                      borderRadius: "0.5rem",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                    title="Descargar carátula en PDF"
+                                  >
+                                    <Download size={13} /> PDF
+                                  </button>
+                                )}
 
                                 {/* Convertir a Venta */}
-                                {isVigente && (
+                                {!isConvertida && hasPermission("quotes.convert_to_sale") && (
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -1658,7 +1906,7 @@ export default function ProjectSalesPage() {
                                       fontWeight: 700,
                                       cursor: "pointer",
                                     }}
-                                    title="Convertir propuesta a Venta Directa"
+                                    title="Convertir propuesta a Venta (condiciones editables)"
                                   >
                                     <DollarSign size={13} /> Vender
                                   </button>
@@ -1740,9 +1988,41 @@ export default function ProjectSalesPage() {
               {/* Header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
                 <div>
-                  <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#2F80ED", textTransform: "uppercase" }}>
-                    Cotización Folio {selectedQuoteForDetail.folio}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#2F80ED", textTransform: "uppercase" }}>
+                      Cotización Folio {selectedQuoteForDetail.folio}
+                    </span>
+                    {selectedQuoteForDetail.status === "VIGENTE" && (
+                      <span style={{ fontSize: "0.7rem", fontWeight: 800, padding: "0.2rem 0.55rem", borderRadius: "9999px", backgroundColor: "rgba(0, 196, 140, 0.12)", color: "#00C48C" }}>
+                        ● Vigente
+                      </span>
+                    )}
+                    {selectedQuoteForDetail.status === "EN_ESPERA" && (
+                      <span style={{ fontSize: "0.7rem", fontWeight: 800, padding: "0.2rem 0.55rem", borderRadius: "9999px", backgroundColor: "rgba(242, 153, 74, 0.12)", color: "#F2994A" }}>
+                        ⏳ En Espera
+                      </span>
+                    )}
+                    {selectedQuoteForDetail.status === "CONVERTIDA_A_VENTA" && (
+                      <span style={{ fontSize: "0.7rem", fontWeight: 800, padding: "0.2rem 0.55rem", borderRadius: "9999px", backgroundColor: "rgba(47, 128, 237, 0.12)", color: "#2F80ED" }}>
+                        ✓ Concretada
+                      </span>
+                    )}
+                    {selectedQuoteForDetail.status === "PERDIDA" && (
+                      <span style={{ fontSize: "0.7rem", fontWeight: 700, padding: "0.2rem 0.55rem", borderRadius: "9999px", backgroundColor: "rgba(100, 116, 139, 0.12)", color: "#475569" }}>
+                        ✕ Perdida
+                      </span>
+                    )}
+                    {selectedQuoteForDetail.status === "EXPIRADA" && (
+                      <span style={{ fontSize: "0.7rem", fontWeight: 700, padding: "0.2rem 0.55rem", borderRadius: "9999px", backgroundColor: "rgba(242, 153, 74, 0.12)", color: "#F2994A" }}>
+                        Expirada
+                      </span>
+                    )}
+                    {selectedQuoteForDetail.status === "RECHAZADA" && (
+                      <span style={{ fontSize: "0.7rem", fontWeight: 700, padding: "0.2rem 0.55rem", borderRadius: "9999px", backgroundColor: "rgba(235, 87, 87, 0.12)", color: "#EB5757" }}>
+                        Rechazada
+                      </span>
+                    )}
+                  </div>
                   <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#1F3652", margin: "0.2rem 0 0" }}>
                     Unidad {selectedQuoteForDetail.unit} • {selectedQuoteForDetail.unitType}
                   </h2>
@@ -1755,6 +2035,93 @@ export default function ProjectSalesPage() {
                   <X size={20} />
                 </button>
               </div>
+
+              {/* Status Action Switcher Bar in Detail Modal */}
+              {hasPermission("quotes.change_status") && (
+                <div style={{ backgroundColor: "#F1F5F9", borderRadius: "0.75rem", padding: "0.6rem 0.85rem", marginBottom: "1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>
+                    Etapa / Estatus CRM:
+                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateQuoteStatus(selectedQuoteForDetail.id, "VIGENTE")}
+                      style={{
+                        padding: "0.3rem 0.65rem",
+                        borderRadius: "9999px",
+                        fontSize: "0.72rem",
+                        fontWeight: selectedQuoteForDetail.status === "VIGENTE" ? 800 : 500,
+                        backgroundColor: selectedQuoteForDetail.status === "VIGENTE" ? "#00C48C" : "#FFFFFF",
+                        color: selectedQuoteForDetail.status === "VIGENTE" ? "#FFFFFF" : "#00C48C",
+                        border: "1px solid #00C48C",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ● Vigente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateQuoteStatus(selectedQuoteForDetail.id, "EN_ESPERA")}
+                      style={{
+                        padding: "0.3rem 0.65rem",
+                        borderRadius: "9999px",
+                        fontSize: "0.72rem",
+                        fontWeight: selectedQuoteForDetail.status === "EN_ESPERA" ? 800 : 500,
+                        backgroundColor: selectedQuoteForDetail.status === "EN_ESPERA" ? "#F2994A" : "#FFFFFF",
+                        color: selectedQuoteForDetail.status === "EN_ESPERA" ? "#FFFFFF" : "#F2994A",
+                        border: "1px solid #F2994A",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ⏳ En Espera
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenLostReason(selectedQuoteForDetail)}
+                      style={{
+                        padding: "0.3rem 0.65rem",
+                        borderRadius: "9999px",
+                        fontSize: "0.72rem",
+                        fontWeight: selectedQuoteForDetail.status === "PERDIDA" ? 800 : 500,
+                        backgroundColor: selectedQuoteForDetail.status === "PERDIDA" ? "#64748B" : "#FFFFFF",
+                        color: selectedQuoteForDetail.status === "PERDIDA" ? "#FFFFFF" : "#64748B",
+                        border: "1px solid #64748B",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ✕ Perdida
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateQuoteStatus(selectedQuoteForDetail.id, "EXPIRADA")}
+                      style={{
+                        padding: "0.3rem 0.65rem",
+                        borderRadius: "9999px",
+                        fontSize: "0.72rem",
+                        fontWeight: selectedQuoteForDetail.status === "EXPIRADA" ? 800 : 500,
+                        backgroundColor: selectedQuoteForDetail.status === "EXPIRADA" ? "#E2E8F0" : "#FFFFFF",
+                        color: "#475569",
+                        border: "1px solid #CBD5E1",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Expirada
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Motivo de Pérdida Banner si aplica */}
+              {selectedQuoteForDetail.lostReason && (
+                <div style={{ backgroundColor: "rgba(235, 87, 87, 0.08)", borderRadius: "0.85rem", padding: "0.85rem 1rem", border: "1px solid rgba(235, 87, 87, 0.25)", marginBottom: "1.25rem" }}>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#EB5757", display: "block" }}>
+                    Motivo de Descarte / Pérdida:
+                  </span>
+                  <p style={{ fontSize: "0.82rem", color: "#1F3652", margin: "0.25rem 0 0" }}>
+                    {selectedQuoteForDetail.lostReason}
+                  </p>
+                </div>
+              )}
 
               {/* Info Grid */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
@@ -1813,25 +2180,27 @@ export default function ProjectSalesPage() {
               {/* Action Buttons */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadQuotePDF(selectedQuoteForDetail)}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.45rem",
-                      padding: "0.6rem 1.1rem",
-                      borderRadius: "9999px",
-                      border: "1.5px solid #2F80ED",
-                      backgroundColor: "#FFFFFF",
-                      color: "#2F80ED",
-                      fontSize: "0.82rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Download size={15} /> Descargar PDF
-                  </button>
+                  {hasPermission("quotes.export") && (
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadQuotePDF(selectedQuoteForDetail)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.45rem",
+                        padding: "0.6rem 1.1rem",
+                        borderRadius: "9999px",
+                        border: "1.5px solid #2F80ED",
+                        backgroundColor: "#FFFFFF",
+                        color: "#2F80ED",
+                        fontSize: "0.82rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Download size={15} /> Descargar PDF
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -1856,7 +2225,7 @@ export default function ProjectSalesPage() {
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  {selectedQuoteForDetail.status === "VIGENTE" && (
+                  {selectedQuoteForDetail.status !== "CONVERTIDA_A_VENTA" && hasPermission("quotes.convert_to_sale") && (
                     <button
                       type="button"
                       onClick={() => handleConvertQuoteToSale(selectedQuoteForDetail)}
@@ -1896,6 +2265,146 @@ export default function ProjectSalesPage() {
                     Cerrar
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* MODAL REGISTRAR MOTIVO DE VENTA PERDIDA */}
+        {/* ========================================================================= */}
+        {lostReasonQuote && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.65)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 10000,
+              padding: "1rem",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "1.25rem",
+                width: "100%",
+                maxWidth: "500px",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+                padding: "1.75rem",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                    Marcar Cotización como Perdida
+                  </h3>
+                  <p style={{ fontSize: "0.8rem", color: "#64748B", margin: "0.2rem 0 0" }}>
+                    Folio {lostReasonQuote.folio} • Prospecto {lostReasonQuote.clientName}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setLostReasonQuote(null)}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem", margin: "1.25rem 0" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.35rem" }}>
+                    Categoría del motivo
+                  </label>
+                  <select
+                    value={lostReasonCategory}
+                    onChange={(e) => setLostReasonCategory(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem 0.85rem",
+                      borderRadius: "0.65rem",
+                      border: "1px solid #CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      fontSize: "0.85rem",
+                      color: "#1F3652",
+                      outline: "none",
+                    }}
+                  >
+                    <option value="Precio fuera de presupuesto">Precio fuera de presupuesto</option>
+                    <option value="Eligió otra opción / competencia">Eligió otra opción / competencia</option>
+                    <option value="No le convenció ubicación o tipología">No le convenció ubicación o tipología</option>
+                    <option value="Condiciones financieras insuficientes">Condiciones financieras insuficientes</option>
+                    <option value="Sin respuesta / Prospecto inactivo">Sin respuesta / Prospecto inactivo</option>
+                    <option value="Compra pospuesta para más adelante">Compra pospuesta para más adelante</option>
+                    <option value="Otro motivo">Otro motivo</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.35rem" }}>
+                    Comentarios o detalle adicional (opcional)
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Ej. El cliente mencionó que encontró un departamento en zona norte..."
+                    value={lostReasonText}
+                    onChange={(e) => setLostReasonText(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem 0.85rem",
+                      borderRadius: "0.65rem",
+                      border: "1px solid #CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      fontSize: "0.85rem",
+                      color: "#1F3652",
+                      outline: "none",
+                      resize: "none",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.6rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setLostReasonQuote(null)}
+                  style={{
+                    padding: "0.55rem 1.1rem",
+                    borderRadius: "9999px",
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    color: "#64748B",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmLostReason}
+                  style={{
+                    padding: "0.55rem 1.25rem",
+                    borderRadius: "9999px",
+                    border: "none",
+                    backgroundColor: "#EB5757",
+                    color: "#FFFFFF",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(235, 87, 87, 0.25)",
+                  }}
+                >
+                  Confirmar Pérdida
+                </button>
               </div>
             </div>
           </div>
@@ -2246,10 +2755,17 @@ export default function ProjectSalesPage() {
         {/* MODAL 5-STEP CREAR NUEVA VENTA */}
         <CreateSaleWizardModal
           isOpen={showNewSaleModal}
-          onClose={() => setShowNewSaleModal(false)}
+          onClose={() => {
+            setShowNewSaleModal(false);
+            setSelectedQuoteToConvert(null);
+          }}
           projects={projects}
           initialProjectId={projectId}
-          onSaleCreated={handleSaleCreated}
+          initialQuote={selectedQuoteToConvert}
+          onSaleCreated={(sale) => {
+            handleSaleCreated(sale);
+            setSelectedQuoteToConvert(null);
+          }}
         />
 
         {/* MODAL 4-STEP COTIZAR UNIDAD */}

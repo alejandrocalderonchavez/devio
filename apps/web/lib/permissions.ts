@@ -29,6 +29,14 @@ export type PermissionKey =
   | "sales.edit"
   | "sales.cancel"
   | "sales.export"
+  // 4.1. COTIZACIONES & CRM DE PROSPECTOS
+  | "quotes.view"
+  | "quotes.create"
+  | "quotes.edit"
+  | "quotes.convert_to_sale"
+  | "quotes.change_status"
+  | "quotes.export"
+  | "quotes.delete"
   // 5. COBRANZA & PAGOS
   | "payments.view"
   | "payments.register"
@@ -200,6 +208,56 @@ export const PERMISSIONS_CATALOG: PermissionModuleCategory[] = [
         label: "Exportar Libro de Ventas",
         description: "Descargar catálogo de ventas y contratos en Excel o PDF",
         parentKey: "sales.view",
+      },
+    ],
+  },
+  {
+    id: "quotes",
+    name: "Cotizaciones & CRM",
+    iconName: "FileCheck2",
+    parentKey: "quotes.view",
+    permissions: [
+      {
+        key: "quotes.view",
+        label: "Ver Cotizaciones y Prospectos",
+        description: "Acceso al módulo de seguimiento de cotizaciones comerciales y CRM",
+        isParent: true,
+      },
+      {
+        key: "quotes.create",
+        label: "Crear Nueva Cotización",
+        description: "Generar corridas financieras y cotizaciones comerciales para prospectos",
+        parentKey: "quotes.view",
+      },
+      {
+        key: "quotes.edit",
+        label: "Editar Cotización y Condiciones",
+        description: "Modificar esquemas de pago, descuentos y vigencias de cotizaciones activas",
+        parentKey: "quotes.view",
+      },
+      {
+        key: "quotes.convert_to_sale",
+        label: "Convertir Cotización a Venta",
+        description: "Formalizar la venta a partir de una cotización con condiciones originales o ajustadas",
+        parentKey: "quotes.view",
+      },
+      {
+        key: "quotes.change_status",
+        label: "Gestionar Embudo CRM (Estatus)",
+        description: "Cambiar estatus de cotización: Vigente, En Espera, Concretada, Rechazada o Perdida",
+        parentKey: "quotes.view",
+      },
+      {
+        key: "quotes.export",
+        label: "Exportar y Descargar Cotizaciones",
+        description: "Descargar cotizaciones en PDF oficial o exportar listados a Excel",
+        parentKey: "quotes.view",
+      },
+      {
+        key: "quotes.delete",
+        label: "Eliminar Cotizaciones",
+        description: "Eliminar registros de cotizaciones del sistema",
+        parentKey: "quotes.view",
       },
     ],
   },
@@ -412,6 +470,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     "sales.edit",
     "sales.cancel",
     "sales.export",
+    "quotes.view",
+    "quotes.create",
+    "quotes.edit",
+    "quotes.convert_to_sale",
+    "quotes.change_status",
+    "quotes.export",
+    "quotes.delete",
     "payments.view",
     "payments.export",
     "payments.waive_moratory",
@@ -434,6 +499,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     "sales.view",
     "sales.create",
     "sales.export",
+    "quotes.view",
+    "quotes.create",
+    "quotes.convert_to_sale",
+    "quotes.change_status",
+    "quotes.export",
     "clients.view",
     "clients.edit",
     "clients.upload_docs",
@@ -450,6 +520,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
     "units.export",
     "sales.view",
     "sales.export",
+    "quotes.view",
+    "quotes.export",
     "payments.view",
     "payments.register",
     "payments.bulk_import",
@@ -488,6 +560,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
   "Legal / Notaría": [
     "units.view",
     "sales.view",
+    "quotes.view",
     "clients.view",
     "clients.upload_docs",
     "clients.export_statement",

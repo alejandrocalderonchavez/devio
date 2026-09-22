@@ -178,7 +178,9 @@ export interface QuoteRecord {
   settlementPct: number;
   settlementAmount: number;
   additionals?: Array<{ id?: string; name: string; price: number }>;
-  status: "VIGENTE" | "EXPIRADA" | "CONVERTIDA_A_VENTA" | "RECHAZADA";
+  status: "VIGENTE" | "EN_ESPERA" | "CONVERTIDA_A_VENTA" | "PERDIDA" | "EXPIRADA" | "RECHAZADA";
+  lostReason?: string;
+  notes?: string;
   createdAt: string; // ISO format
   expiresAt: string; // ISO format
   pdfUrl?: string;

@@ -35,7 +35,7 @@ import {
 import { DevioDatePicker } from "../ui/devio-date-picker";
 import PhoneInput from "../ui/phone-input";
 import CurrencyInput from "../ui/currency-input";
-import { CoOwner, ProjectItem, ProjectAdditional } from "../../data/projects-data";
+import { CoOwner, ProjectItem, ProjectAdditional, QuoteRecord } from "../../data/projects-data";
 import { useProject } from "../../context/project-context";
 
 export interface CreateSaleWizardModalProps {
@@ -44,6 +44,7 @@ export interface CreateSaleWizardModalProps {
   currency?: "MXN" | "USD";
   initialProjectId?: string | null;
   projects?: ProjectItem[];
+  initialQuote?: QuoteRecord | null;
   onSaleCreated?: (saleData: any) => void;
 }
 
@@ -77,6 +78,7 @@ export default function CreateSaleWizardModal({
   currency = "MXN",
   initialProjectId = "",
   projects = [],
+  initialQuote = null,
   onSaleCreated,
 }: CreateSaleWizardModalProps) {
   const router = useRouter();
@@ -386,7 +388,7 @@ export default function CreateSaleWizardModal({
   // --------------------------------------------------------------------------
   // STEP 4: PLAN DE PAGO
   // --------------------------------------------------------------------------
-  const { paymentPlans = [], addSale } = useProject();
+  const { paymentPlans = [], addSale, updateQuote } = useProject();
   const activeDeveloperPlans = useMemo(() => paymentPlans.filter((p) => p.isActive), [paymentPlans]);
 
   const [selectedPlanId, setSelectedPlanId] = useState<string>("custom");
@@ -403,6 +405,61 @@ export default function CreateSaleWizardModal({
   const [interestPct, setInterestPct] = useState<number>(0);
   const [internalPlanNotes, setInternalPlanNotes] = useState<string>("");
 
+  // Pre-fill wizard state if converting from an existing QuoteRecord
+  useEffect(() => {
+    if (isOpen && initialQuote) {
+      if (initialQuote.projectId) {
+        setSelectedProjectId(initialQuote.projectId);
+      }
+      if (initialQuote.unit) {
+        setSelectedUnitNumber(initialQuote.unit);
+      }
+      if (initialQuote.superficieM2) {
+        setUnitCustomArea(initialQuote.superficieM2);
+      }
+      if (initialQuote.listPrice || initialQuote.totalQuoteAmount) {
+        setUnitCustomPrice(initialQuote.listPrice || initialQuote.totalQuoteAmount);
+      }
+      if (initialQuote.deliveryDate) {
+        setUnitEstimatedDelivery(initialQuote.deliveryDate);
+      }
+
+      // Pre-fill Primary Client
+      setPrimaryClient({
+        id: "primary-1",
+        name: initialQuote.clientName || "",
+        email: initialQuote.clientEmail || "",
+        phone: initialQuote.clientPhone || "",
+        rfc: initialQuote.clientRfc || "",
+        ownershipPct: 100,
+        isPrimary: true,
+        relationship: "Titular Principal",
+      });
+
+      // Pre-fill Payment Plan & Terms (fully editable)
+      setSelectedPlanId("custom");
+      setCustomPlanName(initialQuote.planName || "Plan Cotizado");
+      setPaymentType("ESQUEMA");
+      setDownPaymentPct(initialQuote.downPaymentPct ?? 20);
+      setInstallmentsCount(initialQuote.installmentsCount ?? 12);
+      setPeriodicity(initialQuote.periodicity || "Mensual");
+      setBalloonLiquidationPct(initialQuote.settlementPct ?? 30);
+      setDiscountPct(initialQuote.discountPct ?? 0);
+
+      // Pre-fill Additionals if any
+      if (initialQuote.additionals && initialQuote.additionals.length > 0) {
+        setSelectedAdditionals(
+          initialQuote.additionals.map((a, idx) => ({
+            id: a.id || `quote-addon-${idx}-${Date.now()}`,
+            name: a.name,
+            price: a.price,
+            category: "otro",
+          }))
+        );
+      }
+    }
+  }, [isOpen, initialQuote]);
+
   // Modal para personalizar plan de pago exclusivo de la venta
   const [isCustomPlanModalOpen, setIsCustomPlanModalOpen] = useState(false);
   const [customModalForm, setCustomModalForm] = useState({
@@ -417,9 +474,9 @@ export default function CreateSaleWizardModal({
     internalNotes: "",
   });
 
-  // Initialize with first active developer plan if available
+  // Initialize with first active developer plan if available (only if no initialQuote)
   useEffect(() => {
-    if (activeDeveloperPlans.length > 0 && selectedPlanId === "custom" && customPlanName === "Plan Personalizado de Venta") {
+    if (!initialQuote && activeDeveloperPlans.length > 0 && selectedPlanId === "custom" && customPlanName === "Plan Personalizado de Venta") {
       const firstPlan = activeDeveloperPlans[0];
       if (firstPlan) {
         setSelectedPlanId(firstPlan.id);
@@ -432,7 +489,7 @@ export default function CreateSaleWizardModal({
         setDiscountPct(firstPlan.discountPct);
       }
     }
-  }, [activeDeveloperPlans]);
+  }, [activeDeveloperPlans, initialQuote]);
 
   const [paymentSchedule, setPaymentSchedule] = useState<PaymentRow[]>([]);
 
@@ -1094,6 +1151,7 @@ export default function CreateSaleWizardModal({
           amount: row.amount,
           scheduledAmount: row.amount,
         })),
+        quoteId: initialQuote?.id,
         initialPayment: {
           registered: initialPaymentOption !== "NONE",
           option: initialPaymentOption,
@@ -1108,6 +1166,12 @@ export default function CreateSaleWizardModal({
 
       if (addSale) {
         addSale(finalSalePayload);
+      }
+
+      if (initialQuote && updateQuote) {
+        updateQuote(targetProjId, initialQuote.id, {
+          status: "CONVERTIDA_A_VENTA",
+        });
       }
 
       setCreatedSaleResult(finalSalePayload);
@@ -1320,6 +1384,60 @@ export default function CreateSaleWizardModal({
           {/* STEP 1: CLIENTE Y COPROPIEDAD */}
           {currentStep === 1 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              {initialQuote && (
+                <div
+                  style={{
+                    backgroundColor: "rgba(0, 196, 140, 0.08)",
+                    border: "1.5px solid rgba(0, 196, 140, 0.35)",
+                    borderRadius: "0.85rem",
+                    padding: "0.85rem 1.25rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <div
+                      style={{
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "10px",
+                        backgroundColor: "#00C48C",
+                        color: "#FFFFFF",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Sparkles size={18} />
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: "0.88rem", color: "#1F3652", display: "block" }}>
+                        Formalizando Venta desde Cotización {initialQuote.folio}
+                      </strong>
+                      <span style={{ fontSize: "0.76rem", color: "#64748B" }}>
+                        Unidad <strong>{initialQuote.unit}</strong> ({initialQuote.unitType}) • Plan: <strong>{initialQuote.planName}</strong> • Monto: <strong>{formatMoney(initialQuote.totalQuoteAmount)}</strong>
+                      </span>
+                    </div>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 800,
+                      backgroundColor: "rgba(0, 196, 140, 0.2)",
+                      color: "#00C48C",
+                      padding: "0.25rem 0.65rem",
+                      borderRadius: "9999px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Condiciones Editables
+                  </span>
+                </div>
+              )}
+
               <div style={{ textAlign: "center", maxWidth: "660px", margin: "0 auto" }}>
                 <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.4rem" }}>
                   Asignar Titular y Copropietarios
