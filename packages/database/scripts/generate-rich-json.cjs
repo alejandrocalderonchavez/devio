@@ -104,39 +104,20 @@ async function generateRichJson() {
         const clientPhone = s.primaryClient?.phone || '-';
         const clientRfc = s.primaryClient?.taxId || '-';
 
-        const scheduled = (s.scheduledObligations || []).map((o, idx) => {
-          const sAmount = Number(o.scheduledAmount) || 0;
-          const pAmount = Number(o.paidAmount) || 0;
-          const pendAmount = Math.max(0, sAmount - pAmount);
-          const sDate = o.dueDate ? o.dueDate.toISOString().split('T')[0] : '2026-10-01';
-          const pDate = o.paidAt ? o.paidAt.toISOString().split('T')[0] : 'Pendiente';
-          const stat = o.status === 'PAID' ? 'Pagado' : o.status === 'OVERDUE' ? 'Atrasado' : 'Pendiente';
-
-          return {
-            id: o.id,
-            concept: o.concept || `Mensualidad ${idx + 1}`,
-            unit: u?.unitNumber || 'N/A',
-            scheduledAmount: sAmount,
-            montoProgramado: sAmount,
-            scheduledDate: sDate,
-            fechaProgramada: sDate,
-            paidAmount: pAmount,
-            montoPagado: pAmount,
-            pendingAmount: pendAmount,
-            montoPendiente: pendAmount,
-            paidDate: pDate,
-            fechaPago: pDate,
-            planPago: 'Personalizado',
-            paymentPlan: 'Personalizado',
-            metodoPago: 'Transferencia SPEI',
-            paymentMethod: 'Transferencia SPEI',
-            status: stat,
-            interesMoratorio: 0,
-            moratoryAmount: 0,
-          };
+        const sortedObligations = [...(s.scheduledObligations || [])].sort((a, b) => {
+          const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+          const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+          if (dateA !== dateB) return dateA - dateB;
+          return (a.obligationNumber || 0) - (b.obligationNumber || 0);
         });
 
-        const receipts = (s.paymentReceipts || []).map((r) => {
+        const sortedReceipts = [...(s.paymentReceipts || [])].sort((a, b) => {
+          const dateA = a.paymentDate ? new Date(a.paymentDate).getTime() : 0;
+          const dateB = b.paymentDate ? new Date(b.paymentDate).getTime() : 0;
+          return dateA - dateB;
+        });
+
+        const receipts = sortedReceipts.map((r) => {
           const rAmount = Number(r.amount) || 0;
           const rDate = r.paymentDate ? r.paymentDate.toISOString().split('T')[0] : '2026-09-01';
           const rFolio = r.receiptFolio || `REC-${r.id.slice(-6)}`;
@@ -159,12 +140,73 @@ async function generateRichJson() {
           };
         });
 
-        const totalScheduled = scheduled.reduce((acc, o) => acc + o.montoProgramado, 0);
+        const totalScheduled = sortedObligations.reduce((acc, o) => acc + (Number(o.originalAmount) || 0), 0);
         const totalPaidFromReceipts = receipts.reduce((acc, r) => acc + r.monto, 0);
 
         const finalTotal = Number(s.totalPrice) > 0 ? Number(s.totalPrice) : (totalScheduled > 0 ? totalScheduled : (Number(u?.basePrice) || 0));
-        const finalPaid = totalPaidFromReceipts > 0 ? totalPaidFromReceipts : Number(s.paidAmount);
+        const finalPaid = totalPaidFromReceipts > 0 ? totalPaidFromReceipts : (Number(s.paidAmount) || 0);
         const finalPending = Math.max(0, finalTotal - finalPaid);
+
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        let remainingPaid = finalPaid;
+
+        const scheduled = sortedObligations.map((o, idx) => {
+          const sAmount = Number(o.originalAmount) || Number(o.scheduledAmount) || 0;
+          const sDate = o.dueDate ? o.dueDate.toISOString().split('T')[0] : '2026-10-01';
+          const oDate = o.dueDate ? new Date(o.dueDate) : null;
+          if (oDate) oDate.setHours(0, 0, 0, 0);
+
+          let pAmount = 0;
+          let pendAmount = sAmount;
+          let stat = 'Pendiente';
+          let pDate = 'Pendiente';
+
+          if (remainingPaid >= sAmount && sAmount > 0) {
+            pAmount = sAmount;
+            pendAmount = 0;
+            remainingPaid -= sAmount;
+            stat = 'Pagado';
+            pDate = sDate;
+          } else if (remainingPaid > 0) {
+            pAmount = remainingPaid;
+            pendAmount = Math.max(0, sAmount - remainingPaid);
+            remainingPaid = 0;
+            const isPastDue = oDate && oDate < now;
+            stat = isPastDue ? 'Atrasado' : 'Pendiente';
+            pDate = 'Parcial';
+          } else {
+            pAmount = 0;
+            pendAmount = sAmount;
+            const isPastDue = oDate && oDate < now;
+            stat = isPastDue ? 'Atrasado' : 'Pendiente';
+            pDate = 'Pendiente';
+          }
+
+          return {
+            id: o.id,
+            concept: o.title || o.concept || `Mensualidad ${idx + 1}`,
+            unit: u?.unitNumber || 'N/A',
+            scheduledAmount: sAmount,
+            montoProgramado: sAmount,
+            scheduledDate: sDate,
+            fechaProgramada: sDate,
+            paidAmount: pAmount,
+            montoPagado: pAmount,
+            pendingAmount: pendAmount,
+            montoPendiente: pendAmount,
+            paidDate: pDate,
+            fechaPago: pDate,
+            planPago: 'Personalizado',
+            paymentPlan: 'Personalizado',
+            metodoPago: pAmount > 0 ? 'Transferencia SPEI' : 'Pendiente',
+            paymentMethod: pAmount > 0 ? 'Transferencia SPEI' : 'Pendiente',
+            status: stat,
+            interesMoratorio: 0,
+            moratoryAmount: 0,
+          };
+        });
 
         return {
           id: s.id,
@@ -192,6 +234,12 @@ async function generateRichJson() {
       const totalCobrado = salesList.reduce((acc, s) => acc + s.paidAmount, 0);
       const porCobrar = salesList.reduce((acc, s) => acc + s.pendingAmount, 0);
       const totalVendido = totalCobrado + porCobrar;
+      const morosidadMonto = salesList.reduce((acc, s) => {
+        const saleOverdue = (s.schedule || [])
+          .filter((inst) => inst.status === 'Atrasado')
+          .reduce((subAcc, inst) => subAcc + inst.montoPendiente, 0);
+        return acc + saleOverdue;
+      }, 0);
 
       return {
         id: p.id,
@@ -210,7 +258,7 @@ async function generateRichJson() {
           valorComercialTotal,
           totalVendido,
           cobranzaEfectivaPct: totalVendido > 0 ? Math.round((totalCobrado / totalVendido) * 100) : 0,
-          morosidadMonto: 0,
+          morosidadMonto,
         },
         unitsInventory,
         sales: salesList,

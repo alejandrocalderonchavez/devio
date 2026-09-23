@@ -464,165 +464,19 @@ export default function ClientDetailPage() {
     ? (currentUnitObj?.ownershipPct || 100) / 100
     : 1;
 
-  // Statement Schedule Data (Cuotas Programadas) derived from sale or clean amortized calculation
-  const statementData: InstallmentItem[] = useMemo(() => {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-
-    const salePlanName = currentSale?.paymentPlan || "Plan Tradicional";
-    const matchedPlan = (paymentPlans || []).find(
-      (p) =>
-        p.id.toLowerCase() === salePlanName.toLowerCase() ||
-        p.name.toLowerCase() === salePlanName.toLowerCase()
-    );
-    const defaultMonthlyRatePct = matchedPlan?.moratoryRatePct ?? 3.0;
-
-    if (currentSale?.schedule && currentSale.schedule.length > 0) {
-      return currentSale.schedule.map((inst: any) => {
-        const instPlanName = inst.planName || currentSale.paymentPlan || "Plan de Pago";
-        const instMatchedPlan = (paymentPlans || []).find(
-          (p) =>
-            p.id.toLowerCase() === instPlanName.toLowerCase() ||
-            p.name.toLowerCase() === instPlanName.toLowerCase()
-        );
-        const monthlyRatePct = instMatchedPlan?.moratoryRatePct !== undefined
-          ? instMatchedPlan.moratoryRatePct
-          : defaultMonthlyRatePct;
-
-        const sDate = inst.scheduledDate || inst.fechaProgramada || "";
-        const sAmount = Number(inst.scheduledAmount ?? inst.montoProgramado) || 0;
-        const pAmount = Number(inst.paidAmount ?? inst.montoPagado) || 0;
-        const pendAmount = Number(inst.pendingAmount ?? inst.montoPendiente) || 0;
-
-        const instDate = parseDateFlexible(sDate);
-        const isPastDue = Boolean(instDate && instDate < now && pendAmount > 0);
-        const status = (
-          (pendAmount === 0 || inst.status === "Pagado")
-            ? "Pagado"
-            : isPastDue || inst.status === "Atrasado"
-            ? "Atrasado"
-            : "Pendiente"
-        ) as "Atrasado" | "Pendiente" | "Pagado";
-
-        let calculatedMoratorio = 0;
-        if (status === "Atrasado" && instDate) {
-          const diffMs = now.getTime() - instDate.getTime();
-          const daysOverdue = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-          calculatedMoratorio = Math.round(pendAmount * (monthlyRatePct / 100) * (daysOverdue / 30));
-        } else if (inst.moratoryInterest) {
-          calculatedMoratorio = inst.moratoryInterest;
-        }
-
-        return {
-          id: inst.id,
-          unit: selectedUnit,
-          montoProgramado: sAmount,
-          fechaProgramada: sDate,
-          montoPagado: pAmount,
-          montoPendiente: pendAmount,
-          fechaPago: inst.paymentDate || inst.fechaPago || (pendAmount === 0 ? "Pagado" : "Pendiente"),
-          planPago: instPlanName,
-          metodoPago: inst.paymentMethod || inst.metodoPago || (pAmount > 0 ? "SPEI" : "Pendiente"),
-          status,
-          interesMoratorio: calculatedMoratorio,
-        };
-      });
-    }
-
-    // Fallback if no explicit sale record exists yet
-    const unitPrice = currentUnitObj.price || 5000000;
-    const invUnit = project?.unitsInventory?.find((u) => u.unit === selectedUnit);
-    const unitPaid = invUnit?.salePaidAmount !== undefined ? invUnit.salePaidAmount : 0;
-    const engancheAmount = Math.round(unitPrice * 0.2);
-    const m1Amount = Math.round(unitPrice * 0.1);
-    const m2Amount = Math.round(unitPrice * 0.1);
-    const liqAmount = Math.max(0, unitPrice - engancheAmount - m1Amount - m2Amount);
-
-    const fallbackItems = [
-      {
-        id: `inst-${selectedUnit}-1`,
-        unit: selectedUnit,
-        montoProgramado: engancheAmount,
-        fechaProgramada: "17 Ago 2026",
-        montoPagado: Math.min(unitPaid, engancheAmount),
-        montoPendiente: Math.max(0, engancheAmount - unitPaid),
-        fechaPago: unitPaid >= engancheAmount ? "17 Ago 2026" : "Pendiente",
-        planPago: invUnit?.salePlanName || "Plan Tradicional",
-        metodoPago: unitPaid >= engancheAmount ? "SPEI" : "Pendiente",
-      },
-      {
-        id: `inst-${selectedUnit}-2`,
-        unit: selectedUnit,
-        montoProgramado: m1Amount,
-        fechaProgramada: "17 Sep 2026",
-        montoPagado: Math.max(0, Math.min(unitPaid - engancheAmount, m1Amount)),
-        montoPendiente: Math.max(0, m1Amount - Math.max(0, unitPaid - engancheAmount)),
-        fechaPago: unitPaid >= engancheAmount + m1Amount ? "17 Sep 2026" : "Pendiente",
-        planPago: invUnit?.salePlanName || "Plan Tradicional",
-        metodoPago: unitPaid >= engancheAmount + m1Amount ? "SPEI" : "Pendiente",
-      },
-      {
-        id: `inst-${selectedUnit}-3`,
-        unit: selectedUnit,
-        montoProgramado: m2Amount,
-        fechaProgramada: "17 Oct 2026",
-        montoPagado: 0,
-        montoPendiente: m2Amount,
-        fechaPago: "Pendiente",
-        planPago: invUnit?.salePlanName || "Plan Tradicional",
-        metodoPago: "Pendiente",
-      },
-      {
-        id: `inst-${selectedUnit}-4`,
-        unit: selectedUnit,
-        montoProgramado: liqAmount,
-        fechaProgramada: "17 Nov 2026",
-        montoPagado: 0,
-        montoPendiente: liqAmount,
-        fechaPago: "Pendiente",
-        planPago: invUnit?.salePlanName || "Plan Tradicional",
-        metodoPago: "Pendiente",
-      },
-    ];
-
-    return fallbackItems.map((item) => {
-      const instDate = parseDateFlexible(item.fechaProgramada);
-      const isPastDue = Boolean(instDate && instDate < now && item.montoPendiente > 0);
-      const status: "Atrasado" | "Pendiente" | "Pagado" =
-        item.montoPendiente === 0
-          ? "Pagado"
-          : isPastDue
-          ? "Atrasado"
-          : "Pendiente";
-
-      let calculatedMoratorio = 0;
-      if (status === "Atrasado" && instDate) {
-        const diffMs = now.getTime() - instDate.getTime();
-        const daysOverdue = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-        calculatedMoratorio = Math.round(item.montoPendiente * (defaultMonthlyRatePct / 100) * (daysOverdue / 30));
-      }
-
-      return {
-        ...item,
-        status,
-        interesMoratorio: calculatedMoratorio,
-      };
-    });
-  }, [currentSale, selectedUnit, currentUnitObj, project, paymentPlans]);
-
   // Payments History List (Transacciones Reales)
   const paymentsList: PaymentReceipt[] = useMemo(() => {
     if (currentSale?.payments && currentSale.payments.length > 0) {
-      return currentSale.payments.map((p) => ({
+      return currentSale.payments.map((p: any) => ({
         id: p.id,
-        fechaPago: p.paymentDate,
-        metodoPago: p.paymentMethod,
-        monto: p.amount,
+        fechaPago: p.paymentDate || p.fechaPago || "",
+        metodoPago: p.paymentMethod || p.metodoPago || "Transferencia SPEI",
+        monto: Number(p.amount ?? p.monto) || 0,
         unit: selectedUnit,
-        reciboFolio: p.receiptFolio,
-        comprobanteUrl: p.voucherUrl,
-        scheduledAmount: p.scheduledAmount || p.amount,
-        scheduledDate: p.scheduledDate || p.paymentDate,
+        reciboFolio: p.receiptFolio || p.reciboFolio || "",
+        comprobanteUrl: p.voucherUrl || p.comprobanteUrl,
+        scheduledAmount: p.scheduledAmount || p.amount || p.monto,
+        scheduledDate: p.scheduledDate || p.paymentDate || p.fechaPago,
         notes: p.notes,
         moratoryAmount: p.moratoryAmount,
         moratoryAction: p.moratoryAction,
@@ -653,7 +507,165 @@ export default function ClientDetailPage() {
     return [];
   }, [currentSale, selectedUnit, project]);
 
-  // Documents List derived directly from project context
+  // Statement Schedule Data (Cuotas Programadas) with Cascading Amortization
+  const statementData: InstallmentItem[] = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const salePlanName = currentSale?.paymentPlan || "Plan Tradicional";
+    const matchedPlan = (paymentPlans || []).find(
+      (p) =>
+        p.id.toLowerCase() === salePlanName.toLowerCase() ||
+        p.name.toLowerCase() === salePlanName.toLowerCase()
+    );
+    const defaultMonthlyRatePct = matchedPlan?.moratoryRatePct ?? 3.0;
+
+    const totalPaidAvailable = paymentsList.length > 0
+      ? paymentsList.reduce((acc, p) => acc + (Number(p.monto) || 0), 0)
+      : (Number(currentSale?.paidAmount) || 0);
+
+    if (currentSale?.schedule && currentSale.schedule.length > 0) {
+      let remainingPaid = totalPaidAvailable;
+
+      // Sort obligations chronologically
+      const sortedSchedule = [...currentSale.schedule].sort((a: any, b: any) => {
+        const dateA = parseDateFlexible(a.scheduledDate || a.fechaProgramada || "")?.getTime() || 0;
+        const dateB = parseDateFlexible(b.scheduledDate || b.fechaProgramada || "")?.getTime() || 0;
+        return dateA - dateB;
+      });
+
+      return sortedSchedule.map((inst: any, idx: number) => {
+        const instPlanName = inst.planName || currentSale.paymentPlan || "Plan de Pago";
+        const instMatchedPlan = (paymentPlans || []).find(
+          (p) =>
+            p.id.toLowerCase() === instPlanName.toLowerCase() ||
+            p.name.toLowerCase() === instPlanName.toLowerCase()
+        );
+        const monthlyRatePct = instMatchedPlan?.moratoryRatePct !== undefined
+          ? instMatchedPlan.moratoryRatePct
+          : defaultMonthlyRatePct;
+
+        const sDate = inst.scheduledDate || inst.fechaProgramada || "";
+        const sAmount = Number(inst.scheduledAmount ?? inst.montoProgramado) || 0;
+
+        const instDate = parseDateFlexible(sDate);
+        const isPastDue = Boolean(instDate && instDate < now);
+
+        let pAmount = 0;
+        let pendAmount = sAmount;
+        let status: "Atrasado" | "Pendiente" | "Pagado" = "Pendiente";
+        let pDate = "Pendiente";
+
+        if (remainingPaid >= sAmount && sAmount > 0) {
+          pAmount = sAmount;
+          pendAmount = 0;
+          remainingPaid -= sAmount;
+          status = "Pagado";
+          pDate = sDate;
+        } else if (remainingPaid > 0) {
+          pAmount = remainingPaid;
+          pendAmount = Math.max(0, sAmount - remainingPaid);
+          remainingPaid = 0;
+          status = isPastDue ? "Atrasado" : "Pendiente";
+          pDate = "Parcial";
+        } else {
+          pAmount = 0;
+          pendAmount = sAmount;
+          status = isPastDue ? "Atrasado" : "Pendiente";
+          pDate = "Pendiente";
+        }
+
+        let calculatedMoratorio = 0;
+        if (status === "Atrasado" && instDate) {
+          const diffMs = now.getTime() - instDate.getTime();
+          const daysOverdue = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+          calculatedMoratorio = Math.round(pendAmount * (monthlyRatePct / 100) * (daysOverdue / 30));
+        }
+
+        return {
+          id: inst.id || `inst-${idx}`,
+          unit: selectedUnit,
+          montoProgramado: sAmount,
+          fechaProgramada: sDate,
+          montoPagado: pAmount,
+          montoPendiente: pendAmount,
+          fechaPago: pDate,
+          planPago: instPlanName,
+          metodoPago: pAmount > 0 ? (inst.paymentMethod || inst.metodoPago || "Transferencia SPEI") : "Pendiente",
+          status,
+          interesMoratorio: calculatedMoratorio,
+        };
+      });
+    }
+
+    // Fallback if no explicit sale record exists yet
+    const unitPrice = currentUnitObj.price || 5000000;
+    const invUnit = project?.unitsInventory?.find((u) => u.unit === selectedUnit);
+    const unitPaid = totalPaidAvailable > 0 ? totalPaidAvailable : (invUnit?.salePaidAmount !== undefined ? invUnit.salePaidAmount : 0);
+    const engancheAmount = Math.round(unitPrice * 0.2);
+    const m1Amount = Math.round(unitPrice * 0.1);
+    const m2Amount = Math.round(unitPrice * 0.1);
+    const liqAmount = Math.max(0, unitPrice - engancheAmount - m1Amount - m2Amount);
+
+    let remainingFallback = unitPaid;
+    const fallbackRaw = [
+      { id: `inst-${selectedUnit}-1`, concept: "Enganche", amount: engancheAmount, date: "17 Ago 2026" },
+      { id: `inst-${selectedUnit}-2`, concept: "Mensualidad 1", amount: m1Amount, date: "17 Sep 2026" },
+      { id: `inst-${selectedUnit}-3`, concept: "Mensualidad 2", amount: m2Amount, date: "17 Oct 2026" },
+      { id: `inst-${selectedUnit}-4`, concept: "Liquidación", amount: liqAmount, date: "17 Nov 2026" },
+    ];
+
+    return fallbackRaw.map((item) => {
+      const instDate = parseDateFlexible(item.date);
+      const isPastDue = Boolean(instDate && instDate < now);
+      let pAmount = 0;
+      let pendAmount = item.amount;
+      let status: "Atrasado" | "Pendiente" | "Pagado" = "Pendiente";
+      let pDate = "Pendiente";
+
+      if (remainingFallback >= item.amount && item.amount > 0) {
+        pAmount = item.amount;
+        pendAmount = 0;
+        remainingFallback -= item.amount;
+        status = "Pagado";
+        pDate = item.date;
+      } else if (remainingFallback > 0) {
+        pAmount = remainingFallback;
+        pendAmount = Math.max(0, item.amount - remainingFallback);
+        remainingFallback = 0;
+        status = isPastDue ? "Atrasado" : "Pendiente";
+        pDate = "Parcial";
+      } else {
+        pAmount = 0;
+        pendAmount = item.amount;
+        status = isPastDue ? "Atrasado" : "Pendiente";
+        pDate = "Pendiente";
+      }
+
+      let calculatedMoratorio = 0;
+      if (status === "Atrasado" && instDate) {
+        const diffMs = now.getTime() - instDate.getTime();
+        const daysOverdue = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+        calculatedMoratorio = Math.round(pendAmount * (defaultMonthlyRatePct / 100) * (daysOverdue / 30));
+      }
+
+      return {
+        id: item.id,
+        unit: selectedUnit,
+        montoProgramado: item.amount,
+        fechaProgramada: item.date,
+        montoPagado: pAmount,
+        montoPendiente: pendAmount,
+        fechaPago: pDate,
+        planPago: invUnit?.salePlanName || "Plan Tradicional",
+        metodoPago: pAmount > 0 ? "SPEI" : "Pendiente",
+        status,
+        interesMoratorio: calculatedMoratorio,
+      };
+    });
+  }, [currentSale, selectedUnit, currentUnitObj, project, paymentPlans, paymentsList]);
+
+  // Documents List derived directly from project context (Strictly real documents, NO synthetic dummy data)
   const clientDocuments: ClientDocument[] = useMemo(() => {
     if (!project) return [];
     const all = project.clientDocuments || [];
@@ -663,43 +675,8 @@ export default function ClientDetailPage() {
         (rawClient.name && d.clientName?.toLowerCase() === rawClient.name.toLowerCase()) ||
         (rawClient.ownedUnits && rawClient.ownedUnits.some((ou) => ou.unit === d.unit))
     );
-    if (filtered.length > 0) return filtered;
-
-    if (rawClient.ownedUnits.length > 0) {
-      const u = rawClient.ownedUnits[0]?.unit || selectedUnit || "101";
-      return [
-        {
-          id: `doc-default-1-${clientId}`,
-          clientId: clientId,
-          clientName: rawClient.name,
-          title: `Contrato de Compraventa - Unidad ${u}`,
-          category: "Contratos",
-          unit: u,
-          fileType: "PDF",
-          fileSize: "2.4 MB",
-          uploadDate: "12 Ago 2026",
-          updatedAt: "12 Ago 2026",
-          notes: "Contrato privado de compraventa con reserva de dominio debidamente firmado.",
-          isVisibleToClient: true,
-        },
-        {
-          id: `doc-default-2-${clientId}`,
-          clientId: clientId,
-          clientName: rawClient.name,
-          title: "Identificación Oficial (INE / Pasaporte)",
-          category: "Identificación",
-          unit: u,
-          fileType: "PDF",
-          fileSize: "1.1 MB",
-          uploadDate: "10 Ago 2026",
-          updatedAt: "10 Ago 2026",
-          notes: "Copia cotejada de identificación oficial vigente del titular.",
-          isVisibleToClient: false,
-        },
-      ];
-    }
-    return [];
-  }, [project, clientId, rawClient, selectedUnit]);
+    return filtered;
+  }, [project, clientId, rawClient]);
 
   // Base Overdue and Moratory Interest Calculation
   const baseSaldoAtrasado = statementData
@@ -869,8 +846,10 @@ export default function ClientDetailPage() {
   }, [selectedCuotaForAbonos, paymentsList, statementData]);
 
   // Financial Summary
-  const fullUnitAPagar = currentSale?.totalPrice || currentUnitObj?.price || 0;
-  const fullUnitPagado = statementData.reduce((acc, s) => acc + s.montoPagado, 0);
+  const fullUnitAPagar = currentSale?.totalPrice || (currentSale as any)?.totalAmount || (statementData.reduce((acc, s) => acc + s.montoProgramado, 0) > 0 ? statementData.reduce((acc, s) => acc + s.montoProgramado, 0) : currentUnitObj?.price || 0);
+  const fullUnitPagado = paymentsList.length > 0
+    ? paymentsList.reduce((acc, p) => acc + (Number(p.monto) || 0), 0)
+    : statementData.reduce((acc, s) => acc + s.montoPagado, 0);
   const fullUnitMoratorioPagado = paymentsList.reduce((acc, p) => acc + (p.moratoryAmount || 0), 0);
   const totalAPagar = fullUnitAPagar * clientShareRatio;
   const totalPagado = fullUnitPagado * clientShareRatio;
