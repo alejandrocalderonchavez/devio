@@ -384,11 +384,20 @@ export interface QuotePDFData {
   settlementAmount: number;
   settlementPct?: number;
   additionals?: Array<{ name: string; price: number }>;
+  isCoOwnership?: boolean;
+  coOwners?: Array<{
+    name: string;
+    email?: string;
+    phone?: string;
+    rfc?: string;
+    ownershipPct?: number;
+  }>;
   client: {
     name: string;
     email?: string;
     phone?: string;
     rfc?: string;
+    ownershipPct?: number;
   };
   advisor: {
     name: string;
@@ -397,6 +406,7 @@ export interface QuotePDFData {
     phone?: string;
   };
   unitImageUrl?: string;
+  projectCoverUrl?: string;
   floorPlanUrl?: string;
   developerLogoUrl?: string;
   projectLogoUrl?: string;
@@ -406,10 +416,7 @@ export interface QuotePDFData {
   brandColor?: string;
 }
 
-export async function generateQuotePDF(data: QuotePDFData): Promise<{ success: boolean; base64?: string }> {
-  if (typeof window === "undefined") return { success: false };
-  await loadPDFLibraries();
-
+export function getQuoteHTML(data: QuotePDFData): string {
   const brand = data.brandColor || "#1F3652";
   const emissionDate = new Date().toLocaleDateString("es-MX", {
     year: "numeric",
@@ -425,8 +432,6 @@ export async function generateQuotePDF(data: QuotePDFData): Promise<{ success: b
       maximumFractionDigits: 0,
     }).format(val || 0);
 
-  const totalAdditionals = (data.additionals || []).reduce((acc, a) => acc + (a.price || 0), 0);
-
   const devLogo =
     data.developerLogoUrl && (data.developerLogoUrl.startsWith("http") || data.developerLogoUrl.startsWith("data:"))
       ? data.developerLogoUrl
@@ -437,127 +442,204 @@ export async function generateQuotePDF(data: QuotePDFData): Promise<{ success: b
       ? data.projectLogoUrl
       : DEFAULT_PROJ_LOGO;
 
-  const html = `
+  // Fallback for unit image: if unit has no photo, use project cover / image
+  const unitPhoto =
+    data.unitImageUrl && (data.unitImageUrl.startsWith("http") || data.unitImageUrl.startsWith("data:"))
+      ? data.unitImageUrl
+      : data.projectCoverUrl && (data.projectCoverUrl.startsWith("http") || data.projectCoverUrl.startsWith("data:"))
+      ? data.projectCoverUrl
+      : data.projectLogoUrl && (data.projectLogoUrl.startsWith("http") || data.projectLogoUrl.startsWith("data:"))
+      ? data.projectLogoUrl
+      : DEFAULT_PROJ_LOGO;
+
+  // Co-ownership calculation
+  const isCoprop = data.isCoOwnership || (data.coOwners && data.coOwners.length > 0);
+  const coOwnersList = data.coOwners || [];
+
+  return `
     <div id="cot-pdf-container" style="
-      width: 760px;
-      height: 1050px;
+      width: 794px;
+      min-height: 1080px;
+      max-width: 794px;
       overflow: hidden;
       background: #ffffff;
       margin: 0 auto;
       display: flex;
       flex-direction: column;
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       font-size: 10px;
-      color: #1f2937;
+      color: #1F2937;
       box-sizing: border-box;
       position: relative;
     ">
-      <!-- TOP COLOR BAND -->
-      <div style="height: 4px; background: ${brand}; flex-shrink: 0;"></div>
+      <!-- TOP GRADIENT BAND -->
+      <div style="height: 5px; background: linear-gradient(90deg, #1B3047 0%, #2F80ED 100%); flex-shrink: 0;"></div>
 
-      <!-- HEADER CON LOGOS REALES -->
-      <div style="display: flex; align-items: stretch; border-bottom: 1px solid #e5e7eb; min-height: 68px; flex-shrink: 0;">
-        <div style="width: 140px; flex-shrink: 0; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 12px; gap: 4px;">
-          <img src="${projLogo}" style="max-width: 110px; max-height: 44px; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" alt="${data.projectName}" />
-          <div style="font-size: 7.5px; font-weight: 700; color: #9ca3af; text-align: center;">${data.projectName}</div>
+      <!-- HEADER WITH OFFICIAL LOGOS -->
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1.5px solid #E2E8F0; padding: 12px 20px; background: #FFFFFF; flex-shrink: 0; gap: 16px;">
+        <!-- Left Logo: Developer -->
+        <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0; max-width: 170px;">
+          <img src="${devLogo}" style="max-height: 42px; max-width: 150px; object-fit: contain;" crossorigin="anonymous" alt="${data.developerName || "Desarrollador"}" />
         </div>
 
-        <div style="flex: 1; padding: 10px 16px; display: flex; flex-direction: column; justify-content: center; gap: 2px;">
-          <div style="font-size: 7.5px; font-weight: 700; color: ${brand}; text-transform: uppercase; letter-spacing: 0.05em;">
-            Cotización Comercial
+        <!-- Center: Title & Main Info -->
+        <div style="flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+          <div style="font-size: 8px; font-weight: 800; color: #2F80ED; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px;">
+            Cotización Comercial Oficial
           </div>
-          <div style="font-size: 17px; font-weight: 800; color: #111827; margin: 0; line-height: 1.1;">
+          <div style="font-size: 18px; font-weight: 900; color: #1B3047; letter-spacing: -0.3px; line-height: 1.1;">
             Propuesta de Unidad
           </div>
-          <div style="display: flex; gap: 12px; margin-top: 4px; font-size: 9.5px; color: #6b7280;">
-            <div><b style="color: #111827;">Unidad:</b> ${data.unitNumber}</div>
-            <div><b style="color: #111827;">Tipo:</b> ${data.unitType}</div>
-            <div><b style="color: #111827;">Folio:</b> ${data.quoteFolio}</div>
-            <div><b style="color: #111827;">Emisión:</b> ${emissionDate}</div>
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 5px; flex-wrap: wrap;">
+            <span style="background: #F1F5F9; color: #1E293B; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 4px; border: 1px solid #E2E8F0;">
+              Folio: <strong>${data.quoteFolio}</strong>
+            </span>
+            <span style="background: #EFF6FF; color: #1D4ED8; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 4px; border: 1px solid #BFDBFE;">
+              Unidad: <strong>${data.unitNumber}</strong> (${data.unitType})
+            </span>
+            <span style="font-size: 9px; color: #64748B; font-weight: 600;">
+              Emisión: ${emissionDate}
+            </span>
           </div>
         </div>
 
-        <div style="width: 140px; flex-shrink: 0; border-left: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 12px;">
-          <div style="font-size: 7px; color: #9ca3af; margin-bottom: 2px;">Desarrolladora</div>
-          <img src="${devLogo}" style="max-width: 110px; max-height: 38px; object-fit: contain;" crossorigin="anonymous" alt="${data.developerName || "Desarrollador"}" />
+        <!-- Right Logo: Project -->
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; max-width: 170px;">
+          <img src="${projLogo}" style="max-height: 42px; max-width: 150px; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" alt="${data.projectName}" />
         </div>
       </div>
 
-      <!-- BODY -->
+      <!-- MAIN CONTENT BODY -->
       <div style="display: flex; flex: 1; min-height: 0;">
-        <!-- COLUMNA IZQUIERDA -->
-        <div style="width: 272px; flex-shrink: 0; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; background: #f8fafc;">
-          <div style="width: 272px; height: 260px; flex-shrink: 0; overflow: hidden; position: relative; background: #e2e8f0;">
-            ${
-              data.unitImageUrl
-                ? `<img src="${data.unitImageUrl}" style="width: 100%; height: 100%; object-fit: cover;" crossorigin="anonymous" />`
-                : `<div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 11px; font-weight: 600;">Sin fotografía de render</div>`
-            }
-            <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.75)); padding: 20px 12px 10px; color: #fff;">
-              <div style="font-size: 8px; font-weight: 600; opacity: 0.85;">${data.unitType}</div>
-              <div style="font-size: 18px; font-weight: 800;">Unidad ${data.unitNumber}</div>
+        <!-- LEFT COLUMN (Visuals, Clients, Advisor) -->
+        <div style="width: 290px; flex-shrink: 0; border-right: 1.5px solid #E2E8F0; background: #F8FAFC; display: flex; flex-direction: column; padding: 14px; gap: 10px; box-sizing: border-box;">
+          
+          <!-- Unit / Project Photo Render -->
+          <div style="width: 100%; height: 180px; border-radius: 8px; overflow: hidden; position: relative; background: #E2E8F0; border: 1px solid #CBD5E1; box-shadow: 0 1px 3px rgba(0,0,0,0.05); flex-shrink: 0;">
+            <img src="${unitPhoto}" style="width: 100%; height: 100%; object-fit: cover;" crossorigin="anonymous" alt="Render Unidad ${data.unitNumber}" />
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(15, 23, 42, 0.85)); padding: 14px 10px 8px; color: #FFFFFF;">
+              <div style="font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.9;">${data.unitType}</div>
+              <div style="font-size: 16px; font-weight: 900; line-height: 1.1;">Unidad ${data.unitNumber}</div>
             </div>
           </div>
 
-          <div style="flex: 1; display: flex; flex-direction: column; padding: 10px; gap: 8px;">
-            <!-- Contact Card Cliente -->
-            <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 7px; padding: 8px 10px;">
-              <div style="font-size: 8px; font-weight: 700; color: ${brand}; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
-                <div style="width: 5px; height: 5px; background: ${brand}; border-radius: 50%;"></div> Prospecto / Cliente
+          <!-- Floor Plan (Planta Arquitectónica / Conjunto) if available -->
+          ${
+            data.floorPlanUrl
+              ? `
+            <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 4px;">
+              <div style="font-size: 8px; font-weight: 800; color: #1B3047; text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 4px;">
+                <span style="width: 5px; height: 5px; background: #2F80ED; border-radius: 50%;"></span> Planta Asignada
               </div>
-              <div style="font-size: 9px; line-height: 1.5; color: #374151;">
-                <div><span style="color: #9ca3af; font-weight: 600;">Nombre:</span> ${data.client.name}</div>
-                ${data.client.email ? `<div><span style="color: #9ca3af; font-weight: 600;">Email:</span> ${data.client.email}</div>` : ""}
-                ${data.client.phone ? `<div><span style="color: #9ca3af; font-weight: 600;">Tel:</span> ${data.client.phone}</div>` : ""}
+              <div style="height: 110px; border-radius: 4px; overflow: hidden; background: #FAFAFA; display: flex; align-items: center; justify-content: center; border: 1px dashed #CBD5E1;">
+                <img src="${data.floorPlanUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain;" crossorigin="anonymous" alt="Planta Arquitectónica" />
               </div>
+            </div>
+          `
+              : ""
+          }
+
+          <!-- Client / Copropiedad Card -->
+          <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 10px 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid #F1F5F9; padding-bottom: 4px;">
+              <div style="font-size: 8.5px; font-weight: 800; color: #1B3047; text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 5px;">
+                <span style="width: 6px; height: 6px; background: ${isCoprop ? "#00C48C" : "#2F80ED"}; border-radius: 50%;"></span>
+                ${isCoprop ? `Titulares en Copropiedad (${1 + coOwnersList.length})` : "Prospecto / Cliente"}
+              </div>
+              ${
+                isCoprop
+                  ? `<span style="font-size: 7.5px; font-weight: 800; background: rgba(0, 196, 140, 0.12); color: #00875A; padding: 1px 5px; border-radius: 4px;">Copropiedad</span>`
+                  : ""
+              }
             </div>
 
-            <!-- Contact Card Asesor -->
-            <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 7px; padding: 8px 10px;">
-              <div style="font-size: 8px; font-weight: 700; color: ${brand}; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
-                <div style="width: 5px; height: 5px; background: ${brand}; border-radius: 50%;"></div> Asesor Comercial
+            <!-- Primary Client -->
+            <div style="font-size: 9px; line-height: 1.45; color: #334155; margin-bottom: ${isCoprop && coOwnersList.length > 0 ? "6px" : "0"};">
+              <div style="display: flex; justify-content: space-between;">
+                <strong style="color: #0F172A; font-size: 9.5px;">${data.client.name}</strong>
+                ${isCoprop && data.client.ownershipPct ? `<span style="font-weight: 800; color: #1B3047;">${data.client.ownershipPct}%</span>` : ""}
               </div>
-              <div style="font-size: 9px; line-height: 1.5; color: #374151;">
-                <div><span style="color: #9ca3af; font-weight: 600;">Nombre:</span> ${data.advisor.name}</div>
-                ${data.advisor.role ? `<div><span style="color: #9ca3af; font-weight: 600;">Puesto:</span> ${data.advisor.role}</div>` : ""}
-                ${data.advisor.phone ? `<div><span style="color: #9ca3af; font-weight: 600;">Tel:</span> ${data.advisor.phone}</div>` : ""}
-              </div>
+              ${data.client.email ? `<div style="color: #64748B; font-size: 8.5px;">✉ ${data.client.email}</div>` : ""}
+              ${data.client.phone ? `<div style="color: #64748B; font-size: 8.5px;">☎ ${data.client.phone}</div>` : ""}
+              ${data.client.rfc ? `<div style="color: #64748B; font-size: 8px;">RFC: ${data.client.rfc}</div>` : ""}
             </div>
 
-            <div style="font-size: 7.5px; color: #9ca3af; text-align: center; margin-top: auto;">
-              Vigencia 30 días · ${emissionDate}
+            <!-- Co-owners list if any -->
+            ${
+              isCoprop && coOwnersList.length > 0
+                ? coOwnersList
+                    .map(
+                      (co, idx) => `
+                <div style="border-top: 1px dashed #E2E8F0; padding-top: 5px; margin-top: 5px; font-size: 8.5px; line-height: 1.4; color: #334155;">
+                  <div style="display: flex; justify-content: space-between;">
+                    <strong style="color: #1E293B;">${co.name || `Copropietario ${idx + 2}`}</strong>
+                    <span style="font-weight: 800; color: #00875A;">${co.ownershipPct || 0}%</span>
+                  </div>
+                  ${co.email ? `<div style="color: #64748B; font-size: 8px;">✉ ${co.email}</div>` : ""}
+                  ${co.phone ? `<div style="color: #64748B; font-size: 8px;">☎ ${co.phone}</div>` : ""}
+                </div>
+              `
+                    )
+                    .join("")
+                : ""
+            }
+          </div>
+
+          <!-- Advisor Card -->
+          <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 10px 12px;">
+            <div style="font-size: 8.5px; font-weight: 800; color: #1B3047; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 5px; display: flex; align-items: center; gap: 5px;">
+              <span style="width: 6px; height: 6px; background: #64748B; border-radius: 50%;"></span> Asesor Comercial
             </div>
+            <div style="font-size: 9px; line-height: 1.45; color: #334155;">
+              <strong style="color: #0F172A; font-size: 9.5px;">${data.advisor.name}</strong>
+              <div style="color: #64748B; font-size: 8.5px;">${data.advisor.role || "Asesor de Ventas"}</div>
+              ${data.advisor.email ? `<div style="color: #64748B; font-size: 8.5px;">✉ ${data.advisor.email}</div>` : ""}
+              ${data.advisor.phone ? `<div style="color: #64748B; font-size: 8.5px;">☎ ${data.advisor.phone}</div>` : ""}
+            </div>
+          </div>
+
+          <!-- Validity notice -->
+          <div style="margin-top: auto; font-size: 8px; color: #94A3B8; text-align: center; line-height: 1.3;">
+            Propuesta sujeta a disponibilidad • Vigencia de 30 días naturales
           </div>
         </div>
 
-        <!-- COLUMNA DERECHA -->
-        <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 12px 14px;">
-          <!-- Características -->
-          <div style="margin-bottom: 8px;">
-            <div style="font-size: 9px; font-weight: 700; color: ${brand}; margin-bottom: 6px; display: flex; align-items: center; gap: 4px;">
-              <div style="width: 6px; height: 6px; background: ${brand}; border-radius: 2px;"></div> Características de la Unidad
+        <!-- RIGHT COLUMN (Characteristics, Payment Plan, Pricing) -->
+        <div style="flex: 1; display: flex; flex-direction: column; padding: 14px 18px; gap: 12px; box-sizing: border-box; background: #FFFFFF;">
+          
+          <!-- Características de la Unidad (Complete Grid) -->
+          <div>
+            <div style="font-size: 9.5px; font-weight: 800; color: #1B3047; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+              <span style="width: 6px; height: 6px; background: #1B3047; border-radius: 2px;"></span>
+              Características de la Unidad
             </div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
-              <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 5px; padding: 6px 7px;">
-                <div style="font-size: 7.5px; color: #9ca3af; font-weight: 700;">Superficie</div>
-                <div style="font-size: 11px; font-weight: 700; color: #111827;">${data.superficieM2} m²</div>
+            
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+              <!-- Superficie Total -->
+              <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 6px 8px;">
+                <div style="font-size: 7.5px; color: #64748B; font-weight: 700; text-transform: uppercase;">Superficie Total</div>
+                <div style="font-size: 11.5px; font-weight: 800; color: #0F172A; margin-top: 1px;">${data.superficieM2} m²</div>
               </div>
+
+              <!-- Entrega estimada si existe -->
               ${
                 data.deliveryDate
                   ? `
-                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 5px; padding: 6px 7px;">
-                  <div style="font-size: 7.5px; color: #9ca3af; font-weight: 700;">Entrega estimada</div>
-                  <div style="font-size: 10.5px; font-weight: 700; color: #111827;">${data.deliveryDate}</div>
+                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 6px 8px;">
+                  <div style="font-size: 7.5px; color: #64748B; font-weight: 700; text-transform: uppercase;">Entrega Estimada</div>
+                  <div style="font-size: 11px; font-weight: 800; color: #0F172A; margin-top: 1px;">${data.deliveryDate}</div>
                 </div>
               `
                   : ""
               }
+
+              <!-- Dynamic characteristics mapped from unit -->
               ${(data.characteristics || [])
                 .map(
                   (c) => `
-                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 5px; padding: 6px 7px;">
-                  <div style="font-size: 7.5px; color: #9ca3af; font-weight: 700;">${c.label}</div>
-                  <div style="font-size: 11px; font-weight: 700; color: #111827;">${c.value}</div>
+                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 6px 8px;">
+                  <div style="font-size: 7.5px; color: #64748B; font-weight: 700; text-transform: uppercase;">${c.label}</div>
+                  <div style="font-size: 11px; font-weight: 800; color: #0F172A; margin-top: 1px;">${c.value}</div>
                 </div>
               `
                 )
@@ -565,79 +647,85 @@ export async function generateQuotePDF(data: QuotePDFData): Promise<{ success: b
             </div>
           </div>
 
-          <!-- Precio de lista y Descuento -->
-          ${
-            (data.discountPct || 0) > 0
-              ? `
-            <div style="margin-bottom: 8px; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden;">
-              <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 5px 10px;">
-                <span style="font-size: 8.5px; font-weight: 700; color: #374151;">Precio de lista</span>
-                <strong style="font-size: 11px; color: #111827;">${formatMoney(data.listPrice)}</strong>
+          <!-- Precios y Descuentos -->
+          <div style="border: 1px solid #E2E8F0; border-radius: 8px; overflow: hidden; background: #FFFFFF;">
+            <div style="display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; padding: 7px 12px;">
+              <span style="font-size: 9px; font-weight: 700; color: #475569;">Precio de Lista</span>
+              <strong style="font-size: 12px; color: #0F172A; font-weight: 800;">${formatMoney(data.listPrice)}</strong>
+            </div>
+            ${
+              (data.discountPct || 0) > 0
+                ? `
+              <div style="display: flex; justify-content: space-between; align-items: center; background: #ECFDF5; border-top: 1px solid #A7F3D0; padding: 6px 12px;">
+                <span style="font-size: 9px; font-weight: 800; color: #059669;">Descuento Especial (${data.discountPct}%)</span>
+                <strong style="font-size: 12px; color: #059669; font-weight: 800;">-${formatMoney(data.discountAmount || 0)}</strong>
               </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; background: #f0fdf4; border-top: 1px solid #bbf7d0; padding: 5px 10px;">
-                <span style="font-size: 8.5px; font-weight: 700; color: #15803d;">Descuento (${data.discountPct}%)</span>
-                <strong style="font-size: 11px; color: #15803d;">-${formatMoney(data.discountAmount || 0)}</strong>
+            `
+                : ""
+            }
+          </div>
+
+          <!-- Plan de Pagos Comercial -->
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div style="font-size: 9.5px; font-weight: 800; color: #1B3047; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+                <span style="width: 6px; height: 6px; background: #2F80ED; border-radius: 2px;"></span>
+                Plan de Pago: <span style="color: #2F80ED;">${data.planName}</span>
               </div>
             </div>
-          `
-              : ""
-          }
 
-          <!-- Plan de Pago Cards -->
-          <div style="margin-bottom: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <div style="font-size: 9px; font-weight: 700; color: ${brand}; display: flex; align-items: center; gap: 4px;">
-                <div style="width: 6px; height: 6px; background: ${brand}; border-radius: 2px;"></div> Plan de Pago: ${data.planName}
-              </div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;">
-              <div style="background: #eef1f5; border: 1px solid #b0bfce; border-radius: 7px; padding: 7px 9px;">
-                <div style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 700; color: #374151; margin-bottom: 2px;">
-                  <span>Enganche</span>
-                  <span style="background: #d0dae6; color: ${brand}; padding: 1px 5px; border-radius: 8px; font-size: 7px;">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+              <!-- Enganche -->
+              <div style="background: #F0F4F8; border: 1.5px solid #CBD5E1; border-radius: 8px; padding: 9px 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+                  <span style="font-size: 8.5px; font-weight: 800; color: #1E293B;">Enganche</span>
+                  <span style="background: #1B3047; color: #FFFFFF; padding: 1px 5px; border-radius: 4px; font-size: 7.5px; font-weight: 800;">
                     ${data.downPaymentPct || 20}%
                   </span>
                 </div>
-                <div style="font-size: 13.5px; font-weight: 800; color: ${brand};">${formatMoney(data.downPaymentAmount)}</div>
-                <div style="font-size: 7.5px; color: #6b7280; margin-top: 2px;">Pago inicial</div>
+                <div style="font-size: 14px; font-weight: 900; color: #1B3047;">${formatMoney(data.downPaymentAmount)}</div>
+                <div style="font-size: 7.5px; color: #64748B; margin-top: 2px; font-weight: 600;">Pago Inicial al firmar</div>
               </div>
 
-              <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 7px; padding: 7px 9px;">
-                <div style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 700; color: #374151; margin-bottom: 2px;">
-                  <span>${data.installmentsCount} Cuotas</span>
-                  <span style="background: #e5e7eb; color: #6b7280; padding: 1px 5px; border-radius: 8px; font-size: 7px;">Mensual</span>
+              <!-- Mensualidades -->
+              <div style="background: #FFFFFF; border: 1.5px solid #E2E8F0; border-radius: 8px; padding: 9px 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+                  <span style="font-size: 8.5px; font-weight: 800; color: #1E293B;">${data.installmentsCount} Cuotas</span>
+                  <span style="background: #E2E8F0; color: #475569; padding: 1px 5px; border-radius: 4px; font-size: 7.5px; font-weight: 700;">Mensual</span>
                 </div>
-                <div style="font-size: 13.5px; font-weight: 800; color: ${brand};">${formatMoney(data.installmentAmount)} c/u</div>
-                <div style="font-size: 7.5px; color: #6b7280; margin-top: 2px;">Total cuotas: ${formatMoney(data.installmentAmount * data.installmentsCount)}</div>
+                <div style="font-size: 14px; font-weight: 900; color: #2F80ED;">${formatMoney(data.installmentAmount)} <span style="font-size: 9px; font-weight: 600;">c/u</span></div>
+                <div style="font-size: 7.5px; color: #64748B; margin-top: 2px; font-weight: 600;">Total diferido: ${formatMoney(data.installmentAmount * data.installmentsCount)}</div>
               </div>
 
-              <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 7px; padding: 7px 9px;">
-                <div style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 700; color: #15803d; margin-bottom: 2px;">
-                  <span>Liquidación</span>
-                  <span style="background: #bbf7d0; color: #15803d; padding: 1px 5px; border-radius: 8px; font-size: 7px;">
+              <!-- Liquidación -->
+              <div style="background: #ECFDF5; border: 1.5px solid #6EE7B7; border-radius: 8px; padding: 9px 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+                  <span style="font-size: 8.5px; font-weight: 800; color: #065F46;">Liquidación</span>
+                  <span style="background: #10B981; color: #FFFFFF; padding: 1px 5px; border-radius: 4px; font-size: 7.5px; font-weight: 800;">
                     ${data.settlementPct || 30}%
                   </span>
                 </div>
-                <div style="font-size: 13.5px; font-weight: 800; color: #15803d;">${formatMoney(data.settlementAmount)}</div>
-                <div style="font-size: 7.5px; color: #15803d; margin-top: 2px;">Contra entrega / Escritura</div>
+                <div style="font-size: 14px; font-weight: 900; color: #065F46;">${formatMoney(data.settlementAmount)}</div>
+                <div style="font-size: 7.5px; color: #047857; margin-top: 2px; font-weight: 600;">Contra entrega / Escritura</div>
               </div>
             </div>
           </div>
 
-          <!-- Add-ons Section -->
+          <!-- Adicionales si existen -->
           ${
             (data.additionals || []).length > 0
               ? `
-            <div style="margin-bottom: 8px;">
-              <div style="font-size: 8.5px; font-weight: 700; color: ${brand}; margin-bottom: 4px;">Adicionales Seleccionados</div>
+            <div>
+              <div style="font-size: 8.5px; font-weight: 800; color: #1B3047; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;">
+                Adicionales Seleccionados
+              </div>
               <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">
                 ${data.additionals!
                   .map(
                     (ad) => `
-                  <div style="background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 5px; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 8px; font-weight: 600; color: #374151;">${ad.name}</span>
-                    <strong style="font-size: 8.5px; color: ${brand};">${formatMoney(ad.price)}</strong>
+                  <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 5px 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 8.5px; font-weight: 600; color: #334155;">${ad.name}</span>
+                    <strong style="font-size: 9px; color: #1B3047; font-weight: 800;">${formatMoney(ad.price)}</strong>
                   </div>
                 `
                   )
@@ -648,35 +736,136 @@ export async function generateQuotePDF(data: QuotePDFData): Promise<{ success: b
               : ""
           }
 
-          <!-- Total Box -->
-          <div style="background: ${brand}; border-radius: 7px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; color: #fff; margin-bottom: 8px;">
-            <span style="font-size: 9.5px; font-weight: 700; opacity: 0.9;">Total de la Propuesta Comercial</span>
-            <span style="font-size: 17px; font-weight: 800;">${formatMoney(data.totalQuoteAmount)}</span>
-          </div>
-
-          <!-- Planta Conjunto if exists -->
-          ${
-            data.floorPlanUrl
-              ? `
-            <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 4px;">
-              <div style="font-size: 8px; font-weight: 700; color: ${brand}; margin-bottom: 3px;">Planta Arquitectónica / Conjunto</div>
-              <div style="flex: 1; min-height: 0; border: 1px solid #e5e7eb; border-radius: 6px; padding: 4px; display: flex; align-items: center; justify-content: center; background: #fafafa; overflow: hidden;">
-                <img src="${data.floorPlanUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain;" crossorigin="anonymous" />
-              </div>
+          <!-- Total Final Box -->
+          <div style="background: linear-gradient(135deg, #1B3047 0%, #111F30 100%); border-radius: 9px; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; color: #FFFFFF; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); margin-top: auto;">
+            <div>
+              <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #93C5FD;">Monto Total de la Propuesta</div>
+              <div style="font-size: 10.5px; font-weight: 600; opacity: 0.85; margin-top: 1px;">Precios expresados en Moneda Nacional (MXN)</div>
             </div>
-          `
-              : ""
-          }
+            <div style="font-size: 22px; font-weight: 900; letter-spacing: -0.5px; color: #FFFFFF;">
+              ${formatMoney(data.totalQuoteAmount)}
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- FOOTER -->
-      <div style="border-top: 1px solid #e5e7eb; padding: 5px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 7px; color: #9ca3af; background: #fff; flex-shrink: 0;">
-        <span>Esta cotización tiene vigencia de 30 días naturales. Precios y disponibilidad sujetos a cambio sin previo aviso.</span>
-        <span>Generado con <strong>Devio Platform</strong></span>
+      <div style="border-top: 1.5px solid #E2E8F0; padding: 8px 20px; display: flex; justify-content: space-between; align-items: center; font-size: 8px; color: #94A3B8; background: #FFFFFF; flex-shrink: 0;">
+        <span>Esta cotización tiene vigencia de 30 días naturales a partir de su emisión. Precios y disponibilidad sujetos a cambios sin previo aviso.</span>
+        <span>Generado con <strong>Devio Real Estate Platform</strong></span>
       </div>
     </div>
   `;
+}
+
+export function openQuoteInNewTab(data: QuotePDFData) {
+  if (typeof window === "undefined") return;
+
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return;
+
+  const html = getQuoteHTML(data);
+
+  const fullDocument = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <title>Cotización ${data.unitNumber} - ${data.projectName}</title>
+      <style>
+        @page {
+          size: letter portrait;
+          margin: 10mm;
+        }
+        * {
+          box-sizing: border-box;
+        }
+        body {
+          margin: 0;
+          padding: 24px;
+          background: #F1F5F9;
+          font-family: 'Inter', system-ui, -apple-system, sans-serif;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .top-toolbar {
+          width: 794px;
+          max-width: 100%;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+        .action-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          border-radius: 9999px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          border: none;
+          transition: all 0.2s;
+        }
+        .btn-print {
+          background-color: #1F3652;
+          color: #ffffff;
+        }
+        .btn-print:hover {
+          background-color: #152538;
+        }
+        .document-wrapper {
+          width: 794px;
+          max-width: 100%;
+          background: #ffffff;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        @media print {
+          body {
+            background: #ffffff;
+            padding: 0;
+          }
+          .top-toolbar {
+            display: none !important;
+          }
+          .document-wrapper {
+            box-shadow: none;
+            border-radius: 0;
+            width: 100%;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="top-toolbar">
+        <span style="font-size: 13px; color: #64748B; font-weight: 600;">Vista Previa de Cotización Comercial</span>
+        <div style="display: flex; gap: 8px;">
+          <button class="action-btn btn-print" onclick="window.print()">
+            🖨️ Imprimir / Guardar en PDF
+          </button>
+        </div>
+      </div>
+      <div class="document-wrapper">
+        ${html}
+      </div>
+    </body>
+    </html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(fullDocument);
+  printWindow.document.close();
+}
+
+export async function generateQuotePDF(data: QuotePDFData): Promise<{ success: boolean; base64?: string }> {
+  if (typeof window === "undefined") return { success: false };
+  await loadPDFLibraries();
+
+  const html = getQuoteHTML(data);
 
   // Render ghost node
   const ghost = document.createElement("div");
@@ -694,8 +883,8 @@ export async function generateQuotePDF(data: QuotePDFData): Promise<{ success: b
       margin: 0,
       filename: `Cotizacion_${data.unitNumber}_${data.quoteFolio}.pdf`,
       image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, allowTaint: true, width: 760, height: 1050 },
-      jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
+      html2canvas: { scale: 2, useCORS: true, allowTaint: true, scrollY: 0, width: 794 },
+      jsPDF: { unit: "pt", format: "letter", orientation: "portrait" },
     };
 
     if (window.html2pdf) {

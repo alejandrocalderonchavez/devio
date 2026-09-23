@@ -48,7 +48,7 @@ import AppLayout from "../../../../../components/layout/app-layout";
 import { useProject } from "../../../../../context/project-context";
 import { INITIAL_CLIENTS, ClientProfile, ClientOwnedUnit, QuoteRecord } from "../../../../../data/projects-data";
 import { exportTableToExcel, exportTableToPDF } from "../../../../../lib/export-utils";
-import { generateQuotePDF, generateReceiptPDF, openReceiptInNewTab } from "../../../../../lib/pdf-generator";
+import { generateQuotePDF, openQuoteInNewTab, generateReceiptPDF, openReceiptInNewTab } from "../../../../../lib/pdf-generator";
 import { sendAndLogNotification } from "../../../../../lib/notifications";
 import { InfoTooltip } from "../../../../../components/ui/tooltip";
 import CurrencyInput from "../../../../../components/ui/currency-input";
@@ -2521,9 +2521,8 @@ export default function ClientDetailPage() {
                           </span>
                         </td>
                         <td style={{ padding: "0.75rem 1.25rem", textAlign: "center" }}>
-                          <button
-                            type="button"
-                            onClick={() => {
+                          {(() => {
+                            const buildPayload = () => {
                               const devLogoUrl =
                                 (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
                                 "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
@@ -2532,20 +2531,53 @@ export default function ClientDetailPage() {
                                   ? project.image
                                   : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
 
-                              generateQuotePDF({
+                              const unitObj = project.unitsInventory?.find((u) => u.unit === q.unit);
+                              const unitPhoto = (unitObj?.images && unitObj.images.length > 0 && unitObj.images[0])
+                                ? unitObj.images[0]
+                                : (project.coverFileName || project.image || project.logoFileName || "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg");
+
+                              const floorPlanUrl =
+                                (unitObj?.floorPlan && project.floorPlans?.find((fp) => fp.name === unitObj.floorPlan || fp.id === unitObj.floorPlan)?.imageUrl) ||
+                                (project.floorPlans && project.floorPlans.length > 0 && project.floorPlans[0]?.imageUrl) ||
+                                undefined;
+
+                              const chars: Array<{ label: string; value: string }> = [];
+                              if (unitObj?.areaM2 || q.superficieM2) chars.push({ label: "Superficie Total", value: `${unitObj?.areaM2 || q.superficieM2} m²` });
+                              if (unitObj?.interiorAreaM2) chars.push({ label: "Superficie Interior", value: `${unitObj.interiorAreaM2} m²` });
+                              if (unitObj?.terraceAreaM2) chars.push({ label: "Terraza / Balcón", value: `${unitObj.terraceAreaM2} m²` });
+                              if (unitObj?.gardenAreaM2) chars.push({ label: "Jardín / Roof", value: `${unitObj.gardenAreaM2} m²` });
+                              if (unitObj?.bedrooms !== undefined && unitObj?.bedrooms !== null && unitObj?.bedrooms > 0) chars.push({ label: "Recámaras", value: `${unitObj.bedrooms}` });
+                              if (unitObj?.bathrooms !== undefined && unitObj?.bathrooms !== null && unitObj?.bathrooms > 0) chars.push({ label: "Baños", value: `${unitObj.bathrooms}` });
+                              if (unitObj?.parkingSpots !== undefined && unitObj?.parkingSpots !== null && unitObj?.parkingSpots > 0) chars.push({ label: "Estacionamientos", value: `${unitObj.parkingSpots}` });
+                              if (unitObj?.storageUnits !== undefined && unitObj?.storageUnits !== null && unitObj?.storageUnits > 0) chars.push({ label: "Bodegas", value: `${unitObj.storageUnits}` });
+                              if (unitObj?.floor !== undefined && unitObj?.floor !== null) chars.push({ label: "Nivel / Piso", value: `Nivel ${unitObj.floor}` });
+                              if (unitObj?.orientation) chars.push({ label: "Orientación", value: unitObj.orientation });
+                              if (unitObj?.viewType) chars.push({ label: "Vista", value: unitObj.viewType });
+                              if (q.deliveryDate || unitObj?.deliveryDate || project.estimatedDeliveryDate) chars.push({ label: "Entrega Estimada", value: q.deliveryDate || unitObj?.deliveryDate || project.estimatedDeliveryDate || "" });
+                              if (unitObj?.maintenanceFee) chars.push({ label: "Cuota Mantto.", value: `$${unitObj.maintenanceFee.toLocaleString("es-MX")}/mes` });
+                              if (unitObj?.levelHeightM) chars.push({ label: "Altura Libre", value: `${unitObj.levelHeightM} m` });
+
+                              return {
                                 quoteFolio: q.folio,
                                 unitNumber: q.unit,
-                                unitType: q.unitType,
-                                superficieM2: q.superficieM2,
+                                unitType: q.unitType || "Departamento",
+                                superficieM2: q.superficieM2 || unitObj?.areaM2 || 0,
+                                deliveryDate: q.deliveryDate || unitObj?.deliveryDate || project.estimatedDeliveryDate || "Mayo 2028",
                                 projectName: project.name,
                                 developerLogoUrl: devLogoUrl,
                                 projectLogoUrl: projLogoUrl,
+                                projectCoverUrl: project.coverFileName || project.image,
+                                unitImageUrl: unitPhoto,
+                                floorPlanUrl: floorPlanUrl,
                                 developerName: "Desarrolladora Inmobiliaria",
+                                characteristics: chars,
+                                isCoOwnership: q.isCoOwnership,
+                                coOwners: q.coOwners,
                                 listPrice: q.listPrice || q.totalQuoteAmount,
                                 discountPct: q.discountPct,
                                 discountAmount: q.discountAmount,
                                 totalQuoteAmount: q.totalQuoteAmount,
-                                planName: q.planName,
+                                planName: q.planName || "Plan de Pago",
                                 downPaymentAmount: q.downPaymentAmount,
                                 downPaymentPct: q.downPaymentPct,
                                 installmentsCount: q.installmentsCount,
@@ -2560,29 +2592,66 @@ export default function ClientDetailPage() {
                                   rfc: q.clientRfc,
                                 },
                                 advisor: {
-                                  name: q.advisorName,
+                                  name: q.advisorName || "Asesor Comercial",
                                   role: "Asesor Comercial",
                                 },
                                 brandColor: "#1F3652",
-                              });
-                              showToast("PDF Generado", `Descargando cotización ${q.folio}...`);
-                            }}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.35rem",
-                              backgroundColor: "#1B3047",
-                              color: "#FFFFFF",
-                              padding: "0.4rem 0.9rem",
-                              borderRadius: "9999px",
-                              fontSize: "0.75rem",
-                              fontWeight: 700,
-                              border: "none",
-                              cursor: "pointer",
-                            }}
-                          >
-                            <Download size={13} /> PDF
-                          </button>
+                              };
+                            };
+
+                            return (
+                              <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", justifyContent: "center" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const payload = buildPayload();
+                                    openQuoteInNewTab(payload);
+                                    showToast("Cotización", `Abriendo vista previa de ${q.folio}...`);
+                                  }}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.3rem",
+                                    backgroundColor: "rgba(31, 54, 82, 0.08)",
+                                    color: "#1F3652",
+                                    padding: "0.35rem 0.75rem",
+                                    borderRadius: "9999px",
+                                    fontSize: "0.72rem",
+                                    fontWeight: 700,
+                                    border: "1px solid rgba(31, 54, 82, 0.15)",
+                                    cursor: "pointer",
+                                  }}
+                                  title="Abrir cotización en pestaña nueva"
+                                >
+                                  <ExternalLink size={12} /> Abrir
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const payload = buildPayload();
+                                    generateQuotePDF(payload);
+                                    showToast("PDF Generado", `Descargando cotización ${q.folio}...`);
+                                  }}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.3rem",
+                                    backgroundColor: "#1B3047",
+                                    color: "#FFFFFF",
+                                    padding: "0.35rem 0.75rem",
+                                    borderRadius: "9999px",
+                                    fontSize: "0.72rem",
+                                    fontWeight: 700,
+                                    border: "none",
+                                    cursor: "pointer",
+                                  }}
+                                  title="Descargar PDF"
+                                >
+                                  <Download size={12} /> PDF
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))

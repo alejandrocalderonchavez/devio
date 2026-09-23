@@ -28,14 +28,15 @@ import {
   Trash2,
   Edit2,
   Sliders,
-  Users
+  Users,
+  ExternalLink
 } from "lucide-react";
 import { DevioDatePicker } from "../ui/devio-date-picker";
 import PhoneInput from "../ui/phone-input";
 import CurrencyInput from "../ui/currency-input";
 import { CoOwner, ProjectAdditional, QuoteRecord, UnitItem } from "../../data/projects-data";
 import { useProject } from "../../context/project-context";
-import { generateQuotePDF } from "../../lib/pdf-generator";
+import { generateQuotePDF, openQuoteInNewTab, QuotePDFData } from "../../lib/pdf-generator";
 
 export interface QuoteUnitWizardModalProps {
   isOpen: boolean;
@@ -62,6 +63,14 @@ interface AdditionalItem {
   category?: "bodega" | "estacionamiento" | "acabados" | "terraza" | "otro";
 }
 
+interface ClientData {
+  name: string;
+  email: string;
+  phone: string;
+  rfc: string;
+  isExisting?: boolean;
+}
+
 export default function QuoteUnitWizardModal({
   isOpen,
   onClose,
@@ -72,10 +81,93 @@ export default function QuoteUnitWizardModal({
   initialAdditionals = [],
   onQuoteGenerated,
 }: QuoteUnitWizardModalProps) {
+  const { paymentPlans = [], addQuote, projects = [], userName = "Asesor Comercial", userEmail = "ventas@devio.mx" } = useProject();
+
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isSending, setIsSending] = useState(false);
   const [isSentSuccess, setIsSentSuccess] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // --------------------------------------------------------------------------
+  // CLIENTES REGISTRADOS (Búsqueda multi-proyecto como en Nueva Venta)
+  // --------------------------------------------------------------------------
+  const existingClients = useMemo(() => {
+    const clientsMap: Record<string, ClientData> = {};
+
+    projects.forEach((p) => {
+      // 1. Desde ventas registradas
+      (p.sales || []).forEach((s) => {
+        if (s.clientName && s.clientName.trim()) {
+          const key = (s.clientEmail || s.clientName).toLowerCase();
+          clientsMap[key] = {
+            name: s.clientName,
+            email: s.clientEmail || "",
+            phone: s.clientPhone || "",
+            rfc: s.clientRfc || "",
+            isExisting: true,
+          };
+        }
+        (s.coOwners || []).forEach((co) => {
+          if (co.name && co.name.trim()) {
+            const coKey = (co.email || co.name).toLowerCase();
+            clientsMap[coKey] = {
+              name: co.name,
+              email: co.email || "",
+              phone: co.phone || "",
+              rfc: co.rfc || "",
+              isExisting: true,
+            };
+          }
+        });
+      });
+
+      // 2. Desde cotizaciones
+      (p.quotes || []).forEach((q) => {
+        if (q.clientName && q.clientName.trim()) {
+          const key = (q.clientEmail || q.clientName).toLowerCase();
+          if (!clientsMap[key]) {
+            clientsMap[key] = {
+              name: q.clientName,
+              email: q.clientEmail || "",
+              phone: q.clientPhone || "",
+              rfc: q.clientRfc || "",
+              isExisting: true,
+            };
+          }
+        }
+      });
+
+      // 3. Desde inventario de unidades
+      (p.unitsInventory || []).forEach((u) => {
+        if (u.client && u.client !== "-" && u.client !== "Sin asignar") {
+          const key = u.client.toLowerCase();
+          if (!clientsMap[key]) {
+            clientsMap[key] = {
+              name: u.client,
+              email: (u as any).clientEmail || "",
+              phone: (u as any).clientPhone || "",
+              rfc: (u as any).clientRfc || "",
+              isExisting: true,
+            };
+          }
+        }
+        (u.coOwners || []).forEach((co) => {
+          if (co.name && co.name.trim()) {
+            const coKey = (co.email || co.name).toLowerCase();
+            clientsMap[coKey] = {
+              name: co.name,
+              email: co.email || "",
+              phone: co.phone || "",
+              rfc: co.rfc || "",
+              isExisting: true,
+            };
+          }
+        });
+      });
+    });
+
+    return Object.values(clientsMap);
+  }, [projects]);
 
   // --------------------------------------------------------------------------
   // STEP 1: CLIENTE Y COPROPIEDAD
@@ -94,6 +186,33 @@ export default function QuoteUnitWizardModal({
   });
   const [isPrimaryFound, setIsPrimaryFound] = useState(false);
   const [coOwnersList, setCoOwnersList] = useState<CoOwner[]>([]);
+
+  // Autocompletado del prospecto principal por email o nombre
+  useEffect(() => {
+    if (!primaryClient.email && !primaryClient.name) {
+      setIsPrimaryFound(false);
+      return;
+    }
+    const trimmedEmail = (primaryClient.email || "").trim().toLowerCase();
+    const trimmedName = (primaryClient.name || "").trim().toLowerCase();
+    const found = existingClients.find(
+      (c) =>
+        (trimmedEmail && c.email && c.email.toLowerCase() === trimmedEmail) ||
+        (trimmedName && c.name && c.name.toLowerCase() === trimmedName)
+    );
+    if (found) {
+      setIsPrimaryFound(true);
+      setPrimaryClient((prev) => ({
+        ...prev,
+        name: prev.name || found.name,
+        email: prev.email || found.email,
+        phone: prev.phone || found.phone,
+        rfc: prev.rfc || found.rfc,
+      }));
+    } else {
+      setIsPrimaryFound(false);
+    }
+  }, [primaryClient.email, primaryClient.name, existingClients]);
 
   const handleToggleCoOwnership = (enabled: boolean) => {
     setIsCoOwnership(enabled);
@@ -206,7 +325,6 @@ export default function QuoteUnitWizardModal({
   // --------------------------------------------------------------------------
   // STEP 3: PLAN DE PAGO
   // --------------------------------------------------------------------------
-  const { paymentPlans = [], addQuote, projects = [], userName = "Asesor Comercial", userEmail = "ventas@devio.mx" } = useProject();
   const activeDeveloperPlans = useMemo(() => paymentPlans.filter((p) => p.isActive), [paymentPlans]);
 
   const [selectedPlanId, setSelectedPlanId] = useState<string>("custom");
@@ -512,6 +630,88 @@ export default function QuoteUnitWizardModal({
     { num: 4, label: "Carátula y Enlace" },
   ];
 
+  const getUnitCharacteristics = () => {
+    const chars: Array<{ label: string; value: string }> = [];
+    if (unit?.areaM2) chars.push({ label: "Superficie Total", value: `${unit.areaM2} m²` });
+    if (unit?.interiorAreaM2) chars.push({ label: "Superficie Interior", value: `${unit.interiorAreaM2} m²` });
+    if (unit?.terraceAreaM2) chars.push({ label: "Terraza / Balcón", value: `${unit.terraceAreaM2} m²` });
+    if (unit?.gardenAreaM2) chars.push({ label: "Jardín / Roof", value: `${unit.gardenAreaM2} m²` });
+    if (unit?.bedrooms !== undefined && unit?.bedrooms !== null && unit?.bedrooms > 0) chars.push({ label: "Recámaras", value: `${unit.bedrooms}` });
+    if (unit?.bathrooms !== undefined && unit?.bathrooms !== null && unit?.bathrooms > 0) chars.push({ label: "Baños", value: `${unit.bathrooms}` });
+    if (unit?.parkingSpots !== undefined && unit?.parkingSpots !== null && unit?.parkingSpots > 0) chars.push({ label: "Estacionamientos", value: `${unit.parkingSpots}` });
+    if (unit?.storageUnits !== undefined && unit?.storageUnits !== null && unit?.storageUnits > 0) chars.push({ label: "Bodegas", value: `${unit.storageUnits}` });
+    if (unit?.floor !== undefined && unit?.floor !== null) chars.push({ label: "Nivel / Piso", value: `Nivel ${unit.floor}` });
+    if (unit?.orientation) chars.push({ label: "Orientación", value: unit.orientation });
+    if (unit?.viewType) chars.push({ label: "Vista", value: unit.viewType });
+    if (unit?.deliveryDate) chars.push({ label: "Entrega Estimada", value: unit.deliveryDate });
+    if (unit?.maintenanceFee) chars.push({ label: "Cuota Mantto.", value: `$${unit.maintenanceFee.toLocaleString("es-MX")}/mes` });
+    if (unit?.levelHeightM) chars.push({ label: "Altura Libre", value: `${unit.levelHeightM} m` });
+    return chars;
+  };
+
+  const buildQuotePDFPayload = (): QuotePDFData => {
+    const targetProjId = projectId || (projects.length > 0 && projects[0]?.id ? projects[0].id : "p-1");
+    const curProj = projects.find((p) => p.id === targetProjId);
+    const devLogo =
+      (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+      "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+    const projLogo =
+      (curProj?.image && curProj.image.startsWith("http"))
+        ? curProj.image
+        : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+
+    const unitPhoto = (unit?.images && unit.images.length > 0 && unit.images[0])
+      ? unit.images[0]
+      : (curProj?.coverFileName || curProj?.image || curProj?.logoFileName || "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg");
+
+    const floorPlanUrl =
+      (unit?.floorPlan && curProj?.floorPlans?.find((fp) => fp.name === unit.floorPlan || fp.id === unit.floorPlan)?.imageUrl) ||
+      (curProj?.floorPlans && curProj.floorPlans.length > 0 && curProj.floorPlans[0]?.imageUrl) ||
+      undefined;
+
+    return {
+      quoteFolio: quoteFolio,
+      projectName: projectName !== "Proyecto" ? projectName : (curProj?.name || "Proyecto"),
+      unitNumber: unit?.unit || "Unidad",
+      unitType: unit?.type || "Departamento",
+      superficieM2: unit?.areaM2 || 100,
+      deliveryDate: unit?.deliveryDate || curProj?.estimatedDeliveryDate || "Mayo 2028",
+      listPrice: unitBasePrice,
+      discountPct: discountPct,
+      discountAmount: discountAmount,
+      totalQuoteAmount: netTotalQuoteAmount,
+      planName: customPlanName || "Plan de Pago",
+      downPaymentAmount: Math.round(netTotalQuoteAmount * (downPaymentPct / 100)),
+      downPaymentPct: downPaymentPct,
+      installmentsCount: installmentsCount,
+      installmentAmount: installmentsCount > 0 ? Math.round(((netTotalQuoteAmount * (1 - (downPaymentPct + balloonLiquidationPct) / 100)) / installmentsCount) * 100) / 100 : 0,
+      settlementAmount: Math.round(netTotalQuoteAmount * (balloonLiquidationPct / 100)),
+      settlementPct: balloonLiquidationPct,
+      additionals: selectedAdditionals.map((a) => ({ name: a.name, price: a.price })),
+      isCoOwnership: isCoOwnership,
+      coOwners: isCoOwnership ? coOwnersList : undefined,
+      client: {
+        name: primaryClient.name || "Cliente",
+        email: primaryClient.email,
+        phone: primaryClient.phone,
+        rfc: primaryClient.rfc,
+        ownershipPct: isCoOwnership ? primaryClient.ownershipPct : 100,
+      },
+      advisor: {
+        name: userName || "Asesor Comercial",
+        role: "Asesor de Ventas",
+        email: userEmail || "ventas@devio.mx",
+      },
+      unitImageUrl: unitPhoto,
+      projectCoverUrl: curProj?.coverFileName || curProj?.image,
+      floorPlanUrl: floorPlanUrl,
+      developerLogoUrl: devLogo,
+      projectLogoUrl: projLogo,
+      characteristics: getUnitCharacteristics(),
+      brandColor: "#1F3652",
+    };
+  };
+
   const handleSendQuote = () => {
     setIsSending(true);
     const targetProjId = projectId || (projects.length > 0 && projects[0]?.id ? projects[0].id : "p-1");
@@ -552,6 +752,8 @@ export default function QuoteUnitWizardModal({
       settlementPct: balloonLiquidationPct,
       settlementAmount: settlementAmt,
       additionals: selectedAdditionals.map((a) => ({ id: a.id, name: a.name, price: a.price })),
+      isCoOwnership: isCoOwnership,
+      coOwners: isCoOwnership ? allOwnersCombined : undefined,
       status: "VIGENTE",
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -561,24 +763,32 @@ export default function QuoteUnitWizardModal({
       addQuote(targetProjId, newQuoteRecord);
     }
 
-    if (sendEmail && primaryClient.email) {
-      fetch("/api/notifications/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: primaryClient.email,
-          templateAlias: "nueva-cotizacion",
-          templateModel: {
-            nombre_cliente: primaryClient.name || "Cliente",
-            unidad: unit.unit,
-            proyecto: projName,
-            monto_total: netTotalQuoteAmount,
-            folio_cotizacion: quoteFolio,
-            nombre_asesor: userName || "Asesor Devio",
-            anio: new Date().getFullYear().toString(),
-          },
-        }),
-      }).catch((err) => console.error("Error sending quote notification:", err));
+    if (sendEmail) {
+      const targets = isCoOwnership
+        ? allOwnersCombined.filter((o) => o.email && o.email.trim())
+        : primaryClient.email
+        ? [{ email: primaryClient.email, name: primaryClient.name }]
+        : [];
+
+      targets.forEach((t) => {
+        fetch("/api/notifications/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: t.email,
+            templateAlias: "nueva-cotizacion",
+            templateModel: {
+              nombre_cliente: t.name || primaryClient.name || "Cliente",
+              unidad: unit.unit,
+              proyecto: projName,
+              monto_total: netTotalQuoteAmount,
+              folio_cotizacion: quoteFolio,
+              nombre_asesor: userName || "Asesor Devio",
+              anio: new Date().getFullYear().toString(),
+            },
+          }),
+        }).catch((err) => console.error("Error sending quote notification:", err));
+      });
     }
 
     setTimeout(() => {
@@ -752,64 +962,115 @@ export default function QuoteUnitWizardModal({
             <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
               <div style={{ textAlign: "center", maxWidth: "660px", margin: "0 auto" }}>
                 <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.4rem" }}>
-                  Asignar Prospecto y Copropietarios
+                  Asignar Prospecto y Modalidad de Propiedad
                 </h3>
                 <p style={{ fontSize: "0.85rem", color: "var(--devio-neutral-3)", lineHeight: 1.45 }}>
-                  Escribe el correo del prospecto principal o habilita la cotización en esquema de Copropiedad para varios titulares.
+                  Busca o registra los datos del titular principal o activa la modalidad en Copropiedad para múltiples compradores.
                 </p>
               </div>
 
-              {/* Copropiedad Toggle Switch Card */}
-              <div
-                style={{
-                  backgroundColor: isCoOwnership ? "rgba(47, 128, 237, 0.06)" : "#F8FAFC",
-                  border: isCoOwnership ? "1.5px solid var(--devio-blue)" : "1px solid var(--devio-neutral-1)",
-                  borderRadius: "0.85rem",
-                  padding: "0.85rem 1.25rem",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              {/* Selector UI/UX Claro: Propietario Único vs Copropiedad */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+                {/* Card 1: Propietario Único */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleCoOwnership(false)}
+                  style={{
+                    padding: "1rem 1.15rem",
+                    borderRadius: "0.85rem",
+                    border: !isCoOwnership ? "2px solid #2F80ED" : "1.5px solid var(--devio-neutral-1)",
+                    backgroundColor: !isCoOwnership ? "rgba(47, 128, 237, 0.05)" : "#FFFFFF",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "0.85rem",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
                   <div
                     style={{
-                      width: "34px",
-                      height: "34px",
+                      width: "38px",
+                      height: "38px",
                       borderRadius: "8px",
-                      backgroundColor: isCoOwnership ? "var(--devio-blue)" : "rgba(31, 54, 82, 0.08)",
+                      backgroundColor: !isCoOwnership ? "var(--devio-blue)" : "rgba(31, 54, 82, 0.08)",
+                      color: !isCoOwnership ? "#FFFFFF" : "var(--devio-blue-dark)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <User size={20} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <strong style={{ fontSize: "0.92rem", color: "var(--devio-blue-dark)" }}>
+                        Propietario Único
+                      </strong>
+                      {!isCoOwnership && (
+                        <span style={{ width: "18px", height: "18px", borderRadius: "50%", backgroundColor: "var(--devio-blue)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800 }}>
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: "0.76rem", color: "var(--devio-neutral-3)", margin: "0.25rem 0 0", lineHeight: 1.35 }}>
+                      Cotización individual asignada a un solo titular (100% de propiedad).
+                    </p>
+                  </div>
+                </button>
+
+                {/* Card 2: Copropiedad */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleCoOwnership(true)}
+                  style={{
+                    padding: "1rem 1.15rem",
+                    borderRadius: "0.85rem",
+                    border: isCoOwnership ? "2px solid #00C48C" : "1.5px solid var(--devio-neutral-1)",
+                    backgroundColor: isCoOwnership ? "rgba(0, 196, 140, 0.06)" : "#FFFFFF",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "0.85rem",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      borderRadius: "8px",
+                      backgroundColor: isCoOwnership ? "var(--devio-green)" : "rgba(31, 54, 82, 0.08)",
                       color: isCoOwnership ? "#FFFFFF" : "var(--devio-blue-dark)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
+                      flexShrink: 0,
                     }}
                   >
-                    <Users size={18} />
+                    <Users size={20} />
                   </div>
-                  <div>
-                    <strong style={{ fontSize: "0.9rem", color: "var(--devio-blue-dark)", display: "block" }}>
-                      ¿Cotizar en Copropiedad (Varios Dueños)?
-                    </strong>
-                    <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)" }}>
-                      Permite registrar la cotización a nombre de múltiples copropietarios con porcentajes que sumen 100%.
-                    </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <strong style={{ fontSize: "0.92rem", color: "var(--devio-blue-dark)" }}>
+                        Copropiedad (Varios Titulares)
+                      </strong>
+                      {isCoOwnership && (
+                        <span style={{ width: "18px", height: "18px", borderRadius: "50%", backgroundColor: "var(--devio-green)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800 }}>
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: "0.76rem", color: "var(--devio-neutral-3)", margin: "0.25rem 0 0", lineHeight: 1.35 }}>
+                      Cotización compartida entre 2 o más compradores con porcentajes que sumen 100%.
+                    </p>
                   </div>
-                </div>
-
-                <label style={{ display: "flex", alignItems: "center", cursor: "pointer", gap: "0.5rem" }}>
-                  <input
-                    type="checkbox"
-                    checked={isCoOwnership}
-                    onChange={(e) => handleToggleCoOwnership(e.target.checked)}
-                    style={{ width: "20px", height: "20px", accentColor: "var(--devio-blue)" }}
-                  />
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
-                    {isCoOwnership ? "Activada" : "Individual"}
-                  </span>
-                </label>
+                </button>
               </div>
 
-              {/* Ownership Visual Distribution Bar */}
+              {/* Ownership Visual Distribution Bar (When Copropiedad is active) */}
               {isCoOwnership && (
                 <div
                   style={{
@@ -874,7 +1135,7 @@ export default function QuoteUnitWizardModal({
                       const color = colors[idx % colors.length];
                       return (
                         <div
-                          key={owner.id}
+                          key={owner.id || idx}
                           style={{
                             width: `${Math.max(0, Math.min(100, owner.ownershipPct))}%`,
                             backgroundColor: color,
@@ -888,7 +1149,7 @@ export default function QuoteUnitWizardModal({
                 </div>
               )}
 
-              {/* Titular Principal Form */}
+              {/* Titular Principal Card */}
               <div
                 style={{
                   backgroundColor: "#F8FAFC",
@@ -900,7 +1161,52 @@ export default function QuoteUnitWizardModal({
                   gap: "0.85rem",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {/* Selector rápido de cliente existente */}
+                {existingClients.length > 0 && (
+                  <div>
+                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-neutral-4)", display: "block", marginBottom: "0.25rem" }}>
+                      Seleccionar de clientes registrados ({existingClients.length}):
+                    </label>
+                    <select
+                      onChange={(e) => {
+                        const found = existingClients.find(
+                          (c) => (c.email || c.name).toLowerCase() === e.target.value.toLowerCase()
+                        );
+                        if (found) {
+                          setPrimaryClient((prev) => ({
+                            ...prev,
+                            name: found.name,
+                            email: found.email,
+                            phone: found.phone,
+                            rfc: found.rfc,
+                          }));
+                          setIsPrimaryFound(true);
+                        }
+                      }}
+                      defaultValue=""
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.85rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid var(--devio-neutral-2)",
+                        fontSize: "0.85rem",
+                        backgroundColor: "#FFFFFF",
+                        color: "var(--devio-blue-dark)",
+                        outline: "none",
+                        fontWeight: 600,
+                      }}
+                    >
+                      <option value="">-- Buscar o seleccionar cliente existente --</option>
+                      {existingClients.map((c, idx) => (
+                        <option key={idx} value={c.email || c.name}>
+                          {c.name} ({c.email || "Sin correo"}{c.phone ? ` • ${c.phone}` : ""})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: existingClients.length > 0 ? "1px solid var(--devio-neutral-1)" : "none", paddingTop: existingClients.length > 0 ? "0.6rem" : "0" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span
                       style={{
@@ -916,8 +1222,37 @@ export default function QuoteUnitWizardModal({
                       Titular Principal
                     </span>
                     <strong style={{ fontSize: "0.88rem", color: "var(--devio-blue-dark)" }}>
-                      Contacto y Ficha Principal
+                      Contacto y Ficha Comercial
                     </strong>
+                    {isPrimaryFound ? (
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          fontWeight: 800,
+                          backgroundColor: "rgba(0, 196, 140, 0.12)",
+                          color: "var(--devio-green)",
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: "9999px",
+                          border: "1px solid rgba(0, 196, 140, 0.3)",
+                        }}
+                      >
+                        ✓ Cliente Registrado
+                      </span>
+                    ) : primaryClient.email.trim() ? (
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          fontWeight: 800,
+                          backgroundColor: "rgba(47, 128, 237, 0.1)",
+                          color: "var(--devio-blue)",
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: "9999px",
+                          border: "1px solid rgba(47, 128, 237, 0.25)",
+                        }}
+                      >
+                        + Nuevo Prospecto
+                      </span>
+                    ) : null}
                   </div>
 
                   {isCoOwnership && (
@@ -1043,6 +1378,46 @@ export default function QuoteUnitWizardModal({
                         gap: "0.85rem",
                       }}
                     >
+                      {/* Selector rápido para copropietario */}
+                      {existingClients.length > 0 && (
+                        <div>
+                          <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--devio-neutral-4)", display: "block", marginBottom: "0.25rem" }}>
+                            Cargar de clientes registrados:
+                          </label>
+                          <select
+                            onChange={(e) => {
+                              const found = existingClients.find(
+                                (c) => (c.email || c.name).toLowerCase() === e.target.value.toLowerCase()
+                              );
+                              if (found) {
+                                handleUpdateCoOwner(co.id, "name", found.name);
+                                handleUpdateCoOwner(co.id, "email", found.email);
+                                handleUpdateCoOwner(co.id, "phone", found.phone);
+                                handleUpdateCoOwner(co.id, "rfc", found.rfc);
+                              }
+                            }}
+                            defaultValue=""
+                            style={{
+                              width: "100%",
+                              padding: "0.45rem 0.75rem",
+                              borderRadius: "0.4rem",
+                              border: "1px solid var(--devio-neutral-2)",
+                              fontSize: "0.8rem",
+                              backgroundColor: "#FFFFFF",
+                              color: "var(--devio-blue-dark)",
+                              outline: "none",
+                            }}
+                          >
+                            <option value="">-- Seleccionar copropietario existente --</option>
+                            {existingClients.map((c, idx) => (
+                              <option key={idx} value={c.email || c.name}>
+                                {c.name} ({c.email || "Sin correo"}{c.phone ? ` • ${c.phone}` : ""})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span
                           style={{
@@ -1950,71 +2325,54 @@ export default function QuoteUnitWizardModal({
                 </div>
               </div>
 
-              {/* Action Buttons: PDF Download & Link Copy */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+              {/* Action Buttons: Abrir, PDF Download & Link Copy */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
                 <button
                   type="button"
-                  onClick={async () => {
-                    const curProj = projects.find((p) => p.id === projectId);
-                    const devLogo =
-                      (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
-                      "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
-                    const projLogo =
-                      (curProj?.image && curProj.image.startsWith("http"))
-                        ? curProj.image
-                        : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
-
-                    await generateQuotePDF({
-                      quoteFolio: quoteFolio,
-                      projectName: projectName || "Proyecto",
-                      unitNumber: unit?.unit || "Unidad",
-                      unitType: unit?.type || "Departamento",
-                      superficieM2: unit?.areaM2 || 100,
-                      deliveryDate: unit?.deliveryDate || "Mayo 2028",
-                      listPrice: unitBasePrice,
-                      discountPct: discountPct,
-                      discountAmount: discountAmount,
-                      totalQuoteAmount: netTotalQuoteAmount,
-                      planName: customPlanName || "Plan de Pago",
-                      downPaymentAmount: Math.round(netTotalQuoteAmount * (downPaymentPct / 100)),
-                      downPaymentPct: downPaymentPct,
-                      installmentsCount: installmentsCount,
-                      installmentAmount: installmentsCount > 0 ? Math.round(((netTotalQuoteAmount * (1 - (downPaymentPct + balloonLiquidationPct) / 100)) / installmentsCount) * 100) / 100 : 0,
-                      settlementAmount: Math.round(netTotalQuoteAmount * (balloonLiquidationPct / 100)),
-                      settlementPct: balloonLiquidationPct,
-                      additionals: selectedAdditionals.map((a) => ({ name: a.name, price: a.price })),
-                      client: {
-                        name: primaryClient.name || "Cliente",
-                        email: primaryClient.email,
-                        phone: primaryClient.phone,
-                        rfc: primaryClient.rfc,
-                      },
-                      advisor: {
-                        name: userName || "Asesor Comercial",
-                        role: "Asesor de Ventas",
-                        email: userEmail || "ventas@devio.mx",
-                      },
-                      developerLogoUrl: devLogo,
-                      projectLogoUrl: projLogo,
-                      brandColor: "#1F3652",
-                    });
+                  onClick={() => {
+                    openQuoteInNewTab(buildQuotePDFPayload());
                   }}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: "0.5rem",
-                    padding: "0.75rem",
+                    gap: "0.45rem",
+                    padding: "0.75rem 0.5rem",
                     borderRadius: "0.6rem",
                     backgroundColor: "var(--devio-white)",
-                    border: "1.5px solid var(--devio-blue)",
-                    color: "var(--devio-blue)",
+                    border: "1.5px solid var(--devio-blue-dark)",
+                    color: "var(--devio-blue-dark)",
                     fontWeight: 700,
-                    fontSize: "0.85rem",
+                    fontSize: "0.82rem",
                     cursor: "pointer",
+                    transition: "all 0.15s ease",
                   }}
                 >
-                  <Download size={16} /> Descargar Cotización (PDF)
+                  <ExternalLink size={15} /> Abrir Cotización
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await generateQuotePDF(buildQuotePDFPayload());
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.45rem",
+                    padding: "0.75rem 0.5rem",
+                    borderRadius: "0.6rem",
+                    backgroundColor: "var(--devio-blue-dark)",
+                    border: "1.5px solid var(--devio-blue-dark)",
+                    color: "var(--devio-white)",
+                    fontWeight: 700,
+                    fontSize: "0.82rem",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <Download size={15} /> Descargar PDF
                 </button>
 
                 <button
@@ -2024,18 +2382,19 @@ export default function QuoteUnitWizardModal({
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: "0.5rem",
-                    padding: "0.75rem",
+                    gap: "0.45rem",
+                    padding: "0.75rem 0.5rem",
                     borderRadius: "0.6rem",
                     backgroundColor: "var(--devio-white)",
                     border: "1.5px solid var(--devio-neutral-2)",
                     color: "var(--devio-neutral-4)",
                     fontWeight: 700,
-                    fontSize: "0.85rem",
+                    fontSize: "0.82rem",
                     cursor: "pointer",
+                    transition: "all 0.15s ease",
                   }}
                 >
-                  <Copy size={16} /> {copiedLink ? "✓ Enlace Copiado" : "Copiar Enlace Digital"}
+                  <Copy size={15} /> {copiedLink ? "✓ Copiado" : "Copiar Enlace"}
                 </button>
               </div>
 

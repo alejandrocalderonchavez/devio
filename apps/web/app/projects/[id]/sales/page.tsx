@@ -426,16 +426,48 @@ export default function ProjectSalesPage() {
         ? project.image
         : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
 
+    const unitObj = project.unitsInventory?.find((u) => u.unit === quote.unit);
+    const unitPhoto = (unitObj?.images && unitObj.images.length > 0 && unitObj.images[0])
+      ? unitObj.images[0]
+      : (project.coverFileName || project.image || project.logoFileName || "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg");
+
+    const floorPlanUrl =
+      (unitObj?.floorPlan && project.floorPlans?.find((fp) => fp.name === unitObj.floorPlan || fp.id === unitObj.floorPlan)?.imageUrl) ||
+      (project.floorPlans && project.floorPlans.length > 0 && project.floorPlans[0]?.imageUrl) ||
+      undefined;
+
+    const chars: Array<{ label: string; value: string }> = [];
+    if (unitObj?.areaM2 || quote.superficieM2) chars.push({ label: "Superficie Total", value: `${unitObj?.areaM2 || quote.superficieM2} m²` });
+    if (unitObj?.interiorAreaM2) chars.push({ label: "Superficie Interior", value: `${unitObj.interiorAreaM2} m²` });
+    if (unitObj?.terraceAreaM2) chars.push({ label: "Terraza / Balcón", value: `${unitObj.terraceAreaM2} m²` });
+    if (unitObj?.gardenAreaM2) chars.push({ label: "Jardín / Roof", value: `${unitObj.gardenAreaM2} m²` });
+    if (unitObj?.bedrooms !== undefined && unitObj?.bedrooms !== null && unitObj?.bedrooms > 0) chars.push({ label: "Recámaras", value: `${unitObj.bedrooms}` });
+    if (unitObj?.bathrooms !== undefined && unitObj?.bathrooms !== null && unitObj?.bathrooms > 0) chars.push({ label: "Baños", value: `${unitObj.bathrooms}` });
+    if (unitObj?.parkingSpots !== undefined && unitObj?.parkingSpots !== null && unitObj?.parkingSpots > 0) chars.push({ label: "Estacionamientos", value: `${unitObj.parkingSpots}` });
+    if (unitObj?.storageUnits !== undefined && unitObj?.storageUnits !== null && unitObj?.storageUnits > 0) chars.push({ label: "Bodegas", value: `${unitObj.storageUnits}` });
+    if (unitObj?.floor !== undefined && unitObj?.floor !== null) chars.push({ label: "Nivel / Piso", value: `Nivel ${unitObj.floor}` });
+    if (unitObj?.orientation) chars.push({ label: "Orientación", value: unitObj.orientation });
+    if (unitObj?.viewType) chars.push({ label: "Vista", value: unitObj.viewType });
+    if (quote.deliveryDate || unitObj?.deliveryDate || project.estimatedDeliveryDate) chars.push({ label: "Entrega Estimada", value: quote.deliveryDate || unitObj?.deliveryDate || project.estimatedDeliveryDate || "" });
+    if (unitObj?.maintenanceFee) chars.push({ label: "Cuota Mantto.", value: `$${unitObj.maintenanceFee.toLocaleString("es-MX")}/mes` });
+    if (unitObj?.levelHeightM) chars.push({ label: "Altura Libre", value: `${unitObj.levelHeightM} m` });
+
     generateQuotePDF({
       quoteFolio: quote.folio,
       unitNumber: quote.unit,
       unitType: quote.unitType || "Departamento",
-      superficieM2: quote.superficieM2 || 0,
-      deliveryDate: quote.deliveryDate || "Mayo 2028",
+      superficieM2: quote.superficieM2 || unitObj?.areaM2 || 0,
+      deliveryDate: quote.deliveryDate || unitObj?.deliveryDate || project.estimatedDeliveryDate || "Mayo 2028",
       projectName: project.name,
       developerLogoUrl: devLogoUrl,
       projectLogoUrl: projLogoUrl,
+      projectCoverUrl: project.coverFileName || project.image,
+      unitImageUrl: unitPhoto,
+      floorPlanUrl: floorPlanUrl,
       developerName: "Desarrolladora Inmobiliaria",
+      characteristics: chars,
+      isCoOwnership: quote.isCoOwnership,
+      coOwners: quote.coOwners,
       listPrice: quote.listPrice || quote.totalQuoteAmount,
       discountPct: quote.discountPct,
       discountAmount: quote.discountAmount,

@@ -178,6 +178,8 @@ export interface QuoteRecord {
   settlementPct: number;
   settlementAmount: number;
   additionals?: Array<{ id?: string; name: string; price: number }>;
+  isCoOwnership?: boolean;
+  coOwners?: CoOwner[];
   status: "VIGENTE" | "EN_ESPERA" | "CONVERTIDA_A_VENTA" | "PERDIDA" | "EXPIRADA" | "RECHAZADA";
   lostReason?: string;
   notes?: string;
