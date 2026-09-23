@@ -224,8 +224,9 @@ export default function ClientDetailPage() {
       const clientPhone = coOwnerMatch?.phone || firstSale.clientPhone;
       const clientRfc = coOwnerMatch?.rfc || firstSale.clientRfc || "-";
 
-      // Filter strictly to sales belonging to THIS client (by matching email or name)
-      const matchingSales = candidateSales.filter((s) => {
+      // Filter strictly to ALL sales in the project belonging to THIS client (by matching email or name)
+      const matchingSales = (project.sales || []).filter((s) => {
+        if (s.status === "CANCELADA" || !soldUnitsMap.has(s.unit)) return false;
         if (clientEmail && clientEmail !== "-" && s.clientEmail) {
           if (s.clientEmail.toLowerCase() === clientEmail.toLowerCase()) return true;
         }
@@ -477,7 +478,7 @@ export default function ClientDetailPage() {
     const defaultMonthlyRatePct = matchedPlan?.moratoryRatePct ?? 3.0;
 
     if (currentSale?.schedule && currentSale.schedule.length > 0) {
-      return currentSale.schedule.map((inst) => {
+      return currentSale.schedule.map((inst: any) => {
         const instPlanName = inst.planName || currentSale.paymentPlan || "Plan de Pago";
         const instMatchedPlan = (paymentPlans || []).find(
           (p) =>
@@ -488,10 +489,15 @@ export default function ClientDetailPage() {
           ? instMatchedPlan.moratoryRatePct
           : defaultMonthlyRatePct;
 
-        const instDate = parseDateFlexible(inst.scheduledDate);
-        const isPastDue = Boolean(instDate && instDate < now && (inst.pendingAmount || 0) > 0);
+        const sDate = inst.scheduledDate || inst.fechaProgramada || "";
+        const sAmount = Number(inst.scheduledAmount ?? inst.montoProgramado) || 0;
+        const pAmount = Number(inst.paidAmount ?? inst.montoPagado) || 0;
+        const pendAmount = Number(inst.pendingAmount ?? inst.montoPendiente) || 0;
+
+        const instDate = parseDateFlexible(sDate);
+        const isPastDue = Boolean(instDate && instDate < now && pendAmount > 0);
         const status = (
-          (inst.pendingAmount === 0 || inst.status === "Pagado")
+          (pendAmount === 0 || inst.status === "Pagado")
             ? "Pagado"
             : isPastDue || inst.status === "Atrasado"
             ? "Atrasado"
@@ -502,7 +508,7 @@ export default function ClientDetailPage() {
         if (status === "Atrasado" && instDate) {
           const diffMs = now.getTime() - instDate.getTime();
           const daysOverdue = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-          calculatedMoratorio = Math.round((inst.pendingAmount || 0) * (monthlyRatePct / 100) * (daysOverdue / 30));
+          calculatedMoratorio = Math.round(pendAmount * (monthlyRatePct / 100) * (daysOverdue / 30));
         } else if (inst.moratoryInterest) {
           calculatedMoratorio = inst.moratoryInterest;
         }
@@ -510,13 +516,13 @@ export default function ClientDetailPage() {
         return {
           id: inst.id,
           unit: selectedUnit,
-          montoProgramado: inst.scheduledAmount,
-          fechaProgramada: inst.scheduledDate,
-          montoPagado: inst.paidAmount,
-          montoPendiente: inst.pendingAmount,
-          fechaPago: inst.paymentDate || (inst.pendingAmount === 0 ? "Pagado" : "Pendiente"),
+          montoProgramado: sAmount,
+          fechaProgramada: sDate,
+          montoPagado: pAmount,
+          montoPendiente: pendAmount,
+          fechaPago: inst.paymentDate || inst.fechaPago || (pendAmount === 0 ? "Pagado" : "Pendiente"),
           planPago: instPlanName,
-          metodoPago: inst.paymentMethod || (inst.paidAmount > 0 ? "SPEI" : "Pendiente"),
+          metodoPago: inst.paymentMethod || inst.metodoPago || (pAmount > 0 ? "SPEI" : "Pendiente"),
           status,
           interesMoratorio: calculatedMoratorio,
         };
