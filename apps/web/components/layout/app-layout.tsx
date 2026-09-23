@@ -70,22 +70,28 @@ export default function AppLayout({
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
-      const raw = sessionStorage.getItem("devio_impersonation");
+      const raw = localStorage.getItem("devio_impersonation") || sessionStorage.getItem("devio_impersonation");
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
           if (parsed?.active) setImpersonation(parsed);
         } catch (e) {}
+      } else {
+        setImpersonation(null);
       }
     }
   }, [pathname]);
 
   const handleStopImpersonation = () => {
     if (typeof window !== "undefined") {
+      localStorage.removeItem("devio_impersonation");
       sessionStorage.removeItem("devio_impersonation");
     }
     setImpersonation(null);
     showToast("Sesión Restaurada", "Has salido del modo impersonación.");
+    try {
+      window.close();
+    } catch (e) {}
     window.location.href = "/super-admin";
   };
 
@@ -119,48 +125,6 @@ export default function AppLayout({
         backgroundColor: "#EEF3F8",
       }}
     >
-      {/* Impersonation Warning Banner */}
-      {impersonation?.active && (
-        <div
-          style={{
-            backgroundColor: "#1B3047",
-            borderBottom: "2px solid #00C48C",
-            color: "#FFFFFF",
-            padding: "0.45rem 1.5rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            fontSize: "0.78rem",
-            fontWeight: 600,
-            zIndex: 99998,
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <ShieldAlert size={16} color="#00C48C" />
-            <span>
-              <strong>MODO IMPERSONACIÓN ACTIVO:</strong> Estás operando como <u>{impersonation.userName}</u> ({impersonation.developerName})
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={handleStopImpersonation}
-            style={{
-              backgroundColor: "#00C48C",
-              color: "#1B3047",
-              border: "none",
-              padding: "0.25rem 0.85rem",
-              borderRadius: "9999px",
-              fontSize: "0.72rem",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
-            Salir y Volver a Super Admin
-          </button>
-        </div>
-      )}
-
       <div
         style={{
           display: "flex",
@@ -1003,6 +967,64 @@ export default function AppLayout({
         {children}
       </div>
     </div>
+
+    {/* Floating Sleek Non-Intrusive Impersonation Badge */}
+    {impersonation?.active && (
+      <div
+        style={{
+          position: "fixed",
+          bottom: "1.25rem",
+          right: "1.25rem",
+          zIndex: 99999,
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          backgroundColor: "rgba(27, 48, 71, 0.95)",
+          backdropFilter: "blur(12px)",
+          border: "1px solid rgba(0, 196, 140, 0.4)",
+          borderRadius: "9999px",
+          padding: "0.45rem 0.85rem 0.45rem 0.95rem",
+          boxShadow: "0 12px 28px rgba(0, 0, 0, 0.35), 0 0 16px rgba(0, 196, 140, 0.2)",
+          color: "#FFFFFF",
+          fontSize: "0.78rem",
+          animation: "fadeIn 0.2s ease-in-out",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+          <span
+            style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              backgroundColor: "#00C48C",
+              boxShadow: "0 0 8px #00C48C",
+            }}
+          />
+          <span style={{ color: "#8DA4BF" }}>Impersonando:</span>
+          <strong style={{ color: "#00C48C", fontWeight: 700 }}>{impersonation.userName}</strong>
+          <span style={{ color: "#CBD5E1", fontSize: "0.72rem" }}>({impersonation.developerName})</span>
+        </div>
+        <button
+          type="button"
+          onClick={handleStopImpersonation}
+          style={{
+            backgroundColor: "rgba(224, 83, 69, 0.2)",
+            color: "#FF8A80",
+            border: "1px solid rgba(224, 83, 69, 0.4)",
+            borderRadius: "9999px",
+            padding: "0.2rem 0.65rem",
+            fontSize: "0.7rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "rgba(224, 83, 69, 0.4)")}
+          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "rgba(224, 83, 69, 0.2)")}
+        >
+          Salir
+        </button>
+      </div>
+    )}
   </div>
   );
 }

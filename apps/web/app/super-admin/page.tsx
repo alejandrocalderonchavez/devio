@@ -683,7 +683,7 @@ function SuperAdminContent() {
     showToast("Notificación Programada", `Se encoló '${newSch.triggerName}' para el ${newSch.scheduledForFormatted}.`, "success");
   };
 
-  // Impersonation Handler
+  // Impersonation Handler (opens in new tab and hydrates developer, projects and user)
   const handleImpersonate = (dev: SuperAdminDeveloper, user?: any) => {
     const targetUser = user || dev.users[0] || { name: `${dev.name} Admin`, email: dev.contactEmail };
     const sessionObj = {
@@ -693,24 +693,45 @@ function SuperAdminContent() {
       userName: targetUser.name,
       userEmail: targetUser.email,
       role: targetUser.role || "ADMIN",
+      projects: dev.projects,
     };
 
     if (typeof window !== "undefined") {
+      localStorage.setItem("devio_impersonation", JSON.stringify(sessionObj));
       sessionStorage.setItem("devio_impersonation", JSON.stringify(sessionObj));
-      localStorage.setItem("devio_developer_onboarding", JSON.stringify({
-        name: dev.name,
-        commercialName: dev.name,
-        legalName: dev.legalName,
-        rfc: dev.rfc,
-        city: dev.city,
-        email: dev.contactEmail,
-        phone: dev.phone,
-      }));
+      localStorage.setItem(
+        "devio_developer_onboarding",
+        JSON.stringify({
+          id: dev.id,
+          name: dev.name,
+          commercialName: dev.name,
+          legalName: dev.legalName,
+          rfc: dev.rfc,
+          city: dev.city,
+          email: dev.contactEmail,
+          phone: dev.phone,
+        })
+      );
+      localStorage.setItem(
+        "devio_user_session",
+        JSON.stringify({
+          id: targetUser.id || `usr-${Date.now()}`,
+          fullName: targetUser.name,
+          email: targetUser.email,
+          role: targetUser.role || "ADMIN",
+          developerName: dev.name,
+          isImpersonated: true,
+        })
+      );
+      if (Array.isArray(dev.projects) && dev.projects.length > 0) {
+        localStorage.setItem("devio_projects_state", JSON.stringify(dev.projects));
+      }
+      // Set auth cookie so middleware immediately grants access in new tab
+      document.cookie = `devio_auth_token=devio_token_imp_${dev.id}_${Date.now()}; path=/; max-age=86400; SameSite=Lax`;
     }
 
-    setDeveloperName(dev.name);
-    showToast("Modo 'Run As' Activado", `Operando como ${targetUser.name} en ${dev.name}.`, "success");
-    router.push("/dashboard");
+    showToast("Modo 'Run As' Activado", `Abriendo nueva pestaña como ${targetUser.name} (${dev.name})...`, "success");
+    window.open("/dashboard", "_blank");
   };
 
   // Open Payment Link Modal

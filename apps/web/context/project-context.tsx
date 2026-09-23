@@ -340,6 +340,22 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (e) {}
     }
+
+    const storedImpersonation = localStorage.getItem("devio_impersonation") || sessionStorage.getItem("devio_impersonation");
+    if (storedImpersonation) {
+      try {
+        const parsedImp = JSON.parse(storedImpersonation);
+        if (parsedImp?.active) {
+          if (parsedImp.userName) setUserName(parsedImp.userName);
+          if (parsedImp.userEmail) setUserEmail(parsedImp.userEmail);
+          if (parsedImp.developerName) setDeveloperName(parsedImp.developerName);
+          if (parsedImp.role) setUserRole(parsedImp.role as UserRole);
+          if (Array.isArray(parsedImp.projects) && parsedImp.projects.length > 0) {
+            setProjects(parsedImp.projects);
+          }
+        }
+      } catch (e) {}
+    }
   };
 
   // Load from localStorage / sessionStorage & listen to updates
