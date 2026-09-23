@@ -419,7 +419,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
             } catch (e) {}
           }
 
-          // Find matching developer
+          // Find matching developer strictly by active session credentials
           let matched = data.developers.find((d: any) => {
             if (activeDevId && d.id === activeDevId) return true;
             if (activeDevName && d.name.toLowerCase() === activeDevName.toLowerCase()) return true;
@@ -430,15 +430,6 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
             return false;
           });
 
-          // Campero fallback
-          if (!matched && currentEmail && (currentEmail.includes("campero") || currentEmail === "desarrolloscampero@gmail.com")) {
-            matched = data.developers.find((d: any) => d.name.toLowerCase().includes("campero"));
-          }
-
-          if (!matched && data.developers.length > 0) {
-            matched = data.developers[0];
-          }
-
           if (matched) {
             setDeveloperName(matched.name);
             const dLogo = matched.logoPath || matched.logo || matched.logoUrl || "";
@@ -447,7 +438,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
               localStorage.setItem("devio_developer_logo", dLogo);
               sessionStorage.setItem("devio_developer_logo", dLogo);
             }
-            if (Array.isArray(matched.projects) && matched.projects.length > 0) {
+            if (Array.isArray(matched.projects)) {
               setProjects(matched.projects);
               localStorage.setItem("devio_projects_state", JSON.stringify(matched.projects));
               sessionStorage.setItem("devio_projects_state", JSON.stringify(matched.projects));
@@ -2266,7 +2257,30 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined") {
       localStorage.removeItem("devio_user_session");
       sessionStorage.removeItem("devio_user_session");
-      document.cookie = "devio_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      localStorage.removeItem("devio_developer_onboarding");
+      sessionStorage.removeItem("devio_developer_onboarding");
+      localStorage.removeItem("devio_developer_logo");
+      sessionStorage.removeItem("devio_developer_logo");
+      localStorage.removeItem("devio_projects_state");
+      sessionStorage.removeItem("devio_projects_state");
+      localStorage.removeItem("devio_impersonation");
+      sessionStorage.removeItem("devio_impersonation");
+      localStorage.removeItem("devio_is_new_user");
+      sessionStorage.removeItem("devio_is_new_user");
+      localStorage.removeItem("devio_developer_payment_plans");
+      sessionStorage.removeItem("devio_developer_payment_plans");
+      localStorage.removeItem("devio_payment_plans_library");
+      sessionStorage.removeItem("devio_payment_plans_library");
+      localStorage.removeItem("devio_postventa_incidents");
+      sessionStorage.removeItem("devio_postventa_incidents");
+      
+      document.cookie = "devio_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0";
+      setProjects([]);
+      setDeveloperName("");
+      setDeveloperLogo("");
+      setUserName("");
+      setUserEmail("");
+      
       window.location.href = "/login";
     }
   };

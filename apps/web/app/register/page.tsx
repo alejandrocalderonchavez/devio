@@ -144,6 +144,7 @@ function RegisterContent() {
       email: cleanEmail,
       phone: phoneFull,
       roleTitle,
+      password,
       registeredAt: new Date().toISOString(),
       inviteToken: activeInvite?.token,
     };

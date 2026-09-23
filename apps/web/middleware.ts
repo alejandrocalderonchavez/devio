@@ -24,6 +24,11 @@ export function middleware(request: NextRequest) {
   }
 
   if ((pathname === "/login" || pathname === "/register") && authToken) {
+    if (request.nextUrl.searchParams.has("switch") || request.nextUrl.searchParams.has("logout")) {
+      const response = NextResponse.next();
+      response.cookies.delete("devio_auth_token");
+      return response;
+    }
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

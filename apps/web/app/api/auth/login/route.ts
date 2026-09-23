@@ -59,12 +59,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // If still not found and email contains campero / campero developer
-    if (!matchedDev && (cleanEmail.includes("campero") || cleanEmail === "desarrolloscampero@gmail.com")) {
-      matchedDev = developersList.find((d) => d.name.toLowerCase().includes("campero"));
-    }
-
-    if (isSuperAdmin && !matchedDev) {
+    // Super Admin login
+    if (isSuperAdmin) {
       const user = {
         id: `sa-${Date.now()}`,
         fullName: cleanEmail === "acalderoncha@gmail.com" ? "Alejandro Calderón" : "Super Administrador",
@@ -74,21 +70,53 @@ export async function POST(request: Request) {
         roleTitle: "Super Administrador Devio",
         permissions: ["all"],
         isSuperAdmin: true,
-        activeDeveloper: "Devio Global",
+        activeDeveloper: matchedDev ? matchedDev.name : "Devio Global",
       };
 
       const token = `devio_token_sa_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+      const devObj = matchedDev
+        ? {
+            id: matchedDev.id,
+            name: matchedDev.name,
+            commercialName: matchedDev.name,
+            legalName: matchedDev.legalName || matchedDev.name,
+            rfc: matchedDev.taxId || "RFC-PENDIENTE",
+            city: matchedDev.city || matchedDev.neighborhood || "Guadalajara",
+            email: matchedDev.email || cleanEmail,
+            phone: matchedDev.phone || "",
+            logoPath: matchedDev.logoPath || matchedDev.logoUrl || matchedDev.logo || null,
+          }
+        : {
+            id: "dev-global",
+            name: "Devio Global",
+            commercialName: "Devio Global",
+            legalName: "Devio Global Inc.",
+            rfc: "DEV-GLOBAL-01",
+            city: "Guadalajara",
+            email: cleanEmail,
+            phone: "+52 (33) 0000 0000",
+            logoPath: null,
+          };
+
+      const projects = matchedDev ? (matchedDev.projects || []) : [];
 
       return NextResponse.json({
         success: true,
         user,
         token,
-        activeDeveloper: {
-          id: "dev-global",
-          name: "Devio Global",
-        },
-        projects: [],
+        developer: devObj,
+        activeDeveloper: devObj,
+        projects,
       });
+    }
+
+    // If regular user and not matched to any developer or membership
+    if (!matchedDev) {
+      return NextResponse.json(
+        { error: "Credenciales inválidas. Verifica tu correo y contraseña o regístrate si no tienes cuenta." },
+        { status: 401 }
+      );
     }
 
     const devName = matchedDev?.name || "Desarrolladora Devio";

@@ -41,7 +41,7 @@ function LoginContent() {
       let loggedUser: any = null;
       let sessionToken = "";
 
-      // 1. Verificar contra /api/auth/login (Soporta SUPERADMIN_EMAILS de Railway)
+      // 1. Verificar contra /api/auth/login (Multi-tenant y Super Admin)
       try {
         const response = await fetch("/api/auth/login", {
           method: "POST",
@@ -56,6 +56,20 @@ function LoginContent() {
             sessionToken = data.token || `devio_session_${Date.now()}`;
 
             if (typeof window !== "undefined") {
+              // Limpiar estado previo de otra sesión o desarrolladora
+              localStorage.removeItem("devio_user_session");
+              sessionStorage.removeItem("devio_user_session");
+              localStorage.removeItem("devio_developer_onboarding");
+              sessionStorage.removeItem("devio_developer_onboarding");
+              localStorage.removeItem("devio_developer_logo");
+              sessionStorage.removeItem("devio_developer_logo");
+              localStorage.removeItem("devio_projects_state");
+              sessionStorage.removeItem("devio_projects_state");
+              localStorage.removeItem("devio_impersonation");
+              sessionStorage.removeItem("devio_impersonation");
+              localStorage.removeItem("devio_is_new_user");
+              sessionStorage.removeItem("devio_is_new_user");
+
               if (data.developer) {
                 localStorage.setItem("devio_developer_onboarding", JSON.stringify(data.developer));
                 sessionStorage.setItem("devio_developer_onboarding", JSON.stringify(data.developer));
@@ -65,68 +79,57 @@ function LoginContent() {
                   sessionStorage.setItem("devio_developer_logo", devLogo);
                 }
               }
-              if (Array.isArray(data.projects) && data.projects.length > 0) {
+              if (Array.isArray(data.projects)) {
                 localStorage.setItem("devio_projects_state", JSON.stringify(data.projects));
                 sessionStorage.setItem("devio_projects_state", JSON.stringify(data.projects));
               }
-              localStorage.removeItem("devio_impersonation");
-              sessionStorage.removeItem("devio_impersonation");
             }
+          }
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          // Si el servidor rechazó explícitamente las credenciales, verificar solo si fue registrado en este navegador
+          if (typeof window !== "undefined") {
+            const rawRegisteredUsers = localStorage.getItem("devio_registered_users");
+            if (rawRegisteredUsers) {
+              try {
+                const parsed = JSON.parse(rawRegisteredUsers);
+                const match = parsed.find(
+                  (u: any) => u.email?.toLowerCase().trim() === cleanEmail && (!u.password || u.password === password)
+                );
+                if (match) {
+                  loggedUser = match;
+                  sessionToken = `devio_session_local_${Date.now()}`;
+                  localStorage.removeItem("devio_projects_state");
+                  sessionStorage.removeItem("devio_projects_state");
+                  localStorage.removeItem("devio_impersonation");
+                  sessionStorage.removeItem("devio_impersonation");
+                }
+              } catch (e) {}
+            }
+          }
+
+          if (!loggedUser) {
+            setIsSubmitting(false);
+            setErrorMessage(errData.error || "Credenciales inválidas. Verifica tu correo y contraseña.");
+            return;
           }
         }
       } catch (apiErr) {
-        // Fallback a verificación local si el endpoint falla
-      }
-
-      // 2. Si no respondió el backend, verificar contra la cuenta registrada localmente
-      if (!loggedUser && typeof window !== "undefined") {
-        const rawUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
-        const rawRegisteredUsers = localStorage.getItem("devio_registered_users");
-        const rawSystemUsers = localStorage.getItem("devio_system_users");
-
-        let registeredUsers: any[] = [];
-        if (rawRegisteredUsers) {
-          try {
-            registeredUsers = JSON.parse(rawRegisteredUsers);
-          } catch (e) {}
-        }
-
-        if (rawSystemUsers) {
-          try {
-            const parsedSys = JSON.parse(rawSystemUsers);
-            if (Array.isArray(parsedSys)) {
-              registeredUsers = [...registeredUsers, ...parsedSys];
-            }
-          } catch (e) {}
-        }
-
-        if (rawUser) {
-          try {
-            const parsed = JSON.parse(rawUser);
-            if (parsed.email && !registeredUsers.some((u) => u.email === parsed.email)) {
-              registeredUsers.push(parsed);
-            }
-          } catch (e) {}
-        }
-
-        const match = registeredUsers.find(
-          (u) => u.email?.toLowerCase().trim() === cleanEmail
-        );
-
-        if (match) {
-          loggedUser = match;
-          sessionToken = `devio_session_local_${Date.now()}`;
-        } else if (cleanEmail === "acalderoncha@gmail.com") {
-          loggedUser = {
-            id: "sa-1",
-            fullName: "Alejandro Calderón",
-            email: "acalderoncha@gmail.com",
-            role: "Super Admin",
-            roleTitle: "Super Administrador",
-            activeDeveloper: "Devio Global",
-            permissions: ["all"],
-          };
-          sessionToken = `devio_session_sa_${Date.now()}`;
+        // En caso de fallo de red, verificar usuario local
+        if (typeof window !== "undefined") {
+          const rawRegisteredUsers = localStorage.getItem("devio_registered_users");
+          if (rawRegisteredUsers) {
+            try {
+              const parsed = JSON.parse(rawRegisteredUsers);
+              const match = parsed.find(
+                (u: any) => u.email?.toLowerCase().trim() === cleanEmail && (!u.password || u.password === password)
+              );
+              if (match) {
+                loggedUser = match;
+                sessionToken = `devio_session_local_${Date.now()}`;
+              }
+            } catch (e) {}
+          }
         }
       }
 
