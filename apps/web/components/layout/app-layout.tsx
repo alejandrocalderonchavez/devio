@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Wrench,
   ShieldAlert,
+  Bell,
 } from "lucide-react";
 import { useProject, Currency } from "../../context/project-context";
 
@@ -33,6 +34,9 @@ interface AppLayoutProps {
   children: React.ReactNode;
   activeProjectId?: string;
   projectSubTab?: "dashboard" | "units" | "clients" | "sales" | "payments" | "documents" | "marketplace" | "postventa";
+  isAdmin?: boolean;
+  adminSubTab?: "overview" | "developers" | "notifications" | "pricing" | "health";
+  onAdminTabChange?: (tab: "overview" | "developers" | "notifications" | "pricing" | "health") => void;
   onOpenNewSale?: () => void;
   onOpenEditProject?: () => void;
   onOpenProgress?: () => void;
@@ -45,6 +49,9 @@ export default function AppLayout({
   children,
   activeProjectId,
   projectSubTab,
+  isAdmin,
+  adminSubTab,
+  onAdminTabChange,
   onOpenNewSale,
   onOpenEditProject,
   onOpenProgress,
@@ -95,6 +102,9 @@ export default function AppLayout({
     pathname.includes("/postventa") ? "postventa" :
     "dashboard"
   );
+
+  const isAdminMode = Boolean(isAdmin || pathname.startsWith("/super-admin"));
+  const currentAdminTab = adminSubTab || "overview";
 
   const banxicoRate = 18.35;
 
@@ -194,7 +204,7 @@ export default function AppLayout({
       )}
 
       {/* ---------------------------------------------------------------------- */}
-      {/* SIDEBAR DE NAVEGACIÓN IZQUIERDO (Exacto a dashboard/page.tsx) */}
+      {/* SIDEBAR DE NAVEGACIÓN IZQUIERDO */}
       {/* ---------------------------------------------------------------------- */}
       <aside
         style={{
@@ -212,20 +222,164 @@ export default function AppLayout({
         }}
       >
         <div>
-          {/* Logo Devio Oficial */}
-          <Link
-            href="/dashboard"
-            style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1.5rem", paddingLeft: "0.25rem" }}
-          >
-            <img
-              src="/brand/13.png"
-              alt="Devio"
-              style={{ height: "30px", width: "auto", objectFit: "contain" }}
-            />
-          </Link>
+          {/* Logo Devio Oficial + Badge de Modo Admin */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", paddingLeft: "0.25rem" }}>
+            <Link
+              href={isAdminMode ? "/super-admin" : "/dashboard"}
+              style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "0.6rem" }}
+            >
+              <img
+                src="/brand/13.png"
+                alt="Devio"
+                style={{ height: "30px", width: "auto", objectFit: "contain" }}
+              />
+            </Link>
+            {isAdminMode && (
+              <span
+                style={{
+                  fontSize: "0.65rem",
+                  fontWeight: 800,
+                  color: "#00C48C",
+                  backgroundColor: "rgba(0, 196, 140, 0.12)",
+                  padding: "0.2rem 0.5rem",
+                  borderRadius: "9999px",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                ADMIN
+              </span>
+            )}
+          </div>
 
-          {/* Menú Dinámico: Modo Proyecto o Modo General */}
-          {activeProject ? (
+          {/* Menú: Modo Super Admin Exclusivo vs Modo Proyecto vs Modo General */}
+          {isAdminMode ? (
+            <div>
+              <div style={{ fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#94A3B8", padding: "0 0.5rem 0.5rem 0.5rem" }}>
+                Consola Maestra
+              </div>
+              <nav style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                <button
+                  type="button"
+                  onClick={() => onAdminTabChange ? onAdminTabChange("overview") : (window.location.href = "/super-admin?tab=overview")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.65rem",
+                    padding: "0.6rem 0.75rem",
+                    borderRadius: "0.5rem",
+                    border: "none",
+                    backgroundColor: currentAdminTab === "overview" ? "rgba(31, 54, 82, 0.08)" : "transparent",
+                    color: currentAdminTab === "overview" ? "#1F3652" : "#64748B",
+                    fontWeight: currentAdminTab === "overview" ? 700 : 500,
+                    fontSize: "0.85rem",
+                    width: "100%",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <BarChart3 size={17} color={currentAdminTab === "overview" ? "#2F80ED" : "currentColor"} />
+                  Resumen
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onAdminTabChange ? onAdminTabChange("developers") : (window.location.href = "/super-admin?tab=developers")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.65rem",
+                    padding: "0.6rem 0.75rem",
+                    borderRadius: "0.5rem",
+                    border: "none",
+                    backgroundColor: currentAdminTab === "developers" ? "rgba(31, 54, 82, 0.08)" : "transparent",
+                    color: currentAdminTab === "developers" ? "#1F3652" : "#64748B",
+                    fontWeight: currentAdminTab === "developers" ? 700 : 500,
+                    fontSize: "0.85rem",
+                    width: "100%",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <Building2 size={17} color={currentAdminTab === "developers" ? "#2F80ED" : "currentColor"} />
+                  Desarrolladoras
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onAdminTabChange ? onAdminTabChange("notifications") : (window.location.href = "/super-admin?tab=notifications")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.65rem",
+                    padding: "0.6rem 0.75rem",
+                    borderRadius: "0.5rem",
+                    border: "none",
+                    backgroundColor: currentAdminTab === "notifications" ? "rgba(31, 54, 82, 0.08)" : "transparent",
+                    color: currentAdminTab === "notifications" ? "#1F3652" : "#64748B",
+                    fontWeight: currentAdminTab === "notifications" ? 700 : 500,
+                    fontSize: "0.85rem",
+                    width: "100%",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <Bell size={17} color={currentAdminTab === "notifications" ? "#2F80ED" : "currentColor"} />
+                  Notificaciones
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onAdminTabChange ? onAdminTabChange("pricing") : (window.location.href = "/super-admin?tab=pricing")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.65rem",
+                    padding: "0.6rem 0.75rem",
+                    borderRadius: "0.5rem",
+                    border: "none",
+                    backgroundColor: currentAdminTab === "pricing" ? "rgba(31, 54, 82, 0.08)" : "transparent",
+                    color: currentAdminTab === "pricing" ? "#1F3652" : "#64748B",
+                    fontWeight: currentAdminTab === "pricing" ? 700 : 500,
+                    fontSize: "0.85rem",
+                    width: "100%",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <DollarSign size={17} color={currentAdminTab === "pricing" ? "#2F80ED" : "currentColor"} />
+                  Pricing & Planes
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onAdminTabChange ? onAdminTabChange("health") : (window.location.href = "/super-admin?tab=health")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.65rem",
+                    padding: "0.6rem 0.75rem",
+                    borderRadius: "0.5rem",
+                    border: "none",
+                    backgroundColor: currentAdminTab === "health" ? "rgba(31, 54, 82, 0.08)" : "transparent",
+                    color: currentAdminTab === "health" ? "#1F3652" : "#64748B",
+                    fontWeight: currentAdminTab === "health" ? 700 : 500,
+                    fontSize: "0.85rem",
+                    width: "100%",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <Activity size={17} color={currentAdminTab === "health" ? "#2F80ED" : "currentColor"} />
+                  Salud & Auditoría
+                </button>
+              </nav>
+            </div>
+          ) : activeProject ? (
             <div>
               {/* Botón Volver a Todos los Proyectos */}
               <Link
@@ -516,21 +670,20 @@ export default function AppLayout({
           )}
         </div>
 
-        {/* Menú Inferior (Super Admin, Configuración y Ayuda) */}
+        {/* Menú Inferior (Super Admin / Volver a la App, Configuración y Ayuda) */}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", borderTop: "1px solid #E2E8F0", paddingTop: "1rem" }}>
-          {/* Exclusivo para acalderoncha@gmail.com */}
-          {(userEmail || "").toLowerCase().trim() === "acalderoncha@gmail.com" && (
+          {isAdminMode ? (
             <Link
-              href="/super-admin"
+              href="/dashboard"
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "0.75rem",
+                gap: "0.6rem",
                 padding: "0.55rem 0.85rem",
                 borderRadius: "0.5rem",
-                backgroundColor: pathname.startsWith("/super-admin") ? "rgba(0, 196, 140, 0.12)" : "rgba(31, 54, 82, 0.04)",
-                color: pathname.startsWith("/super-admin") ? "#00C48C" : "var(--devio-blue-dark)",
-                fontSize: "0.85rem",
+                backgroundColor: "rgba(31, 54, 82, 0.04)",
+                color: "#1F3652",
+                fontSize: "0.82rem",
                 fontWeight: 700,
                 width: "100%",
                 textAlign: "left",
@@ -538,48 +691,76 @@ export default function AppLayout({
                 transition: "all 0.15s ease",
               }}
             >
-              <ShieldAlert size={16} color={pathname.startsWith("/super-admin") ? "#00C48C" : "var(--devio-blue)"} /> Devio Super Admin
+              <ChevronLeft size={16} color="#2F80ED" /> Volver a la App
             </Link>
+          ) : (
+            /* Exclusivo para acalderoncha@gmail.com */
+            (userEmail || "").toLowerCase().trim() === "acalderoncha@gmail.com" && (
+              <Link
+                href="/super-admin"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  padding: "0.55rem 0.85rem",
+                  borderRadius: "0.5rem",
+                  backgroundColor: "rgba(31, 54, 82, 0.04)",
+                  color: "var(--devio-blue-dark)",
+                  fontSize: "0.85rem",
+                  fontWeight: 700,
+                  width: "100%",
+                  textAlign: "left",
+                  textDecoration: "none",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <ShieldAlert size={16} color="var(--devio-blue)" /> Devio Super Admin
+              </Link>
+            )
           )}
 
-          <Link
-            href="/settings"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.75rem",
-              padding: "0.55rem 0.85rem",
-              borderRadius: "0.5rem",
-              backgroundColor: pathname === "/settings" ? "rgba(31, 54, 82, 0.08)" : "transparent",
-              color: pathname === "/settings" ? "#1F3652" : "#64748B",
-              fontSize: "0.85rem",
-              fontWeight: pathname === "/settings" ? 700 : 500,
-              width: "100%",
-              textAlign: "left",
-              textDecoration: "none",
-            }}
-          >
-            <Settings size={16} /> Configuración
-          </Link>
+          {!isAdminMode && (
+            <>
+              <Link
+                href="/settings"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  padding: "0.55rem 0.85rem",
+                  borderRadius: "0.5rem",
+                  backgroundColor: pathname === "/settings" ? "rgba(31, 54, 82, 0.08)" : "transparent",
+                  color: pathname === "/settings" ? "#1F3652" : "#64748B",
+                  fontSize: "0.85rem",
+                  fontWeight: pathname === "/settings" ? 700 : 500,
+                  width: "100%",
+                  textAlign: "left",
+                  textDecoration: "none",
+                }}
+              >
+                <Settings size={16} /> Configuración
+              </Link>
 
-          <Link
-            href="/settings"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.75rem",
-              padding: "0.55rem 0.85rem",
-              borderRadius: "0.5rem",
-              backgroundColor: "transparent",
-              color: "#64748B",
-              fontSize: "0.85rem",
-              width: "100%",
-              textAlign: "left",
-              textDecoration: "none",
-            }}
-          >
-            <HelpCircle size={16} /> Ayuda
-          </Link>
+              <Link
+                href="/settings"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  padding: "0.55rem 0.85rem",
+                  borderRadius: "0.5rem",
+                  backgroundColor: "transparent",
+                  color: "#64748B",
+                  fontSize: "0.85rem",
+                  width: "100%",
+                  textAlign: "left",
+                  textDecoration: "none",
+                }}
+              >
+                <HelpCircle size={16} /> Ayuda
+              </Link>
+            </>
+          )}
         </div>
       </aside>
 

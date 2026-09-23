@@ -124,6 +124,27 @@ export interface NotificationDeliveryLog {
   metadata?: Record<string, any>;
 }
 
+export interface ScheduledNotification {
+  id: string;
+  triggerKey: string;
+  triggerName: string;
+  category: "COBRANZA" | "VENTAS" | "OBRA" | "POSTVENTA" | "DOCUMENTOS" | "USUARIOS";
+  channel: "POSTMARK" | "WHATSAPP" | "PUSH";
+  scheduledFor: string;
+  scheduledForFormatted: string;
+  relativeTime: string;
+  recipientName: string;
+  recipientContact: string;
+  recipientRole: string;
+  developerName: string;
+  projectName: string;
+  unitName: string;
+  sourceEvent: string;
+  status: "PROGRAMADA" | "EN_COLA" | "PAUSADA" | "ENVIADA" | "CANCELADA";
+  payloadSummary?: string;
+  metadata?: Record<string, any>;
+}
+
 export interface SaaSPricingTier {
   id: string;
   name: string;
@@ -568,3 +589,116 @@ export const INITIAL_NOTIFICATION_DELIVERY_LOGS: NotificationDeliveryLog[] = [
 export const INITIAL_CUSTOM_INVITES: CustomPricingInvite[] = [];
 
 export const INITIAL_SUPER_ADMIN_AUDIT_LOGS: SuperAdminAuditLog[] = [];
+
+export const INITIAL_SCHEDULED_NOTIFICATIONS: ScheduledNotification[] = [
+  {
+    id: "sch-1",
+    triggerKey: "payments.upcoming_reminder",
+    triggerName: "Recordatorio Preventivo de Mensualidad",
+    category: "COBRANZA",
+    channel: "WHATSAPP",
+    scheduledFor: "2026-09-28T09:00:00",
+    scheduledForFormatted: "28 Sep 2026, 09:00 a.m.",
+    relativeTime: "En 5 días",
+    recipientName: "Alejandro Calderón",
+    recipientContact: "+52 33 2256 7499",
+    recipientRole: "Comprador / Titular",
+    developerName: "Lippu México",
+    projectName: "Night Club Tower",
+    unitName: "Depto 301",
+    sourceEvent: "Venta #VTA-2026-004 (Plan 24 Mensualidades)",
+    status: "PROGRAMADA",
+    payloadSummary: "Mensualidad 2/24 por $28,500 MXN (Vence 05 Oct 2026)",
+    metadata: {
+      monto: "$28,500 MXN",
+      fecha_vencimiento: "05 de Octubre 2026",
+    },
+  },
+  {
+    id: "sch-2",
+    triggerKey: "payments.upcoming_reminder",
+    triggerName: "Recordatorio Preventivo de Pago por Correo",
+    category: "COBRANZA",
+    channel: "POSTMARK",
+    scheduledFor: "2026-09-28T09:00:00",
+    scheduledForFormatted: "28 Sep 2026, 09:00 a.m.",
+    relativeTime: "En 5 días",
+    recipientName: "Alejandro Calderón",
+    recipientContact: "acalderoncha@gmail.com",
+    recipientRole: "Comprador / Titular",
+    developerName: "Lippu México",
+    projectName: "Night Club Tower",
+    unitName: "Depto 301",
+    sourceEvent: "Venta #VTA-2026-004",
+    status: "PROGRAMADA",
+    payloadSummary: "Desglose formal y referencia bancaria SPEI",
+    metadata: {
+      templateAlias: "recordatorio-pago",
+      monto: "$28,500 MXN",
+    },
+  },
+  {
+    id: "sch-3",
+    triggerKey: "obra.percentage_breakdown",
+    triggerName: "Reporte Mensual de Avance de Obra",
+    category: "OBRA",
+    channel: "POSTMARK",
+    scheduledFor: "2026-09-30T10:00:00",
+    scheduledForFormatted: "30 Sep 2026, 10:00 a.m.",
+    relativeTime: "Fin de Mes",
+    recipientName: "Inversionistas y Compradores",
+    recipientContact: "Lista de 4 propietarios",
+    recipientRole: "Propietarios Kitos Tower",
+    developerName: "Lippu México",
+    projectName: "Kitos Tower",
+    unitName: "Todas las unidades vendidas",
+    sourceEvent: "Cierre Mensual de Residencia de Obra",
+    status: "PROGRAMADA",
+    payloadSummary: "Avance global 53% • Cimentación 100% • Estructura 45%",
+    metadata: {
+      templateAlias: "registro-porcentaje",
+    },
+  },
+  {
+    id: "sch-4",
+    triggerKey: "payments.overdue_notice",
+    triggerName: "Alerta de Morosidad (+10 días vencido)",
+    category: "COBRANZA",
+    channel: "WHATSAPP",
+    scheduledFor: "2026-10-10T11:00:00",
+    scheduledForFormatted: "10 Oct 2026, 11:00 a.m.",
+    relativeTime: "En 17 días (Si no hay abono)",
+    recipientName: "Juan Salvador",
+    recipientContact: "+52 33 1892 4012",
+    recipientRole: "Comprador / Titular",
+    developerName: "Lippu México",
+    projectName: "Kitos Tower",
+    unitName: "Penthouse 12A",
+    sourceEvent: "Venta #VTA-2026-002",
+    status: "EN_COLA",
+    payloadSummary: "Cuota extraordinaria de equipamiento ($50,000 MXN)",
+    metadata: {
+      dias_vencido: 10,
+    },
+  },
+  {
+    id: "sch-5",
+    triggerKey: "postventa.guarantee_followup",
+    triggerName: "Seguimiento y Encuesta de Entrega",
+    category: "POSTVENTA",
+    channel: "WHATSAPP",
+    scheduledFor: "2026-10-15T12:00:00",
+    scheduledForFormatted: "15 Oct 2026, 12:00 p.m.",
+    relativeTime: "En 22 días",
+    recipientName: "Alex Legaius",
+    recipientContact: "+52 33 3490 8821",
+    recipientRole: "Propietario Entregado",
+    developerName: "Lippu México",
+    projectName: "Night Club Tower",
+    unitName: "Depto 102",
+    sourceEvent: "Acta de Entrega de Llaves #ENT-091",
+    status: "PROGRAMADA",
+    payloadSummary: "Checklist de garantías 30 días y satisfacción",
+  },
+];
+

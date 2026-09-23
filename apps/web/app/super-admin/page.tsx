@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useMemo, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AppLayout from "../../components/layout/app-layout";
 import {
@@ -47,6 +47,18 @@ import {
   Square,
   QrCode,
   Share2,
+  LayoutDashboard,
+  BarChart3,
+  CreditCard,
+  Briefcase,
+  HelpCircle,
+  Play,
+  Pause,
+  Trash2,
+  Filter,
+  CalendarClock,
+  Tag,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   SuperAdminDeveloper,
@@ -56,6 +68,7 @@ import {
   NotificationChannelConfig,
   NotificationTemplate,
   NotificationDeliveryLog,
+  ScheduledNotification,
   SaaSPricingTier,
   INITIAL_SUPER_ADMIN_DEVELOPERS,
   INITIAL_CUSTOM_INVITES,
@@ -63,10 +76,11 @@ import {
   INITIAL_NOTIFICATION_CHANNELS,
   INITIAL_NOTIFICATION_TEMPLATES,
   INITIAL_NOTIFICATION_DELIVERY_LOGS,
+  INITIAL_SCHEDULED_NOTIFICATIONS,
   SAAS_PRICING_TIERS,
 } from "../../data/super-admin-data";
 import { useProject } from "../../context/project-context";
-import { PERMISSIONS_CATALOG, getRolePermissionsMap, PermissionKey } from "../../lib/permissions";
+import { PERMISSIONS_CATALOG, getRolePermissionsMap, PermissionKey, UserRole } from "../../lib/permissions";
 import {
   getNotificationChannelsConfig,
   saveNotificationChannelsConfig,
@@ -74,12 +88,17 @@ import {
   saveNotificationTemplates,
   getNotificationDeliveryLogs,
   saveNotificationDeliveryLogs,
+  getScheduledNotifications,
+  saveScheduledNotifications,
   dispatchSystemNotification,
 } from "../../lib/notifications";
 
-export default function SuperAdminPage() {
+type AdminTab = "overview" | "developers" | "notifications" | "pricing" | "health";
+
+function SuperAdminContent() {
   const router = useRouter();
-  const { setDeveloperName, showToast, userEmail, userRole } = useProject();
+  const searchParams = useSearchParams();
+  const { setDeveloperName, showToast, userEmail, userRole, formatMoney } = useProject();
 
   const [superAdminEmails, setSuperAdminEmails] = useState<string[]>(["acalderoncha@gmail.com"]);
 
@@ -109,21 +128,45 @@ export default function SuperAdminPage() {
     return false;
   }, [userEmail, userRole, superAdminEmails]);
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState<"tenants" | "notifications" | "pricing" | "health_logs">("tenants");
+  // Active Tab from Query Param or State
+  const initialTabParam = (searchParams?.get("tab") as AdminTab) || "overview";
+  const [activeTab, setActiveTab] = useState<AdminTab>(
+    ["overview", "developers", "notifications", "pricing", "health"].includes(initialTabParam)
+      ? initialTabParam
+      : "overview"
+  );
+
+  useEffect(() => {
+    const tabParam = searchParams?.get("tab") as AdminTab;
+    if (tabParam && ["overview", "developers", "notifications", "pricing", "health"].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tab: AdminTab) => {
+    setActiveTab(tab);
+    router.push(`/super-admin?tab=${tab}`);
+  };
 
   // State: Developers & Invites (Clean real data)
   const [developers, setDevelopers] = useState<SuperAdminDeveloper[]>(INITIAL_SUPER_ADMIN_DEVELOPERS);
   const [invites, setInvites] = useState<CustomPricingInvite[]>(INITIAL_CUSTOM_INVITES);
   const [auditLogs, setAuditLogs] = useState<SuperAdminAuditLog[]>(INITIAL_SUPER_ADMIN_AUDIT_LOGS);
-  const [expandedDevId, setExpandedDevId] = useState<string | null>("dev-active");
+  // All developers start collapsed by default
+  const [expandedDevIds, setExpandedDevIds] = useState<string[]>([]);
   const [searchDevQuery, setSearchDevQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
-  // State: Notifications
+  // State: Notifications & Scheduled Automations
   const [channelsConfig, setChannelsConfig] = useState<NotificationChannelConfig>(INITIAL_NOTIFICATION_CHANNELS);
   const [templates, setTemplates] = useState<NotificationTemplate[]>(INITIAL_NOTIFICATION_TEMPLATES);
   const [deliveryLogs, setDeliveryLogs] = useState<NotificationDeliveryLog[]>(INITIAL_NOTIFICATION_DELIVERY_LOGS);
+  const [scheduledNotifications, setScheduledNotifications] = useState<ScheduledNotification[]>(INITIAL_SCHEDULED_NOTIFICATIONS);
+  const [notifSubTab, setNotifSubTab] = useState<"scheduled" | "logs" | "templates" | "channels">("scheduled");
+  const [scheduledSearch, setScheduledSearch] = useState("");
+  const [scheduledChannelFilter, setScheduledChannelFilter] = useState("ALL");
+  const [scheduledCategoryFilter, setScheduledCategoryFilter] = useState("ALL");
+  const [scheduledStatusFilter, setScheduledStatusFilter] = useState("ALL");
   const [logChannelFilter, setLogChannelFilter] = useState<string>("ALL");
   const [logSearchQuery, setLogSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
@@ -165,23 +208,71 @@ export default function SuperAdminPage() {
   const [inviteDiscount, setInviteDiscount] = useState(0);
   const [inviteExpiresAt, setInviteExpiresAt] = useState("2026-10-15");
 
+  // 5. Test Live Notification Modal
+  const [showLiveTestModal, setShowLiveTestModal] = useState(false);
+  const [testTemplate, setTestTemplate] = useState<NotificationTemplate | null>(null);
+  const [testEmail, setTestEmail] = useState(userEmail || "acalderoncha@gmail.com");
+  const [testPayloadJson, setTestPayloadJson] = useState("{}");
+  const [isSendingTest, setIsSendingTest] = useState(false);
+
+  // 6. Log Detail Modal
+  const [selectedLogForDetail, setSelectedLogForDetail] = useState<NotificationDeliveryLog | null>(null);
+
+  // 7. Modal: Editar Tarifa de Cobro (Desarrolladora o Proyecto)
+  const [showPriceModal, setShowPriceModal] = useState(false);
+  const [priceEditScope, setPriceEditScope] = useState<"DEVELOPER" | "PROJECT">("PROJECT");
+  const [priceEditDevId, setPriceEditDevId] = useState("");
+  const [priceEditProjectId, setPriceEditProjectId] = useState("");
+  const [priceEditTargetName, setPriceEditTargetName] = useState("");
+  const [priceEditUnitsCount, setPriceEditUnitsCount] = useState(0);
+  const [priceEditValue, setPriceEditValue] = useState(180);
+
+  // 8. Modal: Programar Notificación Manual
+  const [showCreateScheduleModal, setShowCreateScheduleModal] = useState(false);
+  const [newScheduleTriggerKey, setNewScheduleTriggerKey] = useState("payments.upcoming_reminder");
+  const [newScheduleChannel, setNewScheduleChannel] = useState<"POSTMARK" | "WHATSAPP" | "PUSH">("WHATSAPP");
+  const [newScheduleDate, setNewScheduleDate] = useState("2026-09-30");
+  const [newScheduleTime, setNewScheduleTime] = useState("09:00");
+  const [newScheduleRecipientName, setNewScheduleRecipientName] = useState("");
+  const [newScheduleRecipientContact, setNewScheduleRecipientContact] = useState("");
+  const [newScheduleProject, setNewScheduleProject] = useState("");
+  const [newScheduleUnit, setNewScheduleUnit] = useState("");
+  const [newSchedulePayloadSummary, setNewSchedulePayloadSummary] = useState("");
+
+  // Toggle card expansion
+  const toggleExpandDev = (id: string) => {
+    setExpandedDevIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
   // Load Real Data from storage
   useEffect(() => {
     if (typeof window !== "undefined") {
       setChannelsConfig(getNotificationChannelsConfig());
       setTemplates(getNotificationTemplates());
       setDeliveryLogs(getNotificationDeliveryLogs());
+      setScheduledNotifications(getScheduledNotifications());
+
+      // Read custom unit pricing map
+      const storedCustomPricing = localStorage.getItem("devio_custom_unit_pricing");
+      let customPricingMap: Record<string, { devPrice?: number; projectPrices?: Record<string, number> }> = {};
+      if (storedCustomPricing) {
+        try {
+          customPricingMap = JSON.parse(storedCustomPricing);
+        } catch (e) {}
+      }
 
       // Load real active developer, projects and users
       const storedProjects = localStorage.getItem("devio_projects_state") || sessionStorage.getItem("devio_projects_state");
       const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
       const storedUsers = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
 
-      let devName = "Mi Desarrolladora";
-      let devLegal = "Inmobiliaria y Desarrollos S.A. de C.V.";
+      let devName = "Devio Desarrolladora Demo";
+      let devLegal = "Kitos SAS";
       let devRfc = "DEV260101XYZ";
-      let devCity = "México";
-      let devEmail = "acalderoncha@gmail.com";
+      let devCity = "Guadalajara";
+      let devEmail = "alejandrocalderoncha@gmail.com";
       let devPhone = "3322567499";
 
       if (storedDev) {
@@ -196,351 +287,471 @@ export default function SuperAdminPage() {
         } catch (e) {}
       }
 
+      const activeDevId = "dev-active";
+      const devBasePrice = customPricingMap[activeDevId]?.devPrice || 180;
+
       let realProjects: SuperAdminProject[] = [];
       if (storedProjects) {
         try {
-          const parsedProj: any[] = JSON.parse(storedProjects);
-          realProjects = parsedProj.map((p) => ({
-            id: p.id,
-            name: p.name,
-            type: p.type || "VERTICAL",
-            totalUnits: p.totalUnits || p.unitsInventory?.length || 0,
-            soldUnits: p.soldUnits || p.unitsInventory?.filter((u: any) => u.status === "VENDIDA").length || 0,
-            availableUnits: p.availableUnits || p.unitsInventory?.filter((u: any) => u.status === "DISPONIBLE").length || 0,
-            blockedUnits: p.blockedUnits || p.unitsInventory?.filter((u: any) => u.status === "BLOQUEADA").length || 0,
-            pricePerUnit: 180,
-            status: "ACTIVE",
-            assignedUsersCount: p.team?.length || 1,
-            createdAt: "2026-01-15",
-          }));
+          const parsed = JSON.parse(storedProjects);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            realProjects = parsed.map((p: any) => {
+              const totalUnits = (p.units || []).length || 6;
+              const soldUnits = (p.units || []).filter((u: any) => u.status === "VENDIDA").length || 2;
+              const availableUnits = Math.max(0, totalUnits - soldUnits);
+              const projPriceOverride = customPricingMap[activeDevId]?.projectPrices?.[p.id];
+              const finalPrice = projPriceOverride !== undefined ? projPriceOverride : devBasePrice;
+
+              return {
+                id: p.id || "proj-1",
+                name: p.name || "Proyecto Inmobiliario",
+                type: (p.type || "VERTICAL").toUpperCase(),
+                totalUnits: totalUnits,
+                soldUnits: soldUnits,
+                availableUnits: availableUnits,
+                blockedUnits: 0,
+                pricePerUnit: finalPrice,
+                status: "ACTIVE" as const,
+                assignedUsersCount: 1,
+                createdAt: "2026-01-15",
+              };
+            });
+          }
         } catch (e) {}
+      }
+
+      if (realProjects.length === 0) {
+        const p1Price = customPricingMap[activeDevId]?.projectPrices?.["proj-1730106268757"] ?? devBasePrice;
+        realProjects = [
+          {
+            id: "proj-1730106268757",
+            name: "Black eleven demo",
+            type: "VERTICAL",
+            totalUnits: 6,
+            soldUnits: 2,
+            availableUnits: 4,
+            blockedUnits: 0,
+            pricePerUnit: p1Price,
+            status: "ACTIVE",
+            assignedUsersCount: 1,
+            createdAt: "2026-01-15",
+          },
+        ];
       }
 
       let realUsers: any[] = [];
       if (storedUsers) {
         try {
-          realUsers = JSON.parse(storedUsers);
+          const parsed = JSON.parse(storedUsers);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            realUsers = parsed.map((u: any) => ({
+              id: u.id || `usr-${Date.now()}`,
+              name: u.name || "Usuario Devio",
+              email: u.email || "user@devio.mx",
+              role: u.role || "Director Comercial",
+              assignedProjectIds: u.assignedProjectIds || u.assignedProjects || ["Todos los proyectos"],
+              permissions: u.permissions || [],
+            }));
+          }
         } catch (e) {}
       }
 
       if (realUsers.length === 0) {
         realUsers = [
-          { id: "usr-admin", name: "Alejandro Calderón", email: "acalderoncha@gmail.com", role: "Super Admin" },
+          {
+            id: "usr-admin-root",
+            name: `${devName} Admin`,
+            email: devEmail,
+            role: "SUPER ADMIN",
+            developerName: devName,
+            assignedProjectIds: ["Todos los proyectos"],
+            status: "ACTIVE",
+          },
+          {
+            id: "usr-1",
+            name: "juan salvador",
+            email: "0243563@up.edu.mx",
+            role: "DIRECTOR COMERCIAL",
+            developerName: devName,
+            assignedProjectIds: ["Todos los proyectos"],
+            status: "ACTIVE",
+          },
+          {
+            id: "usr-2",
+            name: "Alejandro pruebas",
+            email: "acalderoncha@gmail.com",
+            role: "CLIENT",
+            developerName: devName,
+            assignedProjectIds: ["Todos los proyectos"],
+            status: "ACTIVE",
+          },
+          {
+            id: "usr-3",
+            name: "Alex legaius",
+            email: "alejandro@legaius.com",
+            role: "CLIENT",
+            developerName: devName,
+            assignedProjectIds: ["Todos los proyectos"],
+            status: "ACTIVE",
+          },
         ];
       }
 
-      const activeDeveloper: SuperAdminDeveloper = {
-        id: "dev-active",
+      const activeDev: SuperAdminDeveloper = {
+        id: activeDevId,
         name: devName,
         legalName: devLegal,
         rfc: devRfc,
         contactEmail: devEmail,
         phone: devPhone,
         city: devCity,
-        pricePerUnitMonthly: 180,
         subscriptionStatus: "ACTIVE",
+        pricePerUnitMonthly: devBasePrice,
         createdAt: "2026-01-15",
         projects: realProjects,
         users: realUsers,
       };
 
-      setDevelopers([activeDeveloper]);
-
-      // Real-time listener and server fetch for notification log changes from sales, payments or test dispatches
-      const handleLogsChange = () => {
-        setDeliveryLogs(getNotificationDeliveryLogs());
-      };
-      window.addEventListener("devio_notification_logs_changed", handleLogsChange);
-      window.addEventListener("storage", handleLogsChange);
-
-      // Fetch persistent server-side delivery logs
-      fetch("/api/notifications/logs")
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data?.logs && Array.isArray(data.logs) && data.logs.length > 0) {
-            const local = getNotificationDeliveryLogs();
-            // Merge unique logs
-            const ids = new Set(data.logs.map((l: any) => l.id));
-            const merged = [...data.logs, ...local.filter((l) => !ids.has(l.id))];
-            setDeliveryLogs(merged);
-            saveNotificationDeliveryLogs(merged);
-          }
-        })
-        .catch((e) => console.warn("Could not sync server notification logs:", e));
-
-      return () => {
-        window.removeEventListener("devio_notification_logs_changed", handleLogsChange);
-        window.removeEventListener("storage", handleLogsChange);
-      };
+      setDevelopers([activeDev]);
     }
   }, []);
 
-  // Sync back to storage on updates
-  const handleUpdateChannelsConfig = (updated: NotificationChannelConfig) => {
-    setChannelsConfig(updated);
-    saveNotificationChannelsConfig(updated);
-    showToast("Configuración Actualizada", "Los parámetros de canales de notificación se han guardado.");
-  };
-
-  const handleUpdateTemplate = (updated: NotificationTemplate) => {
-    const next = templates.map((t) => (t.id === updated.id ? updated : t));
-    setTemplates(next);
-    saveNotificationTemplates(next);
-    showToast("Plantilla Actualizada", `Se guardaron los alias de "${updated.title}".`);
-  };
-
-  // SaaS KPIs Calculations (Strictly per-unit pricing)
+  // SaaS Financial Calculations (accounting for per-project price per unit)
   const metrics = useMemo(() => {
-    const totalDevelopers = developers.length;
-    const totalProjects = developers.reduce((acc, d) => acc + d.projects.length, 0);
-    const totalUnits = developers.reduce(
-      (acc, d) => acc + d.projects.reduce((pAcc, p) => pAcc + p.totalUnits, 0),
-      0
-    );
-    const totalUsers = developers.reduce((acc, d) => acc + d.users.length, 0);
+    let totalUnits = 0;
+    let totalProjects = 0;
+    let totalSoldUnits = 0;
+    let mrr = 0;
 
-    const mrr = developers.reduce((acc, d) => {
-      if (d.subscriptionStatus !== "ACTIVE") return acc;
-      const devUnits = d.projects.reduce((pAcc, p) => pAcc + p.totalUnits, 0);
-      const unitsTotal = devUnits * (d.pricePerUnitMonthly || 180);
-      return acc + unitsTotal;
-    }, 0);
+    developers.forEach((d) => {
+      d.projects.forEach((p) => {
+        totalUnits += p.totalUnits;
+        totalSoldUnits += p.soldUnits;
+        totalProjects += 1;
+        const unitPrice = p.pricePerUnit !== undefined ? p.pricePerUnit : (d.pricePerUnitMonthly || 180);
+        mrr += p.totalUnits * unitPrice;
+      });
+    });
 
     const arr = mrr * 12;
-    const avgPricePerUnit =
-      developers.length > 0
-        ? Math.round(developers.reduce((acc, d) => acc + d.pricePerUnitMonthly, 0) / developers.length)
-        : 180;
+    const totalDevelopers = developers.length;
+    const avgPricePerUnit = totalUnits > 0 ? Math.round(mrr / totalUnits) : 180;
 
     return {
-      totalDevelopers,
-      totalProjects,
       totalUnits,
-      totalUsers,
+      totalProjects,
+      totalSoldUnits,
       mrr,
       arr,
+      totalDevelopers,
       avgPricePerUnit,
     };
   }, [developers]);
 
-  // Format currency
-  const formatMoney = (val: number) => {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-      maximumFractionDigits: 0,
-    }).format(val || 0);
+  // Open Price Edit Modal
+  const handleOpenPriceModal = (
+    devId: string,
+    devName: string,
+    projectId?: string,
+    projectName?: string,
+    currentPrice = 180,
+    unitsCount = 0
+  ) => {
+    setPriceEditScope(projectId ? "PROJECT" : "DEVELOPER");
+    setPriceEditDevId(devId);
+    setPriceEditProjectId(projectId || "");
+    setPriceEditTargetName(projectId ? (projectName || "Proyecto") : devName);
+    setPriceEditUnitsCount(unitsCount);
+    setPriceEditValue(currentPrice);
+    setShowPriceModal(true);
   };
 
-  // Impersonation ("Run As") Action
-  const handleImpersonate = (dev: SuperAdminDeveloper, user?: { id: string; name: string; email: string; role: string }) => {
-    const targetUser = user?.name || dev.users[0]?.name || "Super Admin";
-    setDeveloperName(dev.name);
-
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem(
-        "devio_impersonation",
-        JSON.stringify({
-          active: true,
-          developerId: dev.id,
-          developerName: dev.name,
-          userName: targetUser,
-          userEmail: user?.email || dev.contactEmail,
-          userRole: user?.role || "Super Admin",
-        })
-      );
+  // Save Custom Price per Project or Developer
+  const handleSavePrice = () => {
+    if (priceEditValue <= 0) {
+      showToast("Error", "El precio por unidad debe ser mayor a 0.", "warning");
+      return;
     }
 
-    const newLog: SuperAdminAuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toLocaleString("es-MX"),
-      superAdminName: "Alejandro Calderón (Super Admin)",
-      action: "Sesión Impersonada (Run As)",
-      targetEntity: `${dev.name} (${targetUser})`,
-      details: `Super Admin inició sesión en modo 'Run As' para auditar la cuenta de ${targetUser}.`,
-      ipAddress: "189.215.12.98",
-    };
-    setAuditLogs([newLog, ...auditLogs]);
-
-    showToast("Modo Impersonación Activo", `Ahora estás operando como ${targetUser} de ${dev.name}.`, "info");
-    router.push("/dashboard");
-  };
-
-  // Open Payment Link Generator (Strictly per-unit pricing)
-  const handleOpenPaymentLink = (dev: SuperAdminDeveloper, projId?: string) => {
-    setSelectedDevForPayment(dev);
-    setPaymentScope(projId ? "PROJECT" : "DEVELOPER");
-    setSelectedProjectId(projId || dev.projects[0]?.id || "");
-    setPaymentInterval("MONTHLY");
-    setCopiedLink(false);
-    setShowPaymentModal(true);
-  };
-
-  // Calculate Payment Amount (Strictly based on units count)
-  const calculatedPaymentInfo = useMemo(() => {
-    if (!selectedDevForPayment) return { amount: 0, units: 0, projectsCount: 0, url: "" };
-
-    const dev = selectedDevForPayment;
-    let amount = 0;
-    let units = 0;
-    let projectsCount = 0;
-
-    if (paymentScope === "PROJECT") {
-      const proj = dev.projects.find((p) => p.id === selectedProjectId) || dev.projects[0];
-      units = proj ? proj.totalUnits : 0;
-      projectsCount = 1;
-      amount = units * (dev.pricePerUnitMonthly || 180);
-    } else {
-      units = dev.projects.reduce((acc, p) => acc + p.totalUnits, 0);
-      projectsCount = dev.projects.length;
-      amount = units * (dev.pricePerUnitMonthly || 180);
-    }
-
-    if (paymentInterval === "ANNUAL") {
-      amount = amount * 12 * 0.9; // 10% discount on annual payment
-    }
-
-    const token = `pay_${dev.id}_${paymentScope === "PROJECT" ? selectedProjectId : "all"}_${paymentInterval.toLowerCase()}`;
-    const url = `https://checkout.devio.mx/pay/${token}`;
-
-    return { amount, units, projectsCount, url };
-  }, [selectedDevForPayment, paymentScope, selectedProjectId, paymentInterval]);
-
-  // Open User Permissions Inspection Modal
-  const handleInspectPermissions = (dev: SuperAdminDeveloper, user: any) => {
-    setInspectedUser({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      developerName: dev.name,
-      assignedProjectIds: user.assignedProjectIds,
-    });
-    setShowPermissionsModal(true);
-  };
-
-  // Trigger Test Notification Dispatch
-  const handleTriggerTestNotification = async (template: NotificationTemplate) => {
-    showToast("Enviando Prueba...", `Despachando alerta de prueba para "${template.title}"...`, "info");
-    const logs = dispatchSystemNotification({
-      triggerKey: template.triggerKey,
-      recipientEmail: "acalderoncha@gmail.com",
-      recipientPhone: "+52 (33) 2256 7499",
-      recipientName: "Alejandro Calderón",
-      developerName: "Devio Global",
-      metadata: { testDispatch: true, templateId: template.id },
-    });
-
-    setDeliveryLogs(getNotificationDeliveryLogs());
-    showToast("Disparo Iniciado", `Se procesaron ${logs.length} canales activos para "${template.title}". El estado se actualizará en tiempo real.`);
-  };
-
-  // Retry Failed Notification
-  const handleRetryLog = async (log: NotificationDeliveryLog) => {
-    showToast("Reintentando Envío...", `Reintentando entrega a ${log.recipient}...`, "info");
-
-    if (log.channel === "POSTMARK") {
+    const storedPrices = localStorage.getItem("devio_custom_unit_pricing");
+    let customPricingMap: Record<string, { devPrice?: number; projectPrices?: Record<string, number> }> = {};
+    if (storedPrices) {
       try {
-        const response = await fetch("/api/notifications/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            to: log.recipient,
-            templateAlias: log.metadata?.templateAlias || "bienvenida-cliente",
-            templateModel: log.metadata?.templateModel || {
-              nombre: log.recipientName,
-              correo: log.recipient,
-            },
-          }),
-        });
+        customPricingMap = JSON.parse(storedPrices);
+      } catch (e) {}
+    }
 
-        const data = await response.json();
+    customPricingMap[priceEditDevId] = customPricingMap[priceEditDevId] || {};
 
-        if (response.ok && data.success) {
-          const updated = deliveryLogs.map((l) => {
-            if (l.id === log.id) {
-              return {
-                ...l,
-                status: "ENTREGADO" as const,
-                retryCount: (l.retryCount || 0) + 1,
-                errorDetails: undefined,
-                timestamp: new Date().toLocaleString("es-MX", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-              };
-            }
-            return l;
-          });
-          setDeliveryLogs(updated);
-          saveNotificationDeliveryLogs(updated);
-          showToast("Reenvío Exitoso", `La notificación fue entregada correctamente.`);
-        } else {
-          const errReason = data.error || `Error HTTP ${response.status} de Postmark`;
-          const updated = deliveryLogs.map((l) => {
-            if (l.id === log.id) {
-              return {
-                ...l,
-                status: "FALLIDO" as const,
-                retryCount: (l.retryCount || 0) + 1,
-                errorDetails: errReason,
-                timestamp: new Date().toLocaleString("es-MX", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-              };
-            }
-            return l;
-          });
-          setDeliveryLogs(updated);
-          saveNotificationDeliveryLogs(updated);
-          showToast("Error en Reintento", errReason, "warning");
-        }
-      } catch (err: any) {
-        const errReason = err.message || "Error de red al conectar con Postmark";
-        const updated = deliveryLogs.map((l) => {
-          if (l.id === log.id) {
-            return {
-              ...l,
-              status: "FALLIDO" as const,
-              retryCount: (l.retryCount || 0) + 1,
-              errorDetails: errReason,
-            };
-          }
-          return l;
-        });
-        setDeliveryLogs(updated);
-        saveNotificationDeliveryLogs(updated);
-        showToast("Error de Conexión", errReason, "warning");
-      }
+    if (priceEditScope === "PROJECT" && priceEditProjectId) {
+      customPricingMap[priceEditDevId].projectPrices = customPricingMap[priceEditDevId].projectPrices || {};
+      customPricingMap[priceEditDevId].projectPrices[priceEditProjectId] = priceEditValue;
     } else {
-      const updated = deliveryLogs.map((l) => {
-        if (l.id === log.id) {
+      customPricingMap[priceEditDevId].devPrice = priceEditValue;
+    }
+
+    localStorage.setItem("devio_custom_unit_pricing", JSON.stringify(customPricingMap));
+
+    // Update developers state reactively
+    setDevelopers((prev) =>
+      prev.map((d) => {
+        if (d.id !== priceEditDevId) return d;
+        if (priceEditScope === "DEVELOPER") {
           return {
-            ...l,
-            status: "ENTREGADO" as const,
-            retryCount: (l.retryCount || 0) + 1,
-            errorDetails: undefined,
-            timestamp: new Date().toLocaleString("es-MX", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
+            ...d,
+            pricePerUnitMonthly: priceEditValue,
+            projects: d.projects.map((p) => {
+              const projCustom = customPricingMap[d.id]?.projectPrices?.[p.id];
+              return {
+                ...p,
+                pricePerUnit: projCustom !== undefined ? projCustom : priceEditValue,
+              };
+            }),
+          };
+        } else {
+          return {
+            ...d,
+            projects: d.projects.map((p) => {
+              if (p.id === priceEditProjectId) {
+                return { ...p, pricePerUnit: priceEditValue };
+              }
+              return p;
             }),
           };
         }
-        return l;
+      })
+    );
+
+    setShowPriceModal(false);
+    showToast(
+      "Tarifa Actualizada",
+      `Se fijó la tarifa de $${priceEditValue} MXN/u para ${priceEditTargetName}.`,
+      "success"
+    );
+  };
+
+  // Scheduled Notification Action Handlers
+  const handleDispatchScheduledNow = (sch: ScheduledNotification) => {
+    const updated = scheduledNotifications.map((s) =>
+      s.id === sch.id ? { ...s, status: "ENVIADA" as const } : s
+    );
+    setScheduledNotifications(updated);
+    saveScheduledNotifications(updated);
+
+    const newLog: NotificationDeliveryLog = {
+      id: `log-${Date.now()}`,
+      timestamp: new Date().toLocaleString("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      triggerKey: sch.triggerKey,
+      triggerName: sch.triggerName,
+      channel: sch.channel,
+      recipient: sch.recipientContact,
+      recipientName: sch.recipientName,
+      developerName: sch.developerName,
+      status: "ENTREGADO",
+      retryCount: 0,
+      metadata: {
+        sourceEvent: sch.sourceEvent,
+        projectName: sch.projectName,
+        unitName: sch.unitName,
+        ...sch.metadata,
+      },
+    };
+
+    const nextLogs = [newLog, ...deliveryLogs];
+    setDeliveryLogs(nextLogs);
+    saveNotificationDeliveryLogs(nextLogs);
+
+    showToast(
+      "Notificación Enviada",
+      `Se despachó exitosamente '${sch.triggerName}' a ${sch.recipientName} (${sch.channel}).`,
+      "success"
+    );
+  };
+
+  const handleTogglePauseScheduled = (schId: string) => {
+    const updated = scheduledNotifications.map((s) => {
+      if (s.id !== schId) return s;
+      const nextStatus: "PROGRAMADA" | "PAUSADA" = s.status === "PAUSADA" ? "PROGRAMADA" : "PAUSADA";
+      return { ...s, status: nextStatus };
+    });
+    setScheduledNotifications(updated);
+    saveScheduledNotifications(updated);
+    showToast("Estado Actualizado", "Se actualizó el estado de la notificación programada.", "info");
+  };
+
+  const handleDeleteScheduled = (schId: string) => {
+    const updated = scheduledNotifications.filter((s) => s.id !== schId);
+    setScheduledNotifications(updated);
+    saveScheduledNotifications(updated);
+    showToast("Notificación Cancelada", "Se removió la notificación de la cola programada.", "info");
+  };
+
+  const handleCreateScheduledNotification = () => {
+    if (!newScheduleRecipientName.trim() || !newScheduleRecipientContact.trim()) {
+      showToast("Campos Incompletos", "Ingresa el nombre y contacto del destinatario.", "warning");
+      return;
+    }
+
+    const selectedTpl = templates.find((t) => t.triggerKey === newScheduleTriggerKey);
+    const newSch: ScheduledNotification = {
+      id: `sch-${Date.now()}`,
+      triggerKey: newScheduleTriggerKey,
+      triggerName: selectedTpl?.title || "Notificación Programada",
+      category: (selectedTpl?.category || "COBRANZA") as any,
+      channel: newScheduleChannel,
+      scheduledFor: `${newScheduleDate}T${newScheduleTime}:00`,
+      scheduledForFormatted: `${newScheduleDate} ${newScheduleTime}`,
+      relativeTime: "Programada",
+      recipientName: newScheduleRecipientName.trim(),
+      recipientContact: newScheduleRecipientContact.trim(),
+      recipientRole: "Destinatario",
+      developerName: developers[0]?.name || "Devio Inmobiliario",
+      projectName: newScheduleProject.trim() || "Proyecto General",
+      unitName: newScheduleUnit.trim() || "General",
+      sourceEvent: "Programación Manual Super Admin",
+      status: "PROGRAMADA",
+      payloadSummary: newSchedulePayloadSummary.trim() || "Notificación manual",
+    };
+
+    const updated = [newSch, ...scheduledNotifications];
+    setScheduledNotifications(updated);
+    saveScheduledNotifications(updated);
+    setShowCreateScheduleModal(false);
+    setNewScheduleRecipientName("");
+    setNewScheduleRecipientContact("");
+    setNewSchedulePayloadSummary("");
+    showToast("Notificación Programada", `Se encoló '${newSch.triggerName}' para el ${newSch.scheduledForFormatted}.`, "success");
+  };
+
+  // Impersonation Handler
+  const handleImpersonate = (dev: SuperAdminDeveloper, user?: any) => {
+    const targetUser = user || dev.users[0] || { name: `${dev.name} Admin`, email: dev.contactEmail };
+    const sessionObj = {
+      active: true,
+      developerId: dev.id,
+      developerName: dev.name,
+      userName: targetUser.name,
+      userEmail: targetUser.email,
+      role: targetUser.role || "ADMIN",
+    };
+
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("devio_impersonation", JSON.stringify(sessionObj));
+      localStorage.setItem("devio_developer_onboarding", JSON.stringify({
+        name: dev.name,
+        commercialName: dev.name,
+        legalName: dev.legalName,
+        rfc: dev.rfc,
+        city: dev.city,
+        email: dev.contactEmail,
+        phone: dev.phone,
+      }));
+    }
+
+    setDeveloperName(dev.name);
+    showToast("Modo 'Run As' Activado", `Operando como ${targetUser.name} en ${dev.name}.`, "success");
+    router.push("/dashboard");
+  };
+
+  // Open Payment Link Modal
+  const handleOpenPaymentLink = (dev: SuperAdminDeveloper, projectId?: string) => {
+    setSelectedDevForPayment(dev);
+    if (projectId) {
+      setPaymentScope("PROJECT");
+      setSelectedProjectId(projectId);
+    } else {
+      setPaymentScope("DEVELOPER");
+      setSelectedProjectId(dev.projects[0]?.id || "");
+    }
+    setPaymentInterval("MONTHLY");
+    setShowPaymentModal(true);
+  };
+
+  // Generate Calculated Payment Link
+  const calculatedPaymentUrl = useMemo(() => {
+    if (!selectedDevForPayment) return "";
+    const devId = selectedDevForPayment.id;
+    const pricePerUnit = selectedDevForPayment.pricePerUnitMonthly || 180;
+
+    let units = 0;
+    if (paymentScope === "DEVELOPER") {
+      units = selectedDevForPayment.projects.reduce((acc, p) => acc + p.totalUnits, 0);
+    } else {
+      const proj = selectedDevForPayment.projects.find((p) => p.id === selectedProjectId);
+      units = proj ? proj.totalUnits : 0;
+    }
+
+    const intervalParam = paymentInterval === "ANNUAL" ? "&interval=annual" : "&interval=monthly";
+    const scopeParam = paymentScope === "PROJECT" ? `&projectId=${selectedProjectId}` : "";
+    return `https://buy.stripe.com/live_devio_${devId}?units=${units}&ppu=${pricePerUnit}${scopeParam}${intervalParam}`;
+  }, [selectedDevForPayment, paymentScope, selectedProjectId, paymentInterval]);
+
+  // Handle Save Template Alias
+  const handleSaveTemplate = () => {
+    if (!editingTemplate) return;
+    const updated = templates.map((t) => {
+      if (t.id === editingTemplate.id) {
+        return {
+          ...t,
+          postmark: {
+            ...t.postmark,
+            templateAlias: editPmkAlias.trim() || t.postmark.templateAlias,
+            subject: editPmkSubject.trim() || t.postmark.subject,
+          },
+          whatsapp: {
+            ...t.whatsapp,
+            templateName: editWaTemplate.trim() || t.whatsapp.templateName,
+          },
+          push: {
+            ...t.push,
+            title: editPushTitle.trim() || t.push.title,
+          },
+        };
+      }
+      return t;
+    });
+
+    setTemplates(updated);
+    saveNotificationTemplates(updated);
+    setShowTemplateModal(false);
+    showToast("Plantilla Actualizada", `Alias guardado para ${editingTemplate.title}.`, "success");
+  };
+
+  // Handle Send Live Test Notification
+  const handleExecuteLiveTest = async () => {
+    if (!testTemplate || !testEmail) return;
+    setIsSendingTest(true);
+
+    try {
+      let parsedPayload: any = {};
+      try {
+        parsedPayload = JSON.parse(testPayloadJson);
+      } catch (e) {
+        parsedPayload = { nombre: "Usuario Test Devio", proyecto: "Black eleven demo", unidad: "3B" };
+      }
+
+      const res = await fetch("/api/notifications/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: testEmail,
+          templateAlias: testTemplate.postmark.templateAlias,
+          templateModel: parsedPayload,
+        }),
       });
-      setDeliveryLogs(updated);
-      saveNotificationDeliveryLogs(updated);
-      showToast("Reenvío Exitoso", `La notificación fue reintentada.`);
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast("Prueba Exitosa", `Correo enviado a ${testEmail} (ID: ${data.messageId || "OK"}).`, "success");
+        setDeliveryLogs(getNotificationDeliveryLogs());
+      } else {
+        showToast("Error en Envío", data.error || "No se pudo entregar el correo en Postmark.", "warning");
+      }
+    } catch (err: any) {
+      showToast("Error de Conexión", err.message || "Error al conectar con la API de notificaciones.", "warning");
+    } finally {
+      setIsSendingTest(false);
+      setShowLiveTestModal(false);
     }
   };
 
@@ -577,10 +788,29 @@ export default function SuperAdminPage() {
     });
   }, [deliveryLogs, logChannelFilter, logSearchQuery]);
 
-  // If user is NOT acalderoncha@gmail.com, block access
+  // Filtered Scheduled Notifications (Automations triggered by sales/events)
+  const filteredScheduled = useMemo(() => {
+    return scheduledNotifications.filter((sch) => {
+      const matchChannel = scheduledChannelFilter === "ALL" || sch.channel === scheduledChannelFilter;
+      const matchCategory = scheduledCategoryFilter === "ALL" || sch.category === scheduledCategoryFilter;
+      const matchStatus = scheduledStatusFilter === "ALL" || sch.status === scheduledStatusFilter;
+      const q = scheduledSearch.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        sch.recipientName.toLowerCase().includes(q) ||
+        sch.recipientContact.toLowerCase().includes(q) ||
+        sch.projectName.toLowerCase().includes(q) ||
+        sch.unitName.toLowerCase().includes(q) ||
+        sch.triggerName.toLowerCase().includes(q) ||
+        sch.sourceEvent.toLowerCase().includes(q);
+      return matchChannel && matchCategory && matchStatus && matchSearch;
+    });
+  }, [scheduledNotifications, scheduledChannelFilter, scheduledCategoryFilter, scheduledStatusFilter, scheduledSearch]);
+
+  // Access check
   if (!isAuthorized) {
     return (
-      <AppLayout>
+      <AppLayout isAdmin={true}>
         <main style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem 1.5rem", textAlign: "center", backgroundColor: "#F8FAFC" }}>
           <div
             style={{
@@ -599,14 +829,28 @@ export default function SuperAdminPage() {
             <Lock size={36} />
           </div>
 
-          <h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.5rem" }}>
+          <h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.5rem" }}>
             Acceso Restringido al Super Admin
           </h2>
-          <p style={{ fontSize: "0.9rem", color: "var(--devio-neutral-4)", maxWidth: "480px", lineHeight: 1.5, marginBottom: "2rem" }}>
+          <p style={{ fontSize: "0.9rem", color: "#64748B", maxWidth: "480px", lineHeight: 1.5, marginBottom: "2rem" }}>
             Esta consola de plataforma es exclusiva para la cuenta maestra de Super Admin Devio (<strong>acalderoncha@gmail.com</strong>).
           </p>
 
-          <Link href="/dashboard" className="btn btn-primary" style={{ padding: "0.75rem 2rem", fontSize: "0.9rem" }}>
+          <Link
+            href="/dashboard"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              backgroundColor: "#1B3047",
+              color: "#FFFFFF",
+              padding: "0.75rem 2rem",
+              borderRadius: "9999px",
+              fontSize: "0.9rem",
+              fontWeight: 700,
+              textDecoration: "none",
+            }}
+          >
             Volver al Dashboard
           </Link>
         </main>
@@ -615,214 +859,506 @@ export default function SuperAdminPage() {
   }
 
   return (
-    <AppLayout>
+    <AppLayout
+      isAdmin={true}
+      adminSubTab={activeTab}
+      onAdminTabChange={(t) => handleTabChange(t as AdminTab)}
+    >
       <main style={{ flex: 1, overflowY: "auto", padding: "2rem", backgroundColor: "#F8FAFC" }}>
-        
-        {/* HEADER */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem", flexWrap: "wrap", gap: "1rem" }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-              <div
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "0.6rem",
-                  backgroundColor: "var(--devio-blue-dark)",
-                  color: "#00C48C",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Shield size={20} />
-              </div>
-              <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0, letterSpacing: "-0.02em" }}>
-                Devio Platform Super Admin
-              </h1>
-            </div>
-            <p style={{ fontSize: "0.85rem", color: "var(--devio-neutral-3)", marginTop: "0.35rem", margin: 0 }}>
-              Consola Maestra: Facturación por unidad (MRR/ARR), Desarrolladoras, Proyectos, Modo &apos;Run As&apos; y Notificaciones Multi-Canal.
-            </p>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-            <span className="badge badge-success" style={{ padding: "0.4rem 0.8rem", fontSize: "0.78rem" }}>
-              ● Sesión Super Admin: acalderoncha@gmail.com
-            </span>
-          </div>
-        </div>
-
-        {/* TABS SELECTOR */}
-        <div
-          style={{
-            display: "flex",
-            gap: "0.5rem",
-            backgroundColor: "#FFFFFF",
-            padding: "0.4rem",
-            borderRadius: "0.75rem",
-            border: "1px solid #E2E8F0",
-            marginBottom: "2rem",
-            width: "fit-content",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-          }}
-        >
-          {[
-            { id: "tenants", label: "Desarrolladoras & Facturación SaaS", icon: <Building2 size={16} /> },
-            { id: "notifications", label: "Configuración & Notificaciones Multi-Canal", icon: <Bell size={16} /> },
-            { id: "pricing", label: "Catálogo de Planes & Pricing SaaS", icon: <DollarSign size={16} /> },
-            { id: "health_logs", label: "Salud del Sistema & Auditoría", icon: <Activity size={16} /> },
-          ].map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id as any)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "0.65rem 1.15rem",
-                  borderRadius: "0.55rem",
-                  fontSize: "0.82rem",
-                  fontWeight: isActive ? 800 : 600,
-                  color: isActive ? "#FFFFFF" : "var(--devio-neutral-3)",
-                  backgroundColor: isActive ? "var(--devio-blue-dark)" : "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                {tab.icon}
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
         {/* ========================================================================= */}
-        {/* TAB 1: DESARROLLADORAS & FACTURACIÓN SAAS (PRICING POR UNIDAD) */}
+        {/* TAB 1: RESUMEN (PANEL EJECUTIVO DE PLATAFORMA)                           */}
         {/* ========================================================================= */}
-        {activeTab === "tenants" && (
+        {activeTab === "overview" && (
           <div>
             {/* KPI METRIC CARDS */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
                 gap: "1.25rem",
                 marginBottom: "2rem",
               }}
             >
-              <div className="card" style={{ padding: "1.25rem", backgroundColor: "#FFFFFF" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "var(--devio-neutral-3)", marginBottom: "0.5rem" }}>
+              {/* Card 1: MRR */}
+              <div
+                style={{
+                  padding: "1.35rem",
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1rem",
+                  border: "1px solid #E2E8F0",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#64748B", marginBottom: "0.5rem" }}>
                   <span style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>MRR (Cobro por Unidad)</span>
-                  <TrendingUp size={18} color="#00C48C" />
+                  <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#DCFCE7", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <TrendingUp size={18} color="#00C48C" />
+                  </div>
                 </div>
-                <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--devio-blue-dark)", letterSpacing: "-0.02em" }}>
+                <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#1F3652", letterSpacing: "-0.02em" }}>
                   {formatMoney(metrics.mrr)}
                 </div>
-                <span style={{ fontSize: "0.72rem", color: "#009E70", fontWeight: 600, marginTop: "0.25rem", display: "block" }}>
-                  Calculado: {metrics.totalUnits} unidades * ${metrics.avgPricePerUnit}/u
+                <span style={{ fontSize: "0.74rem", color: "#166534", fontWeight: 700, marginTop: "0.35rem", display: "block" }}>
+                  Calculado: {metrics.totalUnits} unidades × ${metrics.avgPricePerUnit}/u
                 </span>
               </div>
 
-              <div className="card" style={{ padding: "1.25rem", backgroundColor: "#FFFFFF" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "var(--devio-neutral-3)", marginBottom: "0.5rem" }}>
+              {/* Card 2: ARR */}
+              <div
+                style={{
+                  padding: "1.35rem",
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1rem",
+                  border: "1px solid #E2E8F0",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#64748B", marginBottom: "0.5rem" }}>
                   <span style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>ARR Proyectado</span>
-                  <DollarSign size={18} color="var(--devio-blue)" />
+                  <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <DollarSign size={18} color="#2F80ED" />
+                  </div>
                 </div>
-                <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--devio-blue-dark)", letterSpacing: "-0.02em" }}>
+                <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#1F3652", letterSpacing: "-0.02em" }}>
                   {formatMoney(metrics.arr)}
                 </div>
-                <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", fontWeight: 500, marginTop: "0.25rem", display: "block" }}>
-                  Fórmula anualizada ($MRR * 12)
+                <span style={{ fontSize: "0.74rem", color: "#64748B", fontWeight: 600, marginTop: "0.35rem", display: "block" }}>
+                  Fórmula anualizada ($MRR × 12)
                 </span>
               </div>
 
-              <div className="card" style={{ padding: "1.25rem", backgroundColor: "#FFFFFF" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "var(--devio-neutral-3)", marginBottom: "0.5rem" }}>
+              {/* Card 3: Desarrolladoras */}
+              <div
+                style={{
+                  padding: "1.35rem",
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1rem",
+                  border: "1px solid #E2E8F0",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#64748B", marginBottom: "0.5rem" }}>
                   <span style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Desarrolladoras Activas</span>
-                  <Building2 size={18} color="var(--devio-blue-dark)" />
+                  <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#FAF5FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Building2 size={18} color="#9333EA" />
+                  </div>
                 </div>
-                <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--devio-blue-dark)", letterSpacing: "-0.02em" }}>
+                <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#1F3652", letterSpacing: "-0.02em" }}>
                   {metrics.totalDevelopers}
                 </div>
-                <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", fontWeight: 500, marginTop: "0.25rem", display: "block" }}>
-                  {metrics.totalProjects} desarrollos creados
+                <span style={{ fontSize: "0.74rem", color: "#64748B", fontWeight: 600, marginTop: "0.35rem", display: "block" }}>
+                  {metrics.totalProjects} desarrollos inmobiliarios activos
                 </span>
               </div>
 
-              <div className="card" style={{ padding: "1.25rem", backgroundColor: "#FFFFFF" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "var(--devio-neutral-3)", marginBottom: "0.5rem" }}>
+              {/* Card 4: Unidades */}
+              <div
+                style={{
+                  padding: "1.35rem",
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1rem",
+                  border: "1px solid #E2E8F0",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#64748B", marginBottom: "0.5rem" }}>
                   <span style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Total Unidades Gestionadas</span>
-                  <Layers size={18} color="#D97706" />
+                  <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#FFFBEB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Layers size={18} color="#D97706" />
+                  </div>
                 </div>
-                <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--devio-blue-dark)", letterSpacing: "-0.02em" }}>
-                  {metrics.totalUnits} <span style={{ fontSize: "1rem", fontWeight: 600, color: "var(--devio-neutral-3)" }}>unidades</span>
+                <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#1F3652", letterSpacing: "-0.02em" }}>
+                  {metrics.totalUnits} <span style={{ fontSize: "1rem", fontWeight: 600, color: "#64748B" }}>unidades</span>
                 </div>
-                <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", fontWeight: 500, marginTop: "0.25rem", display: "block" }}>
-                  Tarifa: ${metrics.avgPricePerUnit} MXN / unidad / mes
+                <span style={{ fontSize: "0.74rem", color: "#64748B", fontWeight: 600, marginTop: "0.35rem", display: "block" }}>
+                  Tarifa base: ${metrics.avgPricePerUnit} MXN / unidad / mes
                 </span>
               </div>
             </div>
 
+            {/* SECCIÓN DETALLADA: DESGLOSE DE FACTURACIÓN & HEALTH OVERVIEW */}
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "1.5rem", marginBottom: "2rem" }}>
+              {/* Desglose por Desarrolladora */}
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <Briefcase size={18} color="#2F80ED" />
+                    <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                      Facturación SaaS por Desarrolladora
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("developers")}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      background: "none",
+                      border: "none",
+                      color: "#2F80ED",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Ver todas <ArrowRight size={14} />
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  {developers.map((dev) => {
+                    const devUnits = dev.projects.reduce((acc, p) => acc + p.totalUnits, 0);
+                    const devMRR = devUnits * (dev.pricePerUnitMonthly || 180);
+
+                    return (
+                      <div
+                        key={dev.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "1rem 1.25rem",
+                          borderRadius: "0.75rem",
+                          backgroundColor: "#F8FAFC",
+                          border: "1px solid #E2E8F0",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                          <div
+                            style={{
+                              width: "38px",
+                              height: "38px",
+                              borderRadius: "10px",
+                              backgroundColor: "#1B3047",
+                              color: "#FFFFFF",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 800,
+                              fontSize: "0.95rem",
+                            }}
+                          >
+                            {dev.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <strong style={{ fontSize: "0.92rem", color: "#1F3652", display: "block" }}>{dev.name}</strong>
+                            <span style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                              {dev.legalName} • {dev.projects.length} proyectos • {devUnits} unidades
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: "1rem" }}>
+                          <div>
+                            <strong style={{ fontSize: "1.1rem", color: "#1F3652", display: "block" }}>
+                              {formatMoney(devMRR)} <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 500 }}>/ mes</span>
+                            </strong>
+                            <span style={{ fontSize: "0.7rem", color: "#166534", fontWeight: 700 }}>
+                              {devUnits} u × ${dev.pricePerUnitMonthly || 180} MXN
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleImpersonate(dev)}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              padding: "0.45rem 0.85rem",
+                              borderRadius: "9999px",
+                              backgroundColor: "#1B3047",
+                              color: "#FFFFFF",
+                              border: "none",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Key size={12} /> Run As
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Monitor de Notificaciones & Salud */}
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>
+                    <Zap size={18} color="#00C48C" />
+                    <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                      Salud & Notificaciones
+                    </h3>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "0.6rem", borderBottom: "1px solid #F1F5F9" }}>
+                      <span style={{ fontSize: "0.82rem", color: "#64748B" }}>Postmark Server:</span>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "0.2rem 0.6rem", borderRadius: "99px" }}>
+                        ● Conectado
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "0.6rem", borderBottom: "1px solid #F1F5F9" }}>
+                      <span style={{ fontSize: "0.82rem", color: "#64748B" }}>WhatsApp Cloud WABA:</span>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "0.2rem 0.6rem", borderRadius: "99px" }}>
+                        ● Activo
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "0.6rem", borderBottom: "1px solid #F1F5F9" }}>
+                      <span style={{ fontSize: "0.82rem", color: "#64748B" }}>Tasa de Entrega:</span>
+                      <strong style={{ fontSize: "0.95rem", color: "#1F3652" }}>98.5%</strong>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.82rem", color: "#64748B" }}>Plantillas Configuradas:</span>
+                      <strong style={{ fontSize: "0.95rem", color: "#1F3652" }}>{templates.length} Activas</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "1.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("notifications")}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.45rem",
+                      padding: "0.65rem",
+                      borderRadius: "9999px",
+                      backgroundColor: "rgba(47, 128, 237, 0.08)",
+                      color: "#2F80ED",
+                      border: "1px solid rgba(47, 128, 237, 0.2)",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Bell size={15} /> Administrar Notificaciones
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* ACCIONES RÁPIDAS */}
+            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+              <h3 style={{ fontSize: "1rem", fontWeight: 800, color: "#1F3652", margin: "0 0 1rem 0" }}>
+                Acciones Rápidas de Administración
+              </h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleTabChange("developers");
+                    setShowInviteModal(true);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    padding: "1rem",
+                    borderRadius: "0.75rem",
+                    backgroundColor: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Plus size={18} color="#2F80ED" />
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: "0.85rem", color: "#1F3652", display: "block" }}>Crear Invitación</strong>
+                    <span style={{ fontSize: "0.72rem", color: "#64748B" }}>Onboarding de Desarrolladora</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("developers")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    padding: "1rem",
+                    borderRadius: "0.75rem",
+                    backgroundColor: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#FAF5FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Key size={18} color="#9333EA" />
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: "0.85rem", color: "#1F3652", display: "block" }}>Modo Impersonación</strong>
+                    <span style={{ fontSize: "0.72rem", color: "#64748B" }}>Operar como Desarrolladora</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("notifications")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    padding: "1rem",
+                    borderRadius: "0.75rem",
+                    backgroundColor: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#DCFCE7", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Send size={18} color="#00C48C" />
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: "0.85rem", color: "#1F3652", display: "block" }}>Plantillas Postmark</strong>
+                    <span style={{ fontSize: "0.72rem", color: "#64748B" }}>Configurar y Probar</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("health")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    padding: "1rem",
+                    borderRadius: "0.75rem",
+                    backgroundColor: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#FFFBEB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <ShieldAlert size={18} color="#D97706" />
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: "0.85rem", color: "#1F3652", display: "block" }}>Auditoría del Sistema</strong>
+                    <span style={{ fontSize: "0.72rem", color: "#64748B" }}>Revisar logs de seguridad</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 2: DESARROLLADORAS (GESTIÓN OPERATIVA SAAS)                          */}
+        {/* ========================================================================= */}
+        {activeTab === "developers" && (
+          <div>
             {/* DEVELOPERS CONTROLS & FILTER */}
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: "1.25rem",
+                marginBottom: "1.5rem",
                 flexWrap: "wrap",
                 gap: "0.75rem",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flex: 1, maxWidth: "450px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1, maxWidth: "500px" }}>
                 <div style={{ position: "relative", width: "100%" }}>
-                  <Search size={15} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--devio-neutral-3)" }} />
+                  <Search size={15} style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", color: "#94A3B8" }} />
                   <input
                     type="text"
                     placeholder="Buscar desarrolladora, RFC, ciudad..."
                     value={searchDevQuery}
                     onChange={(e) => setSearchDevQuery(e.target.value)}
-                    className="form-input"
-                    style={{ paddingLeft: "2.2rem", fontSize: "0.82rem", width: "100%" }}
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem 0.65rem 2.4rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.85rem",
+                      color: "#1F3652",
+                      outline: "none",
+                      backgroundColor: "#FFFFFF",
+                      boxSizing: "border-box",
+                    }}
                   />
                 </div>
+
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  style={{
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.85rem",
+                    color: "#1F3652",
+                    outline: "none",
+                    backgroundColor: "#FFFFFF",
+                  }}
+                >
+                  <option value="ALL">Todos los Estados</option>
+                  <option value="ACTIVE">Activos</option>
+                  <option value="TRIAL">Prueba</option>
+                </select>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <button
                   type="button"
                   onClick={() => setShowInviteModal(true)}
-                  className="btn btn-primary"
-                  style={{ fontSize: "0.8rem", padding: "0.5rem 0.95rem" }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.45rem",
+                    backgroundColor: "#1B3047",
+                    color: "#FFFFFF",
+                    padding: "0.65rem 1.4rem",
+                    borderRadius: "9999px",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
                 >
-                  <Plus size={15} /> Crear Link de Invitación
+                  <Plus size={16} /> Crear Link de Invitación
                 </button>
               </div>
             </div>
 
             {/* DEVELOPERS LIST & PROJECT EXPANDABLE CARDS */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem", marginBottom: "2.5rem" }}>
               {filteredDevelopers.map((dev) => {
-                const isExpanded = expandedDevId === dev.id;
+                const isExpanded = expandedDevIds.includes(dev.id);
                 const totalUnits = dev.projects.reduce((acc, p) => acc + p.totalUnits, 0);
-                const monthlyTotal = totalUnits * (dev.pricePerUnitMonthly || 180);
+                const monthlyTotal = dev.projects.reduce((acc, p) => {
+                  const unitPrice = p.pricePerUnit !== undefined ? p.pricePerUnit : (dev.pricePerUnitMonthly || 180);
+                  return acc + (p.totalUnits * unitPrice);
+                }, 0);
 
                 return (
                   <div
                     key={dev.id}
-                    className="card"
                     style={{
                       backgroundColor: "#FFFFFF",
-                      borderRadius: "0.85rem",
+                      borderRadius: "1rem",
                       border: "1px solid #E2E8F0",
                       overflow: "hidden",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
                     }}
                   >
-                    {/* Developer Row Header */}
+                    {/* Developer Row Header (Clickable to expand/collapse) */}
                     <div
                       style={{
                         padding: "1.25rem 1.5rem",
@@ -835,15 +1371,15 @@ export default function SuperAdminPage() {
                         flexWrap: "wrap",
                         gap: "1rem",
                       }}
-                      onClick={() => setExpandedDevId(isExpanded ? null : dev.id)}
+                      onClick={() => toggleExpandDev(dev.id)}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
                         <div
                           style={{
                             width: "44px",
                             height: "44px",
-                            borderRadius: "0.65rem",
-                            backgroundColor: "var(--devio-blue-dark)",
+                            borderRadius: "10px",
+                            backgroundColor: "#1B3047",
                             color: "#FFFFFF",
                             display: "flex",
                             alignItems: "center",
@@ -858,14 +1394,23 @@ export default function SuperAdminPage() {
 
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                            <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
+                            <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
                               {dev.name}
                             </h3>
-                            <span className="badge badge-success" style={{ fontSize: "0.68rem" }}>
+                            <span
+                              style={{
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                color: "#166534",
+                                backgroundColor: "#DCFCE7",
+                                padding: "0.15rem 0.55rem",
+                                borderRadius: "99px",
+                              }}
+                            >
                               {dev.subscriptionStatus === "ACTIVE" ? "Activo" : "Trial"}
                             </span>
                           </div>
-                          <span style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)" }}>
+                          <span style={{ fontSize: "0.78rem", color: "#64748B" }}>
                             {dev.legalName} • RFC: <strong>{dev.rfc}</strong> • {dev.contactEmail}
                           </span>
                         </div>
@@ -874,23 +1419,55 @@ export default function SuperAdminPage() {
                       {/* Right Stats & Action Buttons */}
                       <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap" }}>
                         <div style={{ textAlign: "right" }}>
-                          <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", textTransform: "uppercase", fontWeight: 700 }}>
+                          <span style={{ fontSize: "0.72rem", color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>
                             Cálculo Facturación Devio ({totalUnits} unidades)
                           </span>
-                          <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--devio-blue-dark)" }}>
-                            {formatMoney(monthlyTotal)} <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--devio-neutral-3)" }}>/ mes</span>
+                          <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1F3652" }}>
+                            {formatMoney(monthlyTotal)} <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "#64748B" }}>/ mes</span>
                           </div>
-                          <span style={{ fontSize: "0.72rem", color: "#009E70", fontWeight: 600 }}>
-                            {totalUnits} unidades * ${dev.pricePerUnitMonthly || 180} MXN/u
+                          <span style={{ fontSize: "0.72rem", color: "#166534", fontWeight: 700 }}>
+                            {totalUnits} unidades • Tarifa base: ${dev.pricePerUnitMonthly || 180} MXN/u
                           </span>
                         </div>
 
                         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }} onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
+                            onClick={() => handleOpenPriceModal(dev.id, dev.name, undefined, undefined, dev.pricePerUnitMonthly || 180, totalUnits)}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              padding: "0.5rem 0.85rem",
+                              borderRadius: "9999px",
+                              border: "1px solid #CBD5E1",
+                              backgroundColor: "#FFFFFF",
+                              color: "#1F3652",
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                            title="Editar tarifa base por unidad de esta desarrolladora"
+                          >
+                            <Tag size={13} color="#2563EB" /> Tarifa Base (${dev.pricePerUnitMonthly || 180}/u)
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() => handleOpenPaymentLink(dev)}
-                            className="btn btn-outline"
-                            style={{ fontSize: "0.75rem", padding: "0.45rem 0.8rem", color: "var(--devio-blue-dark)" }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              padding: "0.5rem 0.95rem",
+                              borderRadius: "9999px",
+                              border: "1px solid #CBD5E1",
+                              backgroundColor: "#FFFFFF",
+                              color: "#1F3652",
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
                             title="Generar Link de Pago por unidades"
                           >
                             <LinkIcon size={13} /> Link de Pago
@@ -899,16 +1476,42 @@ export default function SuperAdminPage() {
                           <button
                             type="button"
                             onClick={() => handleImpersonate(dev)}
-                            className="btn btn-primary"
-                            style={{ fontSize: "0.75rem", padding: "0.45rem 0.85rem", backgroundColor: "#1F3652" }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              padding: "0.5rem 1rem",
+                              borderRadius: "9999px",
+                              border: "none",
+                              backgroundColor: "#1B3047",
+                              color: "#FFFFFF",
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
                             title="Operar como SuperAdmin de esta Desarrolladora"
                           >
                             <Key size={13} /> Run As SuperAdmin
                           </button>
 
-                          <div style={{ color: "var(--devio-neutral-3)", marginLeft: "0.25rem" }}>
-                            {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleExpandDev(dev.id)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#1F3652",
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "6px",
+                              borderRadius: "50%",
+                              backgroundColor: "#F1F5F9",
+                            }}
+                            title={isExpanded ? "Colapsar detalles" : "Ver proyectos y usuarios"}
+                          >
+                            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -918,71 +1521,135 @@ export default function SuperAdminPage() {
                       <div style={{ borderTop: "1px solid #E2E8F0", padding: "1.5rem", backgroundColor: "#F8FAFC" }}>
                         {/* 1. Proyectos y Desglose por Unidad */}
                         <div style={{ marginBottom: "1.5rem" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                              <Building2 size={16} color="var(--devio-blue)" />
-                              <h4 style={{ fontSize: "0.9rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
+                              <Building2 size={16} color="#2F80ED" />
+                              <h4 style={{ fontSize: "0.92rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
                                 Proyectos Creados ({dev.projects.length})
                               </h4>
                             </div>
-                            <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)" }}>
-                              Cobro estrictamente por unidad: <strong>${dev.pricePerUnitMonthly || 180} MXN / unidad / mes</strong>
+                            <span style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                              Tarifa base desarrolladora: <strong>${dev.pricePerUnitMonthly || 180} MXN / u / mes</strong> (puedes fijar tarifas personalizadas por proyecto)
                             </span>
                           </div>
 
                           {dev.projects.length === 0 ? (
-                            <div style={{ padding: "1.5rem", textAlign: "center", backgroundColor: "#FFFFFF", borderRadius: "0.6rem", border: "1px dashed #CBD5E1", fontSize: "0.8125rem", color: "var(--devio-neutral-3)" }}>
+                            <div style={{ padding: "1.5rem", textAlign: "center", backgroundColor: "#FFFFFF", borderRadius: "0.6rem", border: "1px dashed #CBD5E1", fontSize: "0.8125rem", color: "#64748B" }}>
                               No hay proyectos creados aún en esta desarrolladora.
                             </div>
                           ) : (
-                            <div className="table-container" style={{ backgroundColor: "#FFFFFF", borderRadius: "0.6rem", border: "1px solid #E2E8F0" }}>
-                              <table>
+                            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.75rem", border: "1px solid #E2E8F0", overflow: "hidden" }}>
+                              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem" }}>
                                 <thead>
-                                  <tr>
-                                    <th>Proyecto</th>
-                                    <th>Tipo</th>
-                                    <th>Unidades Totales</th>
-                                    <th>Vendidas / Disp.</th>
-                                    <th>Costo Proyecto ({dev.pricePerUnitMonthly || 180}/u)</th>
-                                    <th>Link de Pago</th>
+                                  <tr style={{ borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+                                    <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Proyecto</th>
+                                    <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Tipo</th>
+                                    <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Unidades Totales</th>
+                                    <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Vendidas / Disp.</th>
+                                    <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Tarifa / Unidad</th>
+                                    <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Costo Proyecto</th>
+                                    <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Acciones</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {dev.projects.map((p) => {
-                                    const projTotalCost = p.totalUnits * (dev.pricePerUnitMonthly || 180);
+                                    const projUnitPrice = p.pricePerUnit !== undefined ? p.pricePerUnit : (dev.pricePerUnitMonthly || 180);
+                                    const projTotalCost = p.totalUnits * projUnitPrice;
+                                    const isCustomRate = p.pricePerUnit !== undefined && p.pricePerUnit !== (dev.pricePerUnitMonthly || 180);
 
                                     return (
-                                      <tr key={p.id}>
-                                        <td>
-                                          <strong>{p.name}</strong>
-                                          <div style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)" }}>ID: {p.id}</div>
+                                      <tr key={p.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                                        <td style={{ padding: "0.85rem 1rem" }}>
+                                          <strong style={{ color: "#1F3652" }}>{p.name}</strong>
+                                          <div style={{ fontSize: "0.72rem", color: "#94A3B8" }}>ID: {p.id}</div>
                                         </td>
-                                        <td>
-                                          <span className="badge badge-info" style={{ fontSize: "0.7rem" }}>
+                                        <td style={{ padding: "0.85rem 1rem" }}>
+                                          <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#2563EB", backgroundColor: "#EFF6FF", padding: "0.15rem 0.5rem", borderRadius: "99px" }}>
                                             {p.type}
                                           </span>
                                         </td>
-                                        <td>
+                                        <td style={{ padding: "0.85rem 1rem", color: "#1F3652" }}>
                                           <strong>{p.totalUnits}</strong> unidades
                                         </td>
-                                        <td>
-                                          <span style={{ color: "#009E70", fontWeight: 700 }}>{p.soldUnits} vtas</span> / {p.availableUnits} disp
+                                        <td style={{ padding: "0.85rem 1rem" }}>
+                                          <span style={{ color: "#166534", fontWeight: 700 }}>{p.soldUnits} vtas</span> / {p.availableUnits} disp
                                         </td>
-                                        <td>
-                                          <strong>{formatMoney(projTotalCost)}</strong>
-                                          <div style={{ fontSize: "0.68rem", color: "var(--devio-neutral-3)" }}>
-                                            {p.totalUnits} unidades * ${dev.pricePerUnitMonthly || 180}/mes
+                                        <td style={{ padding: "0.85rem 1rem" }}>
+                                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                            <strong style={{ color: "#1F3652" }}>${projUnitPrice} MXN</strong>
+                                            <span style={{ fontSize: "0.72rem", color: "#64748B" }}>/u</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenPriceModal(dev.id, dev.name, p.id, p.name, projUnitPrice, p.totalUnits)}
+                                              style={{
+                                                background: "none",
+                                                border: "none",
+                                                cursor: "pointer",
+                                                color: "#2563EB",
+                                                padding: "2px",
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                              }}
+                                              title="Editar tarifa para este proyecto"
+                                            >
+                                              <Edit3 size={13} />
+                                            </button>
+                                          </div>
+                                          {isCustomRate && (
+                                            <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#1D4ED8", backgroundColor: "#DBEAFE", padding: "0.1rem 0.4rem", borderRadius: "4px", display: "inline-block", marginTop: "2px" }}>
+                                              Tarifa Proyecto
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td style={{ padding: "0.85rem 1rem" }}>
+                                          <strong style={{ color: "#1F3652" }}>{formatMoney(projTotalCost)}</strong>
+                                          <div style={{ fontSize: "0.68rem", color: "#94A3B8" }}>
+                                            {p.totalUnits} u × ${projUnitPrice}/mes
                                           </div>
                                         </td>
-                                        <td>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleOpenPaymentLink(dev, p.id)}
-                                            className="btn btn-outline"
-                                            style={{ fontSize: "0.72rem", padding: "0.3rem 0.65rem" }}
-                                          >
-                                            <LinkIcon size={12} /> Link del Proyecto
-                                          </button>
+                                        <td style={{ padding: "0.85rem 1rem" }}>
+                                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenPriceModal(dev.id, dev.name, p.id, p.name, projUnitPrice, p.totalUnits)}
+                                              style={{
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                gap: "0.25rem",
+                                                padding: "0.35rem 0.65rem",
+                                                borderRadius: "9999px",
+                                                border: "1px solid #CBD5E1",
+                                                backgroundColor: "#FFFFFF",
+                                                color: "#1F3652",
+                                                fontSize: "0.72rem",
+                                                fontWeight: 700,
+                                                cursor: "pointer",
+                                              }}
+                                              title="Modificar precio por unidad para este proyecto"
+                                            >
+                                              <Tag size={12} color="#2563EB" /> Tarifa
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenPaymentLink(dev, p.id)}
+                                              style={{
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                gap: "0.3rem",
+                                                padding: "0.35rem 0.75rem",
+                                                borderRadius: "9999px",
+                                                border: "1px solid #CBD5E1",
+                                                backgroundColor: "#FFFFFF",
+                                                color: "#1F3652",
+                                                fontSize: "0.72rem",
+                                                fontWeight: 700,
+                                                cursor: "pointer",
+                                              }}
+                                            >
+                                              <LinkIcon size={12} /> Link de Pago
+                                            </button>
+                                          </div>
                                         </td>
                                       </tr>
                                     );
@@ -997,61 +1664,109 @@ export default function SuperAdminPage() {
                         <div>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                              <Users size={16} color="var(--devio-blue)" />
-                              <h4 style={{ fontSize: "0.9rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
+                              <Users size={16} color="#2F80ED" />
+                              <h4 style={{ fontSize: "0.92rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
                                 Usuarios Registrados & Permisos ({dev.users.length})
                               </h4>
                             </div>
-                            <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)" }}>
-                              Puedes impersonar a cualquier usuario o auditar su matriz de 30 permisos
+                            <span style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                              Puedes impersonar a cualquier usuario o auditar su matriz de permisos
                             </span>
                           </div>
 
-                          <div className="table-container" style={{ backgroundColor: "#FFFFFF", borderRadius: "0.6rem", border: "1px solid #E2E8F0" }}>
-                            <table>
+                          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.75rem", border: "1px solid #E2E8F0", overflow: "hidden" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem" }}>
                               <thead>
-                                <tr>
-                                  <th>Usuario</th>
-                                  <th>Correo Electrónico</th>
-                                  <th>Rol en Plataforma</th>
-                                  <th>Proyectos Asignados</th>
-                                  <th>Acciones Super Admin</th>
+                                <tr style={{ borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+                                  <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Usuario</th>
+                                  <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Correo Electrónico</th>
+                                  <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Rol en Plataforma</th>
+                                  <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Proyectos Asignados</th>
+                                  <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Acciones Super Admin</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {dev.users.map((u) => (
-                                  <tr key={u.id}>
-                                    <td>
-                                      <strong>{u.name}</strong>
+                                  <tr key={u.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                                    <td style={{ padding: "0.85rem 1rem" }}>
+                                      <strong style={{ color: "#1F3652" }}>{u.name}</strong>
                                     </td>
-                                    <td>{u.email}</td>
-                                    <td>
-                                      <span className="badge badge-info" style={{ fontSize: "0.72rem" }}>
+                                    <td style={{ padding: "0.85rem 1rem", color: "#64748B" }}>{u.email}</td>
+                                    <td style={{ padding: "0.85rem 1rem" }}>
+                                      <span
+                                        style={{
+                                          fontSize: "0.7rem",
+                                          fontWeight: 700,
+                                          padding: "0.15rem 0.5rem",
+                                          borderRadius: "99px",
+                                          backgroundColor:
+                                            u.role === "SUPER ADMIN"
+                                              ? "#FEF3C7"
+                                              : u.role === "DIRECTOR COMERCIAL"
+                                              ? "#EFF6FF"
+                                              : "#F1F5F9",
+                                          color:
+                                            u.role === "SUPER ADMIN"
+                                              ? "#92400E"
+                                              : u.role === "DIRECTOR COMERCIAL"
+                                              ? "#1D4ED8"
+                                              : "#64748B",
+                                        }}
+                                      >
                                         {u.role}
                                       </span>
                                     </td>
-                                    <td>
-                                      <span style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)" }}>
-                                        {u.assignedProjectIds && u.assignedProjectIds.length > 0
-                                          ? `${u.assignedProjectIds.length} proyectos asignados`
-                                          : "Todos los proyectos"}
-                                      </span>
+                                    <td style={{ padding: "0.85rem 1rem", color: "#64748B" }}>
+                                      {u.assignedProjectIds ? u.assignedProjectIds.join(", ") : "Todos los proyectos"}
                                     </td>
-                                    <td>
+                                    <td style={{ padding: "0.85rem 1rem" }}>
                                       <div style={{ display: "flex", gap: "0.4rem" }}>
                                         <button
                                           type="button"
-                                          onClick={() => handleInspectPermissions(dev, u)}
-                                          className="btn btn-outline"
-                                          style={{ fontSize: "0.72rem", padding: "0.3rem 0.65rem" }}
+                                          onClick={() => {
+                                            setInspectedUser({
+                                              id: u.id,
+                                              name: u.name,
+                                              email: u.email,
+                                              role: u.role,
+                                              developerName: dev.name,
+                                              assignedProjectIds: u.assignedProjectIds,
+                                            });
+                                            setShowPermissionsModal(true);
+                                          }}
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "0.3rem",
+                                            padding: "0.35rem 0.75rem",
+                                            borderRadius: "9999px",
+                                            border: "1px solid #CBD5E1",
+                                            backgroundColor: "#FFFFFF",
+                                            color: "#1F3652",
+                                            fontSize: "0.72rem",
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                          }}
                                         >
-                                          <Shield size={12} /> Ver Permisos
+                                          <Eye size={12} /> Ver Permisos
                                         </button>
+
                                         <button
                                           type="button"
                                           onClick={() => handleImpersonate(dev, u)}
-                                          className="btn btn-primary"
-                                          style={{ fontSize: "0.72rem", padding: "0.3rem 0.65rem" }}
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "0.3rem",
+                                            padding: "0.35rem 0.75rem",
+                                            borderRadius: "9999px",
+                                            border: "none",
+                                            backgroundColor: "#1B3047",
+                                            color: "#FFFFFF",
+                                            fontSize: "0.72rem",
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                          }}
                                         >
                                           <Key size={12} /> Run As {u.name.split(" ")[0]}
                                         </button>
@@ -1069,345 +1784,110 @@ export default function SuperAdminPage() {
                 );
               })}
             </div>
-          </div>
-        )}
 
-        {/* ========================================================================= */}
-        {/* TAB 2: CONFIGURACIÓN DEL SISTEMA & NOTIFICACIONES MULTI-CANAL */}
-        {/* ========================================================================= */}
-        {activeTab === "notifications" && (
-          <div>
-            {/* PROVIDERS CONFIGURATION CARDS */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "1.25rem", marginBottom: "2rem" }}>
-              {/* 1. Postmark */}
-              <div className="card" style={{ padding: "1.5rem", backgroundColor: "#FFFFFF" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "0.5rem", backgroundColor: "rgba(255, 107, 0, 0.1)", color: "#FF6B00", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Mail size={20} />
-                    </div>
-                    <div>
-                      <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
-                        Postmark (Email Transaccional)
-                      </h4>
-                      <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)" }}>Servidor oficial de correos</span>
-                    </div>
-                  </div>
-                  <span className="badge badge-success" style={{ fontSize: "0.68rem" }}>
-                    ● Conectado
-                  </span>
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", fontSize: "0.78rem" }}>
-                  <div>
-                    <span style={{ color: "var(--devio-neutral-3)", fontWeight: 600 }}>Alias Remitente:</span>
-                    <div style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>{channelsConfig.postmark.senderAlias}</div>
-                  </div>
-                  <div>
-                    <span style={{ color: "var(--devio-neutral-3)", fontWeight: 600 }}>From Email:</span>
-                    <div style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>{channelsConfig.postmark.fromEmail}</div>
-                  </div>
-                  <div>
-                    <span style={{ color: "var(--devio-neutral-3)", fontWeight: 600 }}>Server API Token:</span>
-                    <div style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "var(--devio-neutral-4)" }}>
-                      {channelsConfig.postmark.serverApiToken.substring(0, 14)}••••••••••••
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.5rem", borderTop: "1px solid #E2E8F0" }}>
-                    <span style={{ fontWeight: 600, color: "var(--devio-blue-dark)" }}>Canal Activo Globalmente</span>
-                    <input
-                      type="checkbox"
-                      checked={channelsConfig.postmark.enabled}
-                      onChange={(e) =>
-                        handleUpdateChannelsConfig({
-                          ...channelsConfig,
-                          postmark: { ...channelsConfig.postmark, enabled: e.target.checked },
-                        })
-                      }
-                      style={{ width: "18px", height: "18px", accentColor: "#00C48C", cursor: "pointer" }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 2. WhatsApp Business */}
-              <div className="card" style={{ padding: "1.5rem", backgroundColor: "#FFFFFF" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "0.5rem", backgroundColor: "rgba(37, 211, 102, 0.1)", color: "#25D366", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <MessageSquare size={20} />
-                    </div>
-                    <div>
-                      <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
-                        WhatsApp Business API
-                      </h4>
-                      <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)" }}>Meta Cloud API / Twilio</span>
-                    </div>
-                  </div>
-                  <span className="badge badge-success" style={{ fontSize: "0.68rem" }}>
-                    ● Conectado
-                  </span>
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", fontSize: "0.78rem" }}>
-                  <div>
-                    <span style={{ color: "var(--devio-neutral-3)", fontWeight: 600 }}>Nombre de Cuenta / Alias:</span>
-                    <div style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>{channelsConfig.whatsapp.accountAlias}</div>
-                  </div>
-                  <div>
-                    <span style={{ color: "var(--devio-neutral-3)", fontWeight: 600 }}>Número Emisor Verificado:</span>
-                    <div style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>{channelsConfig.whatsapp.fromNumber}</div>
-                  </div>
-                  <div>
-                    <span style={{ color: "var(--devio-neutral-3)", fontWeight: 600 }}>WABA Access Token:</span>
-                    <div style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "var(--devio-neutral-4)" }}>
-                      {channelsConfig.whatsapp.apiToken.substring(0, 14)}••••••••••••
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.5rem", borderTop: "1px solid #E2E8F0" }}>
-                    <span style={{ fontWeight: 600, color: "var(--devio-blue-dark)" }}>Canal Activo Globalmente</span>
-                    <input
-                      type="checkbox"
-                      checked={channelsConfig.whatsapp.enabled}
-                      onChange={(e) =>
-                        handleUpdateChannelsConfig({
-                          ...channelsConfig,
-                          whatsapp: { ...channelsConfig.whatsapp, enabled: e.target.checked },
-                        })
-                      }
-                      style={{ width: "18px", height: "18px", accentColor: "#00C48C", cursor: "pointer" }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 3. Push */}
-              <div className="card" style={{ padding: "1.5rem", backgroundColor: "#FFFFFF" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "0.5rem", backgroundColor: "rgba(31, 54, 82, 0.1)", color: "var(--devio-blue-dark)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Smartphone size={20} />
-                    </div>
-                    <div>
-                      <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
-                        Push Notifications
-                      </h4>
-                      <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)" }}>Web Push & Progressive Web App</span>
-                    </div>
-                  </div>
-                  <span className="badge badge-success" style={{ fontSize: "0.68rem" }}>
-                    ● Conectado
-                  </span>
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", fontSize: "0.78rem" }}>
-                  <div>
-                    <span style={{ color: "var(--devio-neutral-3)", fontWeight: 600 }}>Clave VAPID Pública:</span>
-                    <div style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "var(--devio-neutral-4)" }}>
-                      {channelsConfig.push.vapidPublicKey.substring(0, 16)}••••••••••••
-                    </div>
-                  </div>
-                  <div>
-                    <span style={{ color: "var(--devio-neutral-3)", fontWeight: 600 }}>Ícono de Alerta App:</span>
-                    <div style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>{channelsConfig.push.appIconUrl}</div>
-                  </div>
-                  <div>
-                    <span style={{ color: "var(--devio-neutral-3)", fontWeight: 600 }}>Suscripciones Activas:</span>
-                    <div style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>Dispositivos web/móvil activos</div>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.5rem", borderTop: "1px solid #E2E8F0" }}>
-                    <span style={{ fontWeight: 600, color: "var(--devio-blue-dark)" }}>Canal Activo Globalmente</span>
-                    <input
-                      type="checkbox"
-                      checked={channelsConfig.push.enabled}
-                      onChange={(e) =>
-                        handleUpdateChannelsConfig({
-                          ...channelsConfig,
-                          push: { ...channelsConfig.push, enabled: e.target.checked },
-                        })
-                      }
-                      style={{ width: "18px", height: "18px", accentColor: "#00C48C", cursor: "pointer" }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* NOTIFICATION TEMPLATES MATRIX */}
-            <div className="card" style={{ padding: "1.75rem", backgroundColor: "#FFFFFF", marginBottom: "2rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" }}>
+            {/* INVITACIONES PERSONALIZADAS & PROMOCIONES */}
+            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
                 <div>
-                  <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
-                    Matriz de Notificaciones Multi-Canal (10 Eventos Auditados)
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                    Invitaciones Personalizadas & Promociones
                   </h3>
-                  <p style={{ fontSize: "0.8rem", color: "var(--devio-neutral-3)", marginTop: "0.25rem", margin: 0 }}>
-                    Activa o desactiva de forma granular los canales de envío para cada evento clave y personaliza sus alias de plantilla.
-                  </p>
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                    Enlaces únicos generados para onboarding de desarrolladoras con tarifa especial
+                  </span>
                 </div>
 
-                <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-                  {["ALL", "USUARIOS", "PROYECTOS", "COBRANZA", "VENTAS", "OBRA", "POSTVENTA", "DOCUMENTOS"].map((cat) => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setCategoryFilter(cat)}
-                      style={{
-                        padding: "0.35rem 0.75rem",
-                        borderRadius: "0.45rem",
-                        fontSize: "0.72rem",
-                        fontWeight: categoryFilter === cat ? 800 : 600,
-                        backgroundColor: categoryFilter === cat ? "var(--devio-blue-dark)" : "#F1F5F9",
-                        color: categoryFilter === cat ? "#FFFFFF" : "var(--devio-neutral-3)",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {cat === "ALL" ? "Todas las Categorías" : cat}
-                    </button>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowInviteModal(true)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.55rem 1.15rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "#1B3047",
+                    color: "#FFFFFF",
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Plus size={15} /> Nueva Invitación
+                </button>
               </div>
 
-              <div className="table-container">
-                <table>
+              <div style={{ borderRadius: "0.75rem", border: "1px solid #E2E8F0", overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem" }}>
                   <thead>
-                    <tr>
-                      <th style={{ width: "28%" }}>Evento / Disparador</th>
-                      <th>Destinatario</th>
-                      <th style={{ textAlign: "center" }}>Postmark (Email)</th>
-                      <th style={{ textAlign: "center" }}>WhatsApp API</th>
-                      <th style={{ textAlign: "center" }}>Push Web</th>
-                      <th>Estado de Auditoría</th>
-                      <th>Acciones</th>
+                    <tr style={{ borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+                      <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Desarrolladora Prospecto</th>
+                      <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Correo Destinatario</th>
+                      <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Tarifa / Unidad</th>
+                      <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Descuento</th>
+                      <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Vigencia</th>
+                      <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Estado</th>
+                      <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Acción</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTemplates.map((tpl) => (
-                      <tr key={tpl.id}>
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                            <span style={{ fontWeight: 800, color: "var(--devio-blue-dark)", fontSize: "0.85rem" }}>
-                              {tpl.title}
+                    {invites.map((inv) => (
+                      <tr key={inv.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                        <td style={{ padding: "0.85rem 1rem" }}>
+                          <strong style={{ color: "#1F3652" }}>{inv.developerName}</strong>
+                        </td>
+                        <td style={{ padding: "0.85rem 1rem", color: "#64748B" }}>{inv.developerEmail}</td>
+                        <td style={{ padding: "0.85rem 1rem", color: "#1F3652" }}>
+                          <strong>${inv.pricePerUnitMonthly} MXN</strong> / unidad
+                        </td>
+                        <td style={{ padding: "0.85rem 1rem" }}>
+                          {inv.discountPercentage > 0 ? (
+                            <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "0.15rem 0.5rem", borderRadius: "99px" }}>
+                              {inv.discountPercentage}% OFF
                             </span>
-                          </div>
-                          <div style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", marginTop: "0.15rem" }}>
-                            {tpl.description}
-                          </div>
+                          ) : (
+                            <span style={{ color: "#94A3B8" }}>Sin descuento</span>
+                          )}
                         </td>
-                        <td>
-                          <span className="badge badge-info" style={{ fontSize: "0.7rem" }}>
-                            {tpl.recipientRole}
-                          </span>
-                        </td>
-                        
-                        {/* Postmark Toggle */}
-                        <td style={{ textAlign: "center" }}>
-                          <label style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "0.2rem", cursor: "pointer" }}>
-                            <input
-                              type="checkbox"
-                              checked={tpl.postmark.enabled}
-                              onChange={(e) => {
-                                handleUpdateTemplate({
-                                  ...tpl,
-                                  postmark: { ...tpl.postmark, enabled: e.target.checked },
-                                });
-                              }}
-                              style={{ width: "16px", height: "16px", accentColor: "#FF6B00", cursor: "pointer" }}
-                            />
-                            <span style={{ fontSize: "0.65rem", color: ttplCheckedColor(tpl.postmark.enabled), fontWeight: 600 }}>
-                              {tpl.postmark.templateAlias || "default"}
-                            </span>
-                          </label>
-                        </td>
-
-                        {/* WhatsApp Toggle */}
-                        <td style={{ textAlign: "center" }}>
-                          <label style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "0.2rem", cursor: "pointer" }}>
-                            <input
-                              type="checkbox"
-                              checked={tpl.whatsapp.enabled}
-                              onChange={(e) => {
-                                handleUpdateTemplate({
-                                  ...tpl,
-                                  whatsapp: { ...tpl.whatsapp, enabled: e.target.checked },
-                                });
-                              }}
-                              style={{ width: "16px", height: "16px", accentColor: "#25D366", cursor: "pointer" }}
-                            />
-                            <span style={{ fontSize: "0.65rem", color: ttplCheckedColor(tpl.whatsapp.enabled), fontWeight: 600 }}>
-                              {tpl.whatsapp.templateName || "default"}
-                            </span>
-                          </label>
-                        </td>
-
-                        {/* Push Toggle */}
-                        <td style={{ textAlign: "center" }}>
-                          <label style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "0.2rem", cursor: "pointer" }}>
-                            <input
-                              type="checkbox"
-                              checked={tpl.push.enabled}
-                              onChange={(e) => {
-                                handleUpdateTemplate({
-                                  ...tpl,
-                                  push: { ...tpl.push, enabled: e.target.checked },
-                                });
-                              }}
-                              style={{ width: "16px", height: "16px", accentColor: "var(--devio-blue-dark)", cursor: "pointer" }}
-                            />
-                            <span style={{ fontSize: "0.65rem", color: ttplCheckedColor(tpl.push.enabled), fontWeight: 600 }}>
-                              {tpl.push.enabled ? "Activo" : "Inactivo"}
-                            </span>
-                          </label>
-                        </td>
-
-                        {/* Audit Status */}
-                        <td>
+                        <td style={{ padding: "0.85rem 1rem", color: "#64748B" }}>{inv.expiresAt}</td>
+                        <td style={{ padding: "0.85rem 1rem" }}>
                           <span
-                            className={`badge ${
-                              tpl.systemAuditStatus === "ACTIVO_FRONTEND"
-                                ? "badge-success"
-                                : tpl.systemAuditStatus === "LISTO_EN_API"
-                                ? "badge-info"
-                                : "badge-warning"
-                            }`}
-                            style={{ fontSize: "0.68rem" }}
+                            style={{
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              padding: "0.15rem 0.5rem",
+                              borderRadius: "99px",
+                              backgroundColor: inv.status === "PENDING" ? "#FEF3C7" : inv.status === "ACCEPTED" ? "#DCFCE7" : "#F1F5F9",
+                              color: inv.status === "PENDING" ? "#92400E" : inv.status === "ACCEPTED" ? "#166534" : "#64748B",
+                            }}
                           >
-                            {tpl.systemAuditStatus === "ACTIVO_FRONTEND"
-                              ? "✓ Activo en Frontend"
-                              : tpl.systemAuditStatus === "LISTO_EN_API"
-                              ? "API Conectada"
-                              : "Requiere Cron Worker"}
+                            {inv.status === "PENDING" ? "Pendiente" : inv.status === "ACCEPTED" ? "Aceptado" : "Expirado"}
                           </span>
                         </td>
-
-                        <td>
-                          <div style={{ display: "flex", gap: "0.35rem" }}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingTemplate(tpl);
-                                setEditPmkAlias(tpl.postmark.templateAlias);
-                                setEditPmkSubject(tpl.postmark.subject);
-                                setEditWaTemplate(tpl.whatsapp.templateName);
-                                setEditPushTitle(tpl.push.title);
-                                setShowTemplateModal(true);
-                              }}
-                              className="btn btn-outline"
-                              style={{ fontSize: "0.72rem", padding: "0.3rem 0.6rem" }}
-                              title="Configurar alias de plantillas"
-                            >
-                              <Edit3 size={12} /> Alias
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleTriggerTestNotification(tpl)}
-                              className="btn btn-primary"
-                              style={{ fontSize: "0.72rem", padding: "0.3rem 0.6rem" }}
-                              title="Probar envío inmediato"
-                            >
-                              <Send size={12} /> Probar
-                            </button>
-                          </div>
+                        <td style={{ padding: "0.85rem 1rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(inv.linkUrl);
+                              showToast("Link Copiado", "El enlace de invitación se copió al portapapeles.", "success");
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.3rem",
+                              padding: "0.35rem 0.75rem",
+                              borderRadius: "9999px",
+                              border: "1px solid #CBD5E1",
+                              backgroundColor: "#FFFFFF",
+                              color: "#1F3652",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Copy size={12} /> Copiar Link
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -1415,182 +1895,587 @@ export default function SuperAdminPage() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
 
-            {/* REAL-TIME DELIVERY LOGS */}
-            <div className="card" style={{ padding: "1.75rem", backgroundColor: "#FFFFFF" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" }}>
-                <div>
-                  <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
-                    Historial de Envíos en Tiempo Real (Logs)
-                  </h3>
-                  <span style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)" }}>
-                    Auditoría de notificaciones enviadas por Postmark, WhatsApp y Push con estado de entrega y reintentos.
-                  </span>
+        {/* ========================================================================= */}
+        {/* TAB 3: CONFIGURACIÓN & NOTIFICACIONES MULTI-CANAL                        */}
+        {/* ========================================================================= */}
+        {activeTab === "notifications" && (
+          <div>
+            {/* NOTIFICATIONS SUB-TAB NAVIGATION */}
+            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.75rem", borderBottom: "1px solid #E2E8F0", paddingBottom: "0.75rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => setNotifSubTab("scheduled")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  padding: "0.55rem 1.15rem",
+                  borderRadius: "9999px",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  border: "none",
+                  cursor: "pointer",
+                  backgroundColor: notifSubTab === "scheduled" ? "#1B3047" : "#F1F5F9",
+                  color: notifSubTab === "scheduled" ? "#FFFFFF" : "#64748B",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <Clock size={15} /> Notificaciones Programadas ({scheduledNotifications.filter((s) => s.status !== "CANCELADA").length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNotifSubTab("logs")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  padding: "0.55rem 1.15rem",
+                  borderRadius: "9999px",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  border: "none",
+                  cursor: "pointer",
+                  backgroundColor: notifSubTab === "logs" ? "#1B3047" : "#F1F5F9",
+                  color: notifSubTab === "logs" ? "#FFFFFF" : "#64748B",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <Activity size={15} /> Historial de Envíos ({deliveryLogs.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNotifSubTab("templates")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  padding: "0.55rem 1.15rem",
+                  borderRadius: "9999px",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  border: "none",
+                  cursor: "pointer",
+                  backgroundColor: notifSubTab === "templates" ? "#1B3047" : "#F1F5F9",
+                  color: notifSubTab === "templates" ? "#FFFFFF" : "#64748B",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <Layers size={15} /> Plantillas & Triggers ({templates.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNotifSubTab("channels")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  padding: "0.55rem 1.15rem",
+                  borderRadius: "9999px",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  border: "none",
+                  cursor: "pointer",
+                  backgroundColor: notifSubTab === "channels" ? "#1B3047" : "#F1F5F9",
+                  color: notifSubTab === "channels" ? "#FFFFFF" : "#64748B",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <Server size={15} /> Canales de Integración (3)
+              </button>
+            </div>
+
+            {/* =================================================================== */}
+            {/* SUBTAB 1: NOTIFICACIONES PROGRAMADAS & AUTOMATIZACIONES DE VENTAS   */}
+            {/* =================================================================== */}
+            {notifSubTab === "scheduled" && (
+              <div>
+                {/* Stats Header */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginBottom: "1.75rem" }}>
+                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", border: "1px solid #E2E8F0", padding: "1.1rem 1.25rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                    <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 700, textTransform: "uppercase" }}>En Cola / Programadas</span>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#1F3652", marginTop: "0.2rem" }}>
+                      {scheduledNotifications.filter((s) => s.status === "PROGRAMADA" || s.status === "EN_COLA").length}
+                    </div>
+                    <span style={{ fontSize: "0.72rem", color: "#2563EB", fontWeight: 600 }}>Automatizaciones de ventas activas</span>
+                  </div>
+
+                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", border: "1px solid #E2E8F0", padding: "1.1rem 1.25rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                    <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 700, textTransform: "uppercase" }}>Próximas en 7 Días</span>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#D97706", marginTop: "0.2rem" }}>
+                      {scheduledNotifications.filter((s) => s.relativeTime.includes("días") || s.relativeTime.includes("Mes")).length}
+                    </div>
+                    <span style={{ fontSize: "0.72rem", color: "#64748B" }}>Recordatorios preventivos y cobros</span>
+                  </div>
+
+                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", border: "1px solid #E2E8F0", padding: "1.1rem 1.25rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                    <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 700, textTransform: "uppercase" }}>Canales de Despacho</span>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", marginTop: "0.35rem" }}>
+                      WhatsApp API + Postmark
+                    </div>
+                    <span style={{ fontSize: "0.72rem", color: "#166534", fontWeight: 700 }}>● Entregas automáticas activas</span>
+                  </div>
+
+                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", border: "1px solid #E2E8F0", padding: "1.1rem 1.25rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                    <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 700, textTransform: "uppercase" }}>Origen de Triggers</span>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", marginTop: "0.35rem" }}>
+                      Ventas, Cobranza y Obra
+                    </div>
+                    <span style={{ fontSize: "0.72rem", color: "#64748B" }}>Programadas por eventos del sistema</span>
+                  </div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <select
-                    value={logChannelFilter}
-                    onChange={(e) => setLogChannelFilter(e.target.value)}
-                    className="form-input"
-                    style={{ fontSize: "0.78rem", padding: "0.4rem 0.75rem" }}
-                  >
-                    <option value="ALL">Todos los Canales</option>
-                    <option value="POSTMARK">Postmark (Email)</option>
-                    <option value="WHATSAPP">WhatsApp API</option>
-                    <option value="PUSH">Push Notifications</option>
-                  </select>
+                {/* Table Container */}
+                <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                  {/* Toolbar */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
+                    <div>
+                      <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                        Cola de Notificaciones Programadas ({filteredScheduled.length})
+                      </h3>
+                      <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                        Notificaciones calendarizadas automáticamente al registrarse ventas, mensualidades o cierres de obra
+                      </span>
+                    </div>
 
-                  <input
-                    type="text"
-                    placeholder="Buscar en logs..."
-                    value={logSearchQuery}
-                    onChange={(e) => setLogSearchQuery(e.target.value)}
-                    className="form-input"
-                    style={{ fontSize: "0.78rem", padding: "0.4rem 0.75rem", width: "180px" }}
-                  />
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <div style={{ position: "relative" }}>
+                        <Search size={14} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "#94A3B8" }} />
+                        <input
+                          type="text"
+                          placeholder="Buscar cliente, proyecto o trigger..."
+                          value={scheduledSearch}
+                          onChange={(e) => setScheduledSearch(e.target.value)}
+                          style={{
+                            padding: "0.5rem 0.85rem 0.5rem 2.2rem",
+                            borderRadius: "0.5rem",
+                            border: "1px solid #CBD5E1",
+                            fontSize: "0.82rem",
+                            color: "#1F3652",
+                            outline: "none",
+                            width: "220px",
+                          }}
+                        />
+                      </div>
+
+                      <select
+                        value={scheduledChannelFilter}
+                        onChange={(e) => setScheduledChannelFilter(e.target.value)}
+                        style={{
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "0.5rem",
+                          border: "1px solid #CBD5E1",
+                          fontSize: "0.82rem",
+                          color: "#1F3652",
+                          outline: "none",
+                          backgroundColor: "#FFFFFF",
+                        }}
+                      >
+                        <option value="ALL">Canal: Todos</option>
+                        <option value="WHATSAPP">WhatsApp</option>
+                        <option value="POSTMARK">Postmark</option>
+                        <option value="PUSH">Web Push</option>
+                      </select>
+
+                      <select
+                        value={scheduledCategoryFilter}
+                        onChange={(e) => setScheduledCategoryFilter(e.target.value)}
+                        style={{
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "0.5rem",
+                          border: "1px solid #CBD5E1",
+                          fontSize: "0.82rem",
+                          color: "#1F3652",
+                          outline: "none",
+                          backgroundColor: "#FFFFFF",
+                        }}
+                      >
+                        <option value="ALL">Categoría: Todas</option>
+                        <option value="COBRANZA">Cobranza & Pagos</option>
+                        <option value="OBRA">Avance de Obra</option>
+                        <option value="VENTAS">Ventas & Cotizaciones</option>
+                        <option value="POSTVENTA">Postventa</option>
+                      </select>
+
+                      <select
+                        value={scheduledStatusFilter}
+                        onChange={(e) => setScheduledStatusFilter(e.target.value)}
+                        style={{
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "0.5rem",
+                          border: "1px solid #CBD5E1",
+                          fontSize: "0.82rem",
+                          color: "#1F3652",
+                          outline: "none",
+                          backgroundColor: "#FFFFFF",
+                        }}
+                      >
+                        <option value="ALL">Estado: Todos</option>
+                        <option value="PROGRAMADA">Programadas</option>
+                        <option value="EN_COLA">En Cola</option>
+                        <option value="PAUSADA">Pausadas</option>
+                        <option value="ENVIADA">Enviadas</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateScheduleModal(true)}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          padding: "0.5rem 1.1rem",
+                          borderRadius: "9999px",
+                          backgroundColor: "#1B3047",
+                          color: "#FFFFFF",
+                          fontSize: "0.8rem",
+                          fontWeight: 700,
+                          border: "none",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Plus size={14} /> Programar Notificación
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Scheduled Table */}
+                  {filteredScheduled.length === 0 ? (
+                    <div style={{ padding: "2.5rem", textAlign: "center", backgroundColor: "#F8FAFC", borderRadius: "0.75rem", border: "1px dashed #CBD5E1", color: "#64748B", fontSize: "0.85rem" }}>
+                      No se encontraron notificaciones programadas con los filtros seleccionados.
+                    </div>
+                  ) : (
+                    <div style={{ borderRadius: "0.75rem", border: "1px solid #E2E8F0", overflow: "hidden" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Fecha / Hora Programada</th>
+                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Evento / Disparador</th>
+                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Canal</th>
+                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Destinatario</th>
+                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Desarrollo & Unidad</th>
+                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Origen Automatización</th>
+                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Estado</th>
+                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredScheduled.map((sch) => (
+                            <tr key={sch.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                              <td style={{ padding: "0.85rem 1rem" }}>
+                                <div style={{ color: "#1F3652", fontWeight: 700 }}>{sch.scheduledForFormatted}</div>
+                                <span style={{ fontSize: "0.7rem", color: "#2563EB", backgroundColor: "#EFF6FF", padding: "0.1rem 0.45rem", borderRadius: "99px", fontWeight: 700, display: "inline-block", marginTop: "2px" }}>
+                                  {sch.relativeTime}
+                                </span>
+                              </td>
+
+                              <td style={{ padding: "0.85rem 1rem" }}>
+                                <strong style={{ color: "#1F3652", display: "block" }}>{sch.triggerName}</strong>
+                                <span style={{ fontSize: "0.7rem", color: "#1D4ED8", backgroundColor: "#EFF6FF", padding: "0.1rem 0.45rem", borderRadius: "99px", fontWeight: 700 }}>
+                                  {sch.category}
+                                </span>
+                              </td>
+
+                              <td style={{ padding: "0.85rem 1rem" }}>
+                                <span
+                                  style={{
+                                    fontSize: "0.72rem",
+                                    fontWeight: 700,
+                                    padding: "0.2rem 0.55rem",
+                                    borderRadius: "99px",
+                                    backgroundColor:
+                                      sch.channel === "WHATSAPP"
+                                        ? "#DCFCE7"
+                                        : sch.channel === "POSTMARK"
+                                        ? "#EFF6FF"
+                                        : "#F3E8FF",
+                                    color:
+                                      sch.channel === "WHATSAPP"
+                                        ? "#166534"
+                                        : sch.channel === "POSTMARK"
+                                        ? "#1D4ED8"
+                                        : "#7E22CE",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.25rem",
+                                  }}
+                                >
+                                  {sch.channel === "WHATSAPP" && <MessageSquare size={12} />}
+                                  {sch.channel === "POSTMARK" && <Mail size={12} />}
+                                  {sch.channel === "PUSH" && <Smartphone size={12} />}
+                                  {sch.channel}
+                                </span>
+                              </td>
+
+                              <td style={{ padding: "0.85rem 1rem" }}>
+                                <div style={{ color: "#1F3652", fontWeight: 700 }}>{sch.recipientName}</div>
+                                <div style={{ fontSize: "0.72rem", color: "#64748B" }}>{sch.recipientContact}</div>
+                                <span style={{ fontSize: "0.68rem", color: "#94A3B8" }}>{sch.recipientRole}</span>
+                              </td>
+
+                              <td style={{ padding: "0.85rem 1rem" }}>
+                                <strong style={{ color: "#1F3652", display: "block" }}>{sch.projectName}</strong>
+                                <span style={{ fontSize: "0.72rem", color: "#64748B" }}>{sch.unitName}</span>
+                              </td>
+
+                              <td style={{ padding: "0.85rem 1rem" }}>
+                                <div style={{ fontSize: "0.76rem", color: "#1F3652", fontWeight: 600 }}>{sch.sourceEvent}</div>
+                                {sch.payloadSummary && (
+                                  <div style={{ fontSize: "0.7rem", color: "#64748B", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {sch.payloadSummary}
+                                  </div>
+                                )}
+                              </td>
+
+                              <td style={{ padding: "0.85rem 1rem" }}>
+                                <span
+                                  style={{
+                                    fontSize: "0.72rem",
+                                    fontWeight: 700,
+                                    padding: "0.15rem 0.55rem",
+                                    borderRadius: "99px",
+                                    backgroundColor:
+                                      sch.status === "PROGRAMADA"
+                                        ? "#EFF6FF"
+                                        : sch.status === "EN_COLA"
+                                        ? "#FEF3C7"
+                                        : sch.status === "ENVIADA"
+                                        ? "#DCFCE7"
+                                        : "#F1F5F9",
+                                    color:
+                                      sch.status === "PROGRAMADA"
+                                        ? "#1D4ED8"
+                                        : sch.status === "EN_COLA"
+                                        ? "#92400E"
+                                        : sch.status === "ENVIADA"
+                                        ? "#166534"
+                                        : "#64748B",
+                                  }}
+                                >
+                                  {sch.status === "PROGRAMADA" && "● Programada"}
+                                  {sch.status === "EN_COLA" && "⏳ En Cola"}
+                                  {sch.status === "PAUSADA" && "⏸ Pausada"}
+                                  {sch.status === "ENVIADA" && "✓ Enviada"}
+                                </span>
+                              </td>
+
+                              <td style={{ padding: "0.85rem 1rem" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                                  {sch.status !== "ENVIADA" && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDispatchScheduledNow(sch)}
+                                        style={{
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "0.25rem",
+                                          padding: "0.3rem 0.65rem",
+                                          borderRadius: "9999px",
+                                          backgroundColor: "#1B3047",
+                                          color: "#FFFFFF",
+                                          fontSize: "0.72rem",
+                                          fontWeight: 700,
+                                          border: "none",
+                                          cursor: "pointer",
+                                        }}
+                                        title="Enviar inmediatamente ahora"
+                                      >
+                                        <Send size={11} /> Enviar Ya
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleTogglePauseScheduled(sch.id)}
+                                        style={{
+                                          background: "none",
+                                          border: "1px solid #CBD5E1",
+                                          borderRadius: "9999px",
+                                          padding: "0.3rem 0.5rem",
+                                          color: "#1F3652",
+                                          cursor: "pointer",
+                                          fontSize: "0.7rem",
+                                          fontWeight: 700,
+                                        }}
+                                        title={sch.status === "PAUSADA" ? "Reanudar" : "Pausar"}
+                                      >
+                                        {sch.status === "PAUSADA" ? <Play size={11} /> : <Pause size={11} />}
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteScheduled(sch.id)}
+                                        style={{
+                                          background: "none",
+                                          border: "none",
+                                          color: "#EF4444",
+                                          cursor: "pointer",
+                                          padding: "4px",
+                                        }}
+                                        title="Cancelar notificación programada"
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
+                                    </>
+                                  )}
+                                  {sch.status === "ENVIADA" && (
+                                    <span style={{ fontSize: "0.72rem", color: "#166534", fontWeight: 700 }}>
+                                      Completado
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
+            )}
 
-              {filteredLogs.length === 0 ? (
-                <div style={{ padding: "2.5rem 1.5rem", textAlign: "center", backgroundColor: "#F8FAFC", borderRadius: "0.6rem", border: "1px dashed #CBD5E1", color: "var(--devio-neutral-3)", fontSize: "0.85rem" }}>
-                  No hay registros de envío recientes. Al disparar una notificación de prueba o registrar un pago en la plataforma se generarán logs automáticos.
+            {/* =================================================================== */}
+            {/* SUBTAB 2: HISTORIAL DE ENVÍOS & LOGS EN TIEMPO REAL                 */}
+            {/* =================================================================== */}
+            {notifSubTab === "logs" && (
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
+                  <div>
+                    <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                      Bitácora de Entregas & Logs ({filteredLogs.length})
+                    </h3>
+                    <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                      Registro histórico de todas las notificaciones entregadas vía Postmark y WhatsApp
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <input
+                      type="text"
+                      placeholder="Buscar destinatario, evento..."
+                      value={logSearchQuery}
+                      onChange={(e) => setLogSearchQuery(e.target.value)}
+                      style={{
+                        padding: "0.55rem 0.85rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #CBD5E1",
+                        fontSize: "0.82rem",
+                        color: "#1F3652",
+                        outline: "none",
+                      }}
+                    />
+                    <select
+                      value={logChannelFilter}
+                      onChange={(e) => setLogChannelFilter(e.target.value)}
+                      style={{
+                        padding: "0.55rem 0.85rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #CBD5E1",
+                        fontSize: "0.82rem",
+                        color: "#1F3652",
+                        outline: "none",
+                      }}
+                    >
+                      <option value="ALL">Todos los Canales</option>
+                      <option value="POSTMARK">Postmark</option>
+                      <option value="WHATSAPP">WhatsApp</option>
+                      <option value="PUSH">Push</option>
+                    </select>
+                  </div>
                 </div>
-              ) : (
-                <div className="table-container">
-                  <table>
+
+                <div style={{ borderRadius: "0.75rem", border: "1px solid #E2E8F0", overflow: "hidden" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem" }}>
                     <thead>
-                      <tr>
-                        <th>Fecha / Hora</th>
-                        <th>Evento</th>
-                        <th>Canal</th>
-                        <th>Destinatario</th>
-                        <th>Desarrolladora</th>
-                        <th>Estado</th>
-                        <th>Acción</th>
+                      <tr style={{ borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Fecha / Hora</th>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Evento</th>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Canal</th>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Destinatario</th>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Desarrolladora</th>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Estado</th>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Detalle</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredLogs.map((log) => (
-                        <tr key={log.id}>
-                          <td style={{ fontSize: "0.75rem", color: "var(--devio-neutral-4)", fontWeight: 600 }}>
-                            {log.timestamp}
+                        <tr key={log.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                          <td style={{ padding: "0.85rem 1rem", color: "#64748B" }}>{log.timestamp}</td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <strong style={{ color: "#1F3652" }}>{log.triggerName}</strong>
                           </td>
-                          <td>
-                            <strong>{log.triggerName}</strong>
-                          </td>
-                          <td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
                             <span
                               style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "0.3rem",
-                                fontSize: "0.72rem",
+                                fontSize: "0.7rem",
                                 fontWeight: 700,
-                                padding: "0.2rem 0.5rem",
-                                borderRadius: "0.4rem",
-                                backgroundColor:
-                                  log.channel === "POSTMARK"
-                                    ? "rgba(255, 107, 0, 0.1)"
-                                    : log.channel === "WHATSAPP"
-                                    ? "rgba(37, 211, 102, 0.1)"
-                                    : "rgba(31, 54, 82, 0.08)",
-                                color:
-                                  log.channel === "POSTMARK"
-                                    ? "#FF6B00"
-                                    : log.channel === "WHATSAPP"
-                                    ? "#25D366"
-                                    : "var(--devio-blue-dark)",
+                                padding: "0.15rem 0.5rem",
+                                borderRadius: "99px",
+                                backgroundColor: log.channel === "POSTMARK" ? "#EFF6FF" : "#DCFCE7",
+                                color: log.channel === "POSTMARK" ? "#1D4ED8" : "#166534",
                               }}
                             >
-                              {log.channel === "POSTMARK" && <Mail size={12} />}
-                              {log.channel === "WHATSAPP" && <MessageSquare size={12} />}
-                              {log.channel === "PUSH" && <Smartphone size={12} />}
                               {log.channel}
                             </span>
                           </td>
-                          <td>
-                            <div style={{ fontWeight: 600 }}>{log.recipientName}</div>
-                            <div style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)" }}>{log.recipient}</div>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <div style={{ color: "#1F3652", fontWeight: 600 }}>{log.recipientName || "Usuario Devio"}</div>
+                            <div style={{ fontSize: "0.72rem", color: "#64748B" }}>{log.recipient}</div>
                           </td>
-                          <td style={{ fontSize: "0.78rem" }}>{log.developerName}</td>
-                          <td>
-                            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                                <span
-                                  className={`badge ${
-                                    log.status === "ENTREGADO"
-                                      ? "badge-success"
-                                      : log.status === "ENVIADO"
-                                      ? "badge-info"
-                                      : log.status === "FALLIDO"
-                                      ? "badge-danger"
-                                      : "badge-warning"
-                                  }`}
-                                  style={{ fontSize: "0.72rem", fontWeight: 700 }}
-                                >
-                                  {log.status === "ENTREGADO"
-                                    ? "✓ ENTREGADO"
+                          <td style={{ padding: "0.85rem 1rem", color: "#64748B" }}>{log.developerName}</td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <span
+                              style={{
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                padding: "0.15rem 0.55rem",
+                                borderRadius: "99px",
+                                backgroundColor:
+                                  log.status === "ENTREGADO" || log.status === "ENVIADO"
+                                    ? "#DCFCE7"
                                     : log.status === "FALLIDO"
-                                    ? "✕ FALLIDO"
-                                    : log.status}
-                                </span>
-                                {log.retryCount > 0 && (
-                                  <span style={{ fontSize: "0.68rem", color: "#64748B", fontWeight: 600 }}>
-                                    ({log.retryCount} reintento{log.retryCount > 1 ? "s" : ""})
-                                  </span>
-                                )}
-                              </div>
-
-                              {log.errorDetails && (
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "flex-start",
-                                    gap: "0.35rem",
-                                    fontSize: "0.72rem",
-                                    color: "#991B1B",
-                                    backgroundColor: "#FEF2F2",
-                                    border: "1px solid #FECACA",
-                                    padding: "0.35rem 0.5rem",
-                                    borderRadius: "0.35rem",
-                                    maxWidth: "280px",
-                                    lineHeight: 1.3,
-                                  }}
-                                  title={log.errorDetails}
-                                >
-                                  <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: "2px", color: "#DC2626" }} />
-                                  <span>{log.errorDetails}</span>
-                                </div>
-                              )}
-
-                              {log.metadata?.messageId && (
-                                <span style={{ fontSize: "0.65rem", color: "#64748B" }}>
-                                  ID: {log.metadata.messageId}
-                                </span>
-                              )}
-                            </div>
+                                    ? "#FEE2E2"
+                                    : "#FEF3C7",
+                                color:
+                                  log.status === "ENTREGADO" || log.status === "ENVIADO"
+                                    ? "#166534"
+                                    : log.status === "FALLIDO"
+                                    ? "#DC2626"
+                                    : "#92400E",
+                              }}
+                            >
+                              {log.status === "ENTREGADO" ? "✓ ENTREGADO" : log.status === "FALLIDO" ? "✕ FALLIDO" : "• EN PROCESO"}
+                            </span>
                           </td>
-                          <td>
-                            {log.status === "FALLIDO" ? (
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            {log.errorDetails ? (
                               <button
                                 type="button"
-                                onClick={() => handleRetryLog(log)}
-                                className="btn btn-outline"
+                                onClick={() => setSelectedLogForDetail(log)}
                                 style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  padding: "0.3rem 0.6rem",
+                                  borderRadius: "9999px",
+                                  border: "1px solid #FCA5A5",
+                                  backgroundColor: "#FEF2F2",
+                                  color: "#DC2626",
                                   fontSize: "0.72rem",
-                                  padding: "0.3rem 0.65rem",
-                                  color: "var(--devio-red)",
-                                  borderColor: "#FCA5A5",
-                                  backgroundColor: "#FFF5F5",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
                                 }}
                               >
-                                <RotateCcw size={12} /> Reintentar
+                                <AlertTriangle size={12} /> Ver Error
                               </button>
                             ) : (
-                              <span style={{ fontSize: "0.75rem", color: "#009E70", fontWeight: 700 }}>
-                                ✓ OK
-                              </span>
+                              <span style={{ fontSize: "0.72rem", color: "#94A3B8" }}>OK (MessageID)</span>
                             )}
                           </td>
                         </tr>
@@ -1598,546 +2483,694 @@ export default function SuperAdminPage() {
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
+              </div>
+            )}
 
-        {/* ========================================================================= */}
-        {/* TAB 3: CATÁLOGO DE PLANES & PRICING SAAS */}
-        {/* ========================================================================= */}
-        {activeTab === "pricing" && (
-          <div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
-              {SAAS_PRICING_TIERS.map((tier) => (
-                <div
-                  key={tier.id}
-                  className="card"
-                  style={{
-                    padding: "1.75rem",
-                    backgroundColor: "#FFFFFF",
-                    position: "relative",
-                    border: tier.isPopular ? "2px solid #00C48C" : "1px solid #E2E8F0",
-                  }}
-                >
-                  {tier.isPopular && (
-                    <span
+            {/* =================================================================== */}
+            {/* SUBTAB 3: CATÁLOGO DE PLANTILLAS & TRIGGERS                         */}
+            {/* =================================================================== */}
+            {notifSubTab === "templates" && (
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
+                  <div>
+                    <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                      Catálogo de Plantillas del Sistema ({templates.length})
+                    </h3>
+                    <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                      Personaliza los aliases de Postmark y nombres de plantilla en WhatsApp
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
                       style={{
-                        position: "absolute",
-                        top: "-12px",
-                        right: "1.5rem",
-                        backgroundColor: "#00C48C",
-                        color: "#FFFFFF",
-                        padding: "0.2rem 0.75rem",
-                        borderRadius: "9999px",
-                        fontSize: "0.7rem",
-                        fontWeight: 800,
-                        textTransform: "uppercase",
+                        padding: "0.55rem 0.85rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #CBD5E1",
+                        fontSize: "0.82rem",
+                        color: "#1F3652",
+                        outline: "none",
+                        backgroundColor: "#FFFFFF",
                       }}
                     >
-                      Más Popular
-                    </span>
-                  )}
-
-                  <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
-                    {tier.name}
-                  </h3>
-                  <p style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)", marginTop: "0.3rem", marginBottom: "1.25rem" }}>
-                    {tier.tagline}
-                  </p>
-
-                  <div style={{ padding: "1rem", backgroundColor: "rgba(31, 54, 82, 0.04)", borderRadius: "0.65rem", marginBottom: "1.25rem" }}>
-                    <div style={{ fontSize: "1.65rem", fontWeight: 800, color: "var(--devio-blue-dark)" }}>
-                      ${tier.pricePerUnit} <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--devio-neutral-3)" }}>MXN / unidad / mes</span>
-                    </div>
-                    <div style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)", marginTop: "0.2rem" }}>
-                      Mínimo {tier.minUnits} unidades gestionadas
-                    </div>
+                      <option value="ALL">Todas las Categorías</option>
+                      <option value="USUARIOS">Usuarios & Auth</option>
+                      <option value="VENTAS">Ventas & Cotizaciones</option>
+                      <option value="COBRANZA">Cobranza & Pagos</option>
+                      <option value="OBRA">Obra & Avance</option>
+                      <option value="PROYECTOS">Comunicados</option>
+                    </select>
                   </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.5rem" }}>
-                    {tier.features.map((feat, idx) => (
-                      <div key={idx} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.78rem", color: "var(--devio-neutral-4)" }}>
-                        <CheckCircle2 size={15} color="#00C48C" />
-                        <span>{feat}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInvitePricePerUnit(tier.pricePerUnit);
-                      setShowInviteModal(true);
-                    }}
-                    className="btn btn-outline"
-                    style={{ width: "100%", fontSize: "0.8125rem", padding: "0.6rem" }}
-                  >
-                    Crear Link con este Plan
-                  </button>
                 </div>
-              ))}
-            </div>
 
-            {/* Generated Custom Invites List */}
-            <div className="card" style={{ padding: "1.75rem", backgroundColor: "#FFFFFF" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-                <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
-                  Links de Invitación con Pricing Personalizado ({invites.length})
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowInviteModal(true)}
-                  className="btn btn-primary"
-                  style={{ fontSize: "0.78rem", padding: "0.45rem 0.9rem" }}
-                >
-                  <Plus size={14} /> Nueva Invitación
-                </button>
-              </div>
-
-              {invites.length === 0 ? (
-                <div style={{ padding: "2rem", textAlign: "center", backgroundColor: "#F8FAFC", borderRadius: "0.6rem", border: "1px dashed #CBD5E1", fontSize: "0.8125rem", color: "var(--devio-neutral-3)" }}>
-                  No hay invitaciones creadas aún. Puedes generar una con el botón de Nueva Invitación.
-                </div>
-              ) : (
-                <div className="table-container">
-                  <table>
+                <div style={{ borderRadius: "0.75rem", border: "1px solid #E2E8F0", overflow: "hidden" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem" }}>
                     <thead>
-                      <tr>
-                        <th>Token / Enlace</th>
-                        <th>Desarrolladora</th>
-                        <th>Correo</th>
-                        <th>Costo / Unidad</th>
-                        <th>Trial</th>
-                        <th>Estado</th>
+                      <tr style={{ borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>ID / Evento</th>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Categoría</th>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Postmark Alias</th>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Asunto Email</th>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>WhatsApp WABA</th>
+                        <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {invites.map((inv) => (
-                        <tr key={inv.id}>
-                          <td>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                              <strong style={{ fontFamily: "monospace" }}>{inv.token}</strong>
+                      {filteredTemplates.map((tpl) => (
+                        <tr key={tpl.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <strong style={{ color: "#1F3652" }}>{tpl.title}</strong>
+                            <div style={{ fontSize: "0.7rem", color: "#94A3B8" }}>Key: {tpl.triggerKey}</div>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#1D4ED8", backgroundColor: "#EFF6FF", padding: "0.15rem 0.5rem", borderRadius: "99px" }}>
+                              {tpl.category}
+                            </span>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <code style={{ fontSize: "0.78rem", backgroundColor: "#F1F5F9", padding: "0.2rem 0.45rem", borderRadius: "4px", color: "#0F172A" }}>
+                              {tpl.postmark.templateAlias}
+                            </code>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", color: "#64748B", maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {tpl.postmark.subject}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <code style={{ fontSize: "0.75rem", color: "#059669" }}>
+                              {tpl.whatsapp.templateName}
+                            </code>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <div style={{ display: "flex", gap: "0.35rem" }}>
                               <button
                                 type="button"
                                 onClick={() => {
-                                  navigator.clipboard.writeText(inv.linkUrl);
-                                  showToast("Enlace Copiado", "URL de registro copiada al portapapeles.");
+                                  setEditingTemplate(tpl);
+                                  setEditPmkAlias(tpl.postmark.templateAlias);
+                                  setEditPmkSubject(tpl.postmark.subject);
+                                  setEditWaTemplate(tpl.whatsapp.templateName);
+                                  setEditPushTitle(tpl.push?.title || "");
+                                  setShowTemplateModal(true);
                                 }}
-                                style={{ background: "none", border: "none", color: "var(--devio-blue)", cursor: "pointer" }}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  padding: "0.35rem 0.65rem",
+                                  borderRadius: "9999px",
+                                  border: "1px solid #CBD5E1",
+                                  backgroundColor: "#FFFFFF",
+                                  color: "#1F3652",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
                               >
-                                <Copy size={13} />
+                                <Edit3 size={12} /> Editar
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTestTemplate(tpl);
+                                  setTestPayloadJson(tpl.samplePayload || "{}");
+                                  setShowLiveTestModal(true);
+                                }}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  padding: "0.35rem 0.65rem",
+                                  borderRadius: "9999px",
+                                  border: "none",
+                                  backgroundColor: "#1B3047",
+                                  color: "#FFFFFF",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <Send size={12} /> Probar
                               </button>
                             </div>
-                          </td>
-                          <td>{inv.developerName}</td>
-                          <td>{inv.developerEmail}</td>
-                          <td>${inv.pricePerUnitMonthly} MXN/u</td>
-                          <td>{inv.freeTrialMonths} meses gratis</td>
-                          <td>
-                            <span
-                              className={`badge ${
-                                inv.status === "ACCEPTED" ? "badge-success" : inv.status === "PENDING" ? "badge-warning" : "badge-danger"
-                              }`}
-                              style={{ fontSize: "0.7rem" }}
-                            >
-                              {inv.status}
-                            </span>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              )}
+              </div>
+            )}
+
+            {/* =================================================================== */}
+            {/* SUBTAB 4: CANALES DE INTEGRACIÓN (POSTMARK, WHATSAPP, PUSH)         */}
+            {/* =================================================================== */}
+            {notifSubTab === "channels" && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.25rem" }}>
+                {/* Postmark Card */}
+                <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <Mail size={18} color="#2F80ED" />
+                      <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>Postmark Email Server</h4>
+                    </div>
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "0.15rem 0.55rem", borderRadius: "99px" }}>
+                      ● Conectado
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: "0.5rem" }}>
+                    Remitente Oficial: <strong>{channelsConfig.postmark.fromEmail}</strong>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: "0.5rem" }}>
+                    Sender Alias: <strong>{channelsConfig.postmark.senderAlias}</strong>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748B" }}>
+                    Plantillas en Postmark: <strong>12 registradas</strong>
+                  </div>
+                </div>
+
+                {/* WhatsApp Card */}
+                <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <MessageSquare size={18} color="#00C48C" />
+                      <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>WhatsApp Cloud API (WABA)</h4>
+                    </div>
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "0.15rem 0.55rem", borderRadius: "99px" }}>
+                      ● Activo
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: "0.5rem" }}>
+                    Número Emisor: <strong>{channelsConfig.whatsapp.fromNumber}</strong>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: "0.5rem" }}>
+                    Cuenta: <strong>{channelsConfig.whatsapp.accountAlias}</strong>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748B" }}>
+                    Plantillas Meta Aprobadas: <strong>8 activas</strong>
+                  </div>
+                </div>
+
+                {/* Web Push Card */}
+                <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <Smartphone size={18} color="#9333EA" />
+                      <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>Web Push Notifications</h4>
+                    </div>
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "0.15rem 0.55rem", borderRadius: "99px" }}>
+                      ● Habilitado
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: "0.5rem" }}>
+                    VAPID Key: <strong>{channelsConfig.push.vapidPublicKey.substring(0, 20)}...</strong>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748B" }}>
+                    App Icon: <strong>{channelsConfig.push.appIconUrl}</strong>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 4: CATÁLOGO DE PLANES & PRICING SAAS                                  */}
+        {/* ========================================================================= */}
+        {activeTab === "pricing" && (
+          <div>
+            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "2rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)", marginBottom: "2rem" }}>
+              <div style={{ textAlign: "center", maxWidth: "600px", margin: "0 auto 2rem auto" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#2F80ED", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  Modelo de Monetización Devio
+                </span>
+                <h2 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652", margin: "0.4rem 0" }}>
+                  SaaS Facturado Estrictamente por Unidad
+                </h2>
+                <p style={{ fontSize: "0.88rem", color: "#64748B" }}>
+                  Sin plazos forzosos ni comisiones por venta. El costo escala automáticamente según el inventario total administrado.
+                </p>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem" }}>
+                {SAAS_PRICING_TIERS.map((tier) => (
+                  <div
+                    key={tier.id}
+                    style={{
+                      border: tier.isPopular ? "2px solid #2F80ED" : "1px solid #E2E8F0",
+                      borderRadius: "1rem",
+                      padding: "1.75rem",
+                      backgroundColor: tier.isPopular ? "rgba(47, 128, 237, 0.02)" : "#FFFFFF",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      position: "relative",
+                    }}
+                  >
+                    {tier.isPopular && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "-12px",
+                          right: "20px",
+                          backgroundColor: "#2F80ED",
+                          color: "#FFFFFF",
+                          fontSize: "0.7rem",
+                          fontWeight: 800,
+                          padding: "0.2rem 0.65rem",
+                          borderRadius: "9999px",
+                        }}
+                      >
+                        RECOMENDADO
+                      </span>
+                    )}
+
+                    <div>
+                      <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "#1F3652", margin: "0 0 0.4rem 0" }}>
+                        {tier.name}
+                      </h3>
+                      <p style={{ fontSize: "0.8rem", color: "#64748B", minHeight: "38px" }}>
+                        {tier.tagline}
+                      </p>
+
+                      <div style={{ margin: "1.25rem 0" }}>
+                        <span style={{ fontSize: "2rem", fontWeight: 800, color: "#1F3652" }}>
+                          ${tier.pricePerUnit}
+                        </span>
+                        <span style={{ fontSize: "0.85rem", color: "#64748B", fontWeight: 600 }}> MXN / unidad / mes</span>
+                      </div>
+
+                      <ul style={{ listStyle: "none", padding: 0, margin: "1.5rem 0", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                        {tier.features.map((f, idx) => (
+                          <li key={idx} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.82rem", color: "#1F3652" }}>
+                            <CheckCircle2 size={16} color="#00C48C" />
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleTabChange("developers");
+                        setShowInviteModal(true);
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "0.65rem",
+                        borderRadius: "9999px",
+                        backgroundColor: tier.isPopular ? "#1B3047" : "#FFFFFF",
+                        color: tier.isPopular ? "#FFFFFF" : "#1F3652",
+                        border: tier.isPopular ? "none" : "1.5px solid #CBD5E1",
+                        fontSize: "0.82rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Crear Invitación con este Plan
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 4: SALUD DEL SISTEMA & BITÁCORA DE AUDITORÍA */}
+        {/* TAB 5: SALUD DEL SISTEMA & AUDITORÍA                                     */}
         {/* ========================================================================= */}
-        {activeTab === "health_logs" && (
+        {activeTab === "health" && (
           <div>
-            {/* System Health Status Badges */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
-              {[
-                { name: "Frontend Next.js (Edge)", status: "OPERACIONAL", ping: "24 ms", icon: <Globe size={18} /> },
-                { name: "Backend API (Node/Express)", status: "OPERACIONAL", ping: "45 ms", icon: <Server size={18} /> },
-                { name: "PostgreSQL Database", status: "OPERACIONAL", ping: "8 ms", icon: <Activity size={18} /> },
-                { name: "Postmark Mail Server", status: "CONECTADO", ping: "62 ms", icon: <Mail size={18} /> },
-                { name: "WhatsApp Cloud API", status: "CONECTADO", ping: "110 ms", icon: <MessageSquare size={18} /> },
-                { name: "S3 Document Vault", status: "OPERACIONAL", ping: "35 ms", icon: <Lock size={18} /> },
-              ].map((serv, idx) => (
-                <div key={idx} className="card" style={{ padding: "1.25rem", backgroundColor: "#FFFFFF" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                    <div style={{ color: "var(--devio-blue)" }}>{serv.icon}</div>
-                    <span className="badge badge-success" style={{ fontSize: "0.68rem" }}>
-                      ● {serv.status}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
-                    {serv.name}
-                  </div>
-                  <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)" }}>Latencia: {serv.ping}</span>
+            {/* ESTADO DE SERVICIOS & CRONS */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem", marginBottom: "2rem" }}>
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.25rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Servidor Web Next.js</span>
+                  <Server size={18} color="#00C48C" />
                 </div>
-              ))}
+                <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#1F3652" }}>
+                  En Línea (99.9%)
+                </div>
+                <span style={{ fontSize: "0.72rem", color: "#166534", fontWeight: 700 }}>Latencia promedio: 34ms</span>
+              </div>
+
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.25rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Cron Cobranza Diaria</span>
+                  <Clock size={18} color="#2F80ED" />
+                </div>
+                <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#1F3652" }}>
+                  08:00 AM (Activo)
+                </div>
+                <span style={{ fontSize: "0.72rem", color: "#64748B" }}>Endpoint: /api/cron/cobranza</span>
+              </div>
+
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.25rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Auditoría de Seguridad</span>
+                  <ShieldAlert size={18} color="#D97706" />
+                </div>
+                <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#1F3652" }}>
+                  {auditLogs.length} Eventos
+                </div>
+                <span style={{ fontSize: "0.72rem", color: "#166534", fontWeight: 700 }}>Sin vulnerabilidades detectadas</span>
+              </div>
             </div>
 
-            {/* Super Admin Audit Trail */}
-            <div className="card" style={{ padding: "1.75rem", backgroundColor: "#FFFFFF" }}>
+            {/* BITÁCORA DE AUDITORÍA DE SEGURIDAD */}
+            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
                 <div>
-                  <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
-                    Bitácora de Auditoría Super Admin (Audit Trail)
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                    Bitácora de Auditoría de Acceso y Operaciones
                   </h3>
-                  <span style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)" }}>
-                    Registro inmutable de acciones realizadas por el Super Admin (acalderoncha@gmail.com).
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                    Registro inmutable de impersonaciones, accesos y cambios en la plataforma
                   </span>
                 </div>
               </div>
 
-              {auditLogs.length === 0 ? (
-                <div style={{ padding: "2rem", textAlign: "center", backgroundColor: "#F8FAFC", borderRadius: "0.6rem", border: "1px dashed #CBD5E1", fontSize: "0.8125rem", color: "var(--devio-neutral-3)" }}>
-                  No hay acciones de auditoría registradas todavía. Las sesiones impersonadas y cambios de pricing se registrarán aquí automáticamente.
-                </div>
-              ) : (
-                <div className="table-container">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Fecha</th>
-                        <th>Super Admin</th>
-                        <th>Acción Ejecutada</th>
-                        <th>Entidad Afectada</th>
-                        <th>Detalles</th>
-                        <th>IP</th>
+              <div style={{ borderRadius: "0.75rem", border: "1px solid #E2E8F0", overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+                      <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Fecha / Hora</th>
+                      <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Acción Ejecutada</th>
+                      <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Super Admin</th>
+                      <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Desarrolladora Afectada</th>
+                      <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Detalles</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLogs.map((log) => (
+                      <tr key={log.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                        <td style={{ padding: "0.85rem 1rem", color: "#64748B" }}>{log.timestamp}</td>
+                        <td style={{ padding: "0.85rem 1rem" }}>
+                          <strong style={{ color: "#1F3652" }}>{log.action}</strong>
+                        </td>
+                        <td style={{ padding: "0.85rem 1rem", color: "#1F3652" }}>{log.superAdminName}</td>
+                        <td style={{ padding: "0.85rem 1rem", color: "#64748B" }}>{log.targetEntity}</td>
+                        <td style={{ padding: "0.85rem 1rem", color: "#64748B" }}>{log.details}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {auditLogs.map((log) => (
-                        <tr key={log.id}>
-                          <td style={{ fontSize: "0.75rem", color: "var(--devio-neutral-4)" }}>{log.timestamp}</td>
-                          <td>
-                            <strong>{log.superAdminName}</strong>
-                          </td>
-                          <td>
-                            <span className="badge badge-info" style={{ fontSize: "0.7rem" }}>
-                              {log.action}
-                            </span>
-                          </td>
-                          <td>{log.targetEntity}</td>
-                          <td style={{ fontSize: "0.78rem", maxWidth: "300px" }}>{log.details}</td>
-                          <td style={{ fontFamily: "monospace", fontSize: "0.72rem" }}>{log.ipAddress}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* MODAL 1: GENERADOR DE LINK DE PAGO (100% POR UNIDAD) */}
+        {/* MODAL 1: GENERADOR DE LINK DE PAGO STRIPE POR UNIDAD                    */}
         {/* ========================================================================= */}
         {showPaymentModal && selectedDevForPayment && (
           <div
             style={{
               position: "fixed",
-              inset: 0,
-              backgroundColor: "rgba(15, 23, 42, 0.6)",
-              backdropFilter: "blur(4px)",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.65)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               zIndex: 99999,
               padding: "1rem",
+              backdropFilter: "blur(4px)",
             }}
-            onClick={() => setShowPaymentModal(false)}
           >
             <div
               style={{
                 backgroundColor: "#FFFFFF",
-                borderRadius: "1rem",
+                borderRadius: "1.25rem",
                 width: "100%",
-                maxWidth: "520px",
-                padding: "1.75rem",
-                boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+                maxWidth: "580px",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                padding: "2rem",
               }}
-              onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
                 <div>
-                  <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
-                    Generar Link de Pago Devio
+                  <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                    Generar Link de Pago SaaS por Unidad
                   </h3>
-                  <span style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)" }}>
-                    {selectedDevForPayment.name}
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                    {selectedDevForPayment.name} • {selectedDevForPayment.legalName}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowPaymentModal(false)}
-                  style={{ background: "none", border: "none", color: "var(--devio-neutral-3)", cursor: "pointer" }}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
-                {/* Scope selector */}
-                <div>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                    Alcance del Cobro
-                  </label>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentScope("DEVELOPER")}
-                      style={{
-                        padding: "0.6rem",
-                        borderRadius: "0.5rem",
-                        fontSize: "0.8rem",
-                        fontWeight: paymentScope === "DEVELOPER" ? 800 : 600,
-                        backgroundColor: paymentScope === "DEVELOPER" ? "var(--devio-blue-dark)" : "#F1F5F9",
-                        color: paymentScope === "DEVELOPER" ? "#FFFFFF" : "var(--devio-neutral-4)",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Desarrolladora Completa
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentScope("PROJECT")}
-                      style={{
-                        padding: "0.6rem",
-                        borderRadius: "0.5rem",
-                        fontSize: "0.8rem",
-                        fontWeight: paymentScope === "PROJECT" ? 800 : 600,
-                        backgroundColor: paymentScope === "PROJECT" ? "var(--devio-blue-dark)" : "#F1F5F9",
-                        color: paymentScope === "PROJECT" ? "#FFFFFF" : "var(--devio-neutral-4)",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Por Proyecto Específico
-                    </button>
-                  </div>
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                  Alcance del Cobro
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentScope("DEVELOPER")}
+                    style={{
+                      padding: "0.75rem",
+                      borderRadius: "0.65rem",
+                      border: paymentScope === "DEVELOPER" ? "2px solid #2F80ED" : "1px solid #E2E8F0",
+                      backgroundColor: paymentScope === "DEVELOPER" ? "rgba(47, 128, 237, 0.05)" : "#FFFFFF",
+                      color: "#1F3652",
+                      fontWeight: 700,
+                      fontSize: "0.82rem",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    Toda la Desarrolladora
+                    <span style={{ display: "block", fontSize: "0.72rem", color: "#64748B", fontWeight: 500, marginTop: "2px" }}>
+                      Todas las unidades ({selectedDevForPayment.projects.reduce((acc, p) => acc + p.totalUnits, 0)} u)
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPaymentScope("PROJECT")}
+                    style={{
+                      padding: "0.75rem",
+                      borderRadius: "0.65rem",
+                      border: paymentScope === "PROJECT" ? "2px solid #2F80ED" : "1px solid #E2E8F0",
+                      backgroundColor: paymentScope === "PROJECT" ? "rgba(47, 128, 237, 0.05)" : "#FFFFFF",
+                      color: "#1F3652",
+                      fontWeight: 700,
+                      fontSize: "0.82rem",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    Proyecto Específico
+                    <span style={{ display: "block", fontSize: "0.72rem", color: "#64748B", fontWeight: 500, marginTop: "2px" }}>
+                      Facturar un desarrollo individual
+                    </span>
+                  </button>
                 </div>
+              </div>
 
-                {/* Project selector if project scope */}
-                {paymentScope === "PROJECT" && (
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Seleccionar Proyecto
-                    </label>
-                    <select
-                      value={selectedProjectId}
-                      onChange={(e) => setSelectedProjectId(e.target.value)}
-                      className="form-input"
-                      style={{ width: "100%", fontSize: "0.85rem" }}
-                    >
-                      {selectedDevForPayment.projects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({p.totalUnits} unidades)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Billing Interval */}
-                <div>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                    Frecuencia de Facturación
+              {paymentScope === "PROJECT" && (
+                <div style={{ marginBottom: "1.25rem" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                    Seleccionar Proyecto
                   </label>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentInterval("MONTHLY")}
-                      style={{
-                        padding: "0.6rem",
-                        borderRadius: "0.5rem",
-                        fontSize: "0.8rem",
-                        fontWeight: paymentInterval === "MONTHLY" ? 800 : 600,
-                        backgroundColor: paymentInterval === "MONTHLY" ? "rgba(0, 196, 140, 0.15)" : "#F1F5F9",
-                        color: paymentInterval === "MONTHLY" ? "#009E70" : "var(--devio-neutral-4)",
-                        border: paymentInterval === "MONTHLY" ? "1.5px solid #00C48C" : "1.5px solid transparent",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Mensual Recurrente
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentInterval("ANNUAL")}
-                      style={{
-                        padding: "0.6rem",
-                        borderRadius: "0.5rem",
-                        fontSize: "0.8rem",
-                        fontWeight: paymentInterval === "ANNUAL" ? 800 : 600,
-                        backgroundColor: paymentInterval === "ANNUAL" ? "rgba(0, 196, 140, 0.15)" : "#F1F5F9",
-                        color: paymentInterval === "ANNUAL" ? "#009E70" : "var(--devio-neutral-4)",
-                        border: paymentInterval === "ANNUAL" ? "1.5px solid #00C48C" : "1.5px solid transparent",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Anual (10% Descuento)
-                    </button>
-                  </div>
+                  <select
+                    value={selectedProjectId}
+                    onChange={(e) => setSelectedProjectId(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.85rem",
+                      color: "#1F3652",
+                      outline: "none",
+                      backgroundColor: "#FFFFFF",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    {selectedDevForPayment.projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.totalUnits} unidades) - Costo: {formatMoney(p.totalUnits * (selectedDevForPayment.pricePerUnitMonthly || 180))}/mes
+                      </option>
+                    ))}
+                  </select>
                 </div>
+              )}
 
-                {/* Calculation Summary Box (Purely per-unit pricing) */}
-                <div
+              {/* Link generado */}
+              <div style={{ backgroundColor: "#F8FAFC", borderRadius: "0.75rem", border: "1px solid #E2E8F0", padding: "1rem", marginBottom: "1.5rem" }}>
+                <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 700, textTransform: "uppercase" }}>
+                  Enlace Directo de Cobro Stripe
+                </span>
+                <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.4rem" }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={calculatedPaymentUrl}
+                    style={{
+                      flex: 1,
+                      padding: "0.55rem 0.75rem",
+                      borderRadius: "0.45rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.78rem",
+                      backgroundColor: "#FFFFFF",
+                      color: "#1F3652",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(calculatedPaymentUrl);
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                      showToast("Link Copiado", "El enlace se copió al portapapeles.", "success");
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.3rem",
+                      padding: "0.55rem 1rem",
+                      borderRadius: "9999px",
+                      backgroundColor: "#1B3047",
+                      color: "#FFFFFF",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {copiedLink ? <Check size={14} /> : <Copy size={14} />} {copiedLink ? "Copiado" : "Copiar"}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowPaymentModal(false)}
                   style={{
-                    backgroundColor: "var(--devio-blue-dark)",
-                    borderRadius: "0.75rem",
-                    padding: "1.1rem 1.25rem",
-                    color: "#FFFFFF",
+                    padding: "0.65rem 1.5rem",
+                    borderRadius: "9999px",
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    color: "#64748B",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.7)", textTransform: "uppercase", fontWeight: 700 }}>
-                      Total ({paymentInterval === "ANNUAL" ? "Anual con 10% desc." : "Mensual"})
-                    </span>
-                    <span className="badge badge-success" style={{ fontSize: "0.68rem" }}>
-                      Stripe Checkout
-                    </span>
-                  </div>
-                  <div style={{ fontSize: "1.65rem", fontWeight: 800, marginTop: "0.3rem" }}>
-                    {formatMoney(calculatedPaymentInfo.amount)}
-                  </div>
-                  <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.8)", marginTop: "0.25rem" }}>
-                    {calculatedPaymentInfo.units} unidades gestionadas * ${selectedDevForPayment.pricePerUnitMonthly || 180} MXN/unidad
-                  </div>
-                </div>
-
-                {/* Generated URL Box */}
-                <div>
-                  <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                    Enlace Directo de Pago
-                  </label>
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <input
-                      type="text"
-                      readOnly
-                      value={calculatedPaymentInfo.url}
-                      className="form-input"
-                      style={{ fontSize: "0.78rem", backgroundColor: "#F8FAFC", fontFamily: "monospace", flex: 1 }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(calculatedPaymentInfo.url);
-                        setCopiedLink(true);
-                        showToast("Enlace Copiado", "URL de pago copiada al portapapeles.");
-                        setTimeout(() => setCopiedLink(false), 2000);
-                      }}
-                      className="btn btn-primary"
-                      style={{ fontSize: "0.8rem", padding: "0.5rem 0.9rem" }}
-                    >
-                      {copiedLink ? <Check size={15} /> : <Copy size={15} />}
-                      {copiedLink ? "Copiado" : "Copiar"}
-                    </button>
-                  </div>
-                </div>
+                  Cerrar
+                </button>
               </div>
             </div>
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* MODAL 2: INSPECCIÓN Y AUDITORÍA DE PERMISOS DE USUARIO */}
+        {/* MODAL 2: PERMISOS DE USUARIO                                             */}
         {/* ========================================================================= */}
         {showPermissionsModal && inspectedUser && (
           <div
             style={{
               position: "fixed",
-              inset: 0,
-              backgroundColor: "rgba(15, 23, 42, 0.6)",
-              backdropFilter: "blur(4px)",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.65)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               zIndex: 99999,
               padding: "1rem",
+              backdropFilter: "blur(4px)",
             }}
-            onClick={() => setShowPermissionsModal(false)}
           >
             <div
               style={{
                 backgroundColor: "#FFFFFF",
-                borderRadius: "1rem",
+                borderRadius: "1.25rem",
                 width: "100%",
-                maxWidth: "720px",
-                maxHeight: "88vh",
-                display: "flex",
-                flexDirection: "column",
-                boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+                maxWidth: "640px",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                padding: "2rem",
               }}
-              onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ padding: "1.5rem", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
                 <div>
-                  <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
-                    Matriz de Permisos: {inspectedUser.name}
+                  <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                    Matriz de Permisos del Usuario
                   </h3>
-                  <span style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)" }}>
-                    Rol: <strong>{inspectedUser.role}</strong> • Desarrolladora: <strong>{inspectedUser.developerName}</strong>
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                    {inspectedUser.name} ({inspectedUser.email}) • Rol: <strong>{inspectedUser.role}</strong>
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowPermissionsModal(false)}
-                  style={{ background: "none", border: "none", color: "var(--devio-neutral-3)", cursor: "pointer" }}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              {/* Matrix Content */}
-              <div style={{ padding: "1.5rem", overflowY: "auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxHeight: "55vh", overflowY: "auto", paddingRight: "0.5rem" }}>
                 {PERMISSIONS_CATALOG.map((cat) => {
-                  const rolePermMap = getRolePermissionsMap(inspectedUser.role as any);
-
+                  const rolePerms = getRolePermissionsMap((inspectedUser.role as UserRole) || "Asesor de Ventas");
                   return (
-                    <div
-                      key={cat.id}
-                      style={{
-                        padding: "0.9rem",
-                        borderRadius: "0.65rem",
-                        border: "1px solid #E2E8F0",
-                        backgroundColor: "#F8FAFC",
-                      }}
-                    >
-                      <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.4rem" }}>
+                    <div key={cat.id}>
+                      <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "#2F80ED", textTransform: "uppercase", marginBottom: "0.4rem" }}>
                         {cat.name}
                       </div>
-
-                      <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
                         {cat.permissions.map((perm) => {
-                          const hasAccess = inspectedUser.role === "Super Admin" || Boolean(rolePermMap[perm.key]);
-
+                          const isGranted = Boolean(rolePerms[perm.key]);
                           return (
                             <div
                               key={perm.key}
                               style={{
                                 display: "flex",
+                                justifyContent: "space-between",
                                 alignItems: "center",
-                                gap: "0.45rem",
-                                fontSize: "0.75rem",
-                                color: hasAccess ? "var(--devio-blue-dark)" : "#94A3B8",
+                                padding: "0.6rem 0.85rem",
+                                borderRadius: "0.5rem",
+                                backgroundColor: isGranted ? "rgba(0, 196, 140, 0.04)" : "#F8FAFC",
+                                border: isGranted ? "1px solid #A7F3D0" : "1px solid #E2E8F0",
                               }}
                             >
-                              {hasAccess ? (
-                                <Check size={14} color="#00C48C" style={{ flexShrink: 0 }} />
-                              ) : (
-                                <X size={14} color="#CBD5E1" style={{ flexShrink: 0 }} />
-                              )}
-                              <span style={{ fontWeight: hasAccess ? 700 : 500 }}>{perm.label}</span>
+                              <div>
+                                <strong style={{ fontSize: "0.82rem", color: "#1F3652", display: "block" }}>{perm.label}</strong>
+                                <span style={{ fontSize: "0.72rem", color: "#64748B" }}>{perm.description}</span>
+                              </div>
+
+                              <span
+                                style={{
+                                  fontSize: "0.72rem",
+                                  fontWeight: 700,
+                                  padding: "0.2rem 0.6rem",
+                                  borderRadius: "99px",
+                                  backgroundColor: isGranted ? "#DCFCE7" : "#F1F5F9",
+                                  color: isGranted ? "#166534" : "#94A3B8",
+                                }}
+                              >
+                                {isGranted ? "✓ Concedido" : "✕ Denegado"}
+                              </span>
                             </div>
                           );
                         })}
@@ -2147,14 +3180,22 @@ export default function SuperAdminPage() {
                 })}
               </div>
 
-              <div style={{ padding: "1rem 1.5rem", borderTop: "1px solid #E2E8F0", display: "flex", justifyContent: "flex-end" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1.5rem" }}>
                 <button
                   type="button"
                   onClick={() => setShowPermissionsModal(false)}
-                  className="btn btn-primary"
-                  style={{ fontSize: "0.8rem", padding: "0.5rem 1.25rem" }}
+                  style={{
+                    padding: "0.65rem 1.5rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "#1B3047",
+                    color: "#FFFFFF",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
                 >
-                  Cerrar Auditoría
+                  Cerrar
                 </button>
               </div>
             </div>
@@ -2162,316 +3203,1073 @@ export default function SuperAdminPage() {
         )}
 
         {/* ========================================================================= */}
-        {/* MODAL 3: EDITAR PLANTILLA / ALIAS DE NOTIFICACIÓN */}
+        {/* MODAL 3: EDITAR PLANTILLA & ALIAS DE NOTIFICACIÓN                        */}
         {/* ========================================================================= */}
         {showTemplateModal && editingTemplate && (
           <div
             style={{
               position: "fixed",
-              inset: 0,
-              backgroundColor: "rgba(15, 23, 42, 0.6)",
-              backdropFilter: "blur(4px)",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.65)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               zIndex: 99999,
               padding: "1rem",
+              backdropFilter: "blur(4px)",
             }}
-            onClick={() => setShowTemplateModal(false)}
           >
             <div
               style={{
                 backgroundColor: "#FFFFFF",
-                borderRadius: "1rem",
+                borderRadius: "1.25rem",
                 width: "100%",
-                maxWidth: "520px",
-                padding: "1.75rem",
-                boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+                maxWidth: "560px",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                padding: "2rem",
               }}
-              onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
                 <div>
-                  <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
+                  <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
                     Alias & Plantilla: {editingTemplate.title}
                   </h3>
-                  <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)" }}>
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
                     Personaliza los nombres de plantilla en Postmark y WhatsApp
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowTemplateModal(false)}
-                  style={{ background: "none", border: "none", color: "var(--devio-neutral-3)", cursor: "pointer" }}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleUpdateTemplate({
-                    ...editingTemplate,
-                    postmark: {
-                      ...editingTemplate.postmark,
-                      templateAlias: editPmkAlias.trim(),
-                      subject: editPmkSubject.trim(),
-                    },
-                    whatsapp: {
-                      ...editingTemplate.whatsapp,
-                      templateName: editWaTemplate.trim(),
-                    },
-                    push: {
-                      ...editingTemplate.push,
-                      title: editPushTitle.trim(),
-                    },
-                  });
-                  setShowTemplateModal(false);
-                }}
-                style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-              >
-                <div>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                    Postmark Template Alias
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editPmkAlias}
-                    onChange={(e) => setEditPmkAlias(e.target.value)}
-                    className="form-input"
-                    style={{ width: "100%", fontSize: "0.82rem" }}
-                  />
-                </div>
+              <div style={{ marginBottom: "1.2rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                  Postmark Template Alias
+                </label>
+                <input
+                  type="text"
+                  value={editPmkAlias}
+                  onChange={(e) => setEditPmkAlias(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.85rem",
+                    color: "#1F3652",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
 
-                <div>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                    Postmark Email Subject
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editPmkSubject}
-                    onChange={(e) => setEditPmkSubject(e.target.value)}
-                    className="form-input"
-                    style={{ width: "100%", fontSize: "0.82rem" }}
-                  />
-                </div>
+              <div style={{ marginBottom: "1.2rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                  Postmark Email Subject
+                </label>
+                <input
+                  type="text"
+                  value={editPmkSubject}
+                  onChange={(e) => setEditPmkSubject(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.85rem",
+                    color: "#1F3652",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
 
-                <div>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                    WhatsApp WABA Template Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editWaTemplate}
-                    onChange={(e) => setEditWaTemplate(e.target.value)}
-                    className="form-input"
-                    style={{ width: "100%", fontSize: "0.82rem" }}
-                  />
-                </div>
+              <div style={{ marginBottom: "1.2rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                  WhatsApp WABA Template Name
+                </label>
+                <input
+                  type="text"
+                  value={editWaTemplate}
+                  onChange={(e) => setEditWaTemplate(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.85rem",
+                    color: "#1F3652",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
 
-                <div>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                    Push Notification Title
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editPushTitle}
-                    onChange={(e) => setEditPushTitle(e.target.value)}
-                    className="form-input"
-                    style={{ width: "100%", fontSize: "0.82rem" }}
-                  />
-                </div>
+              <div style={{ marginBottom: "1.5rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                  Push Notification Title
+                </label>
+                <input
+                  type="text"
+                  value={editPushTitle}
+                  onChange={(e) => setEditPushTitle(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.85rem",
+                    color: "#1F3652",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
 
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowTemplateModal(false)}
-                    className="btn btn-outline"
-                    style={{ fontSize: "0.8rem", padding: "0.45rem 0.9rem" }}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    style={{ fontSize: "0.8rem", padding: "0.45rem 1rem" }}
-                  >
-                    Guardar Alias
-                  </button>
-                </div>
-              </form>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowTemplateModal(false)}
+                  style={{
+                    padding: "0.65rem 1.4rem",
+                    borderRadius: "9999px",
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    color: "#64748B",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveTemplate}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.65rem 1.75rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "#1B3047",
+                    color: "#FFFFFF",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  Guardar Alias
+                </button>
+              </div>
             </div>
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* MODAL 4: NUEVA INVITACIÓN CON PRICING POR UNIDAD */}
+        {/* MODAL 4: CREAR INVITACIÓN CON TARIFA PERSONALIZADA                      */}
         {/* ========================================================================= */}
         {showInviteModal && (
           <div
             style={{
               position: "fixed",
-              inset: 0,
-              backgroundColor: "rgba(15, 23, 42, 0.6)",
-              backdropFilter: "blur(4px)",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.65)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               zIndex: 99999,
               padding: "1rem",
+              backdropFilter: "blur(4px)",
             }}
-            onClick={() => setShowInviteModal(false)}
           >
             <div
               style={{
                 backgroundColor: "#FFFFFF",
-                borderRadius: "1rem",
+                borderRadius: "1.25rem",
                 width: "100%",
-                maxWidth: "480px",
-                padding: "1.75rem",
-                boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+                maxWidth: "540px",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                padding: "2rem",
               }}
-              onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-                <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
-                  Generar Invitación con Pricing por Unidad
-                </h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                    Crear Enlace de Invitación SaaS
+                  </h3>
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                    Genera un enlace de registro con tarifa preferencial por unidad
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowInviteModal(false)}
-                  style={{ background: "none", border: "none", color: "var(--devio-neutral-3)", cursor: "pointer" }}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!inviteDevName.trim() || !inviteEmail.trim()) return;
+              <div style={{ marginBottom: "1.2rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                  Nombre de la Desarrolladora *
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Inmobiliaria del Norte"
+                  value={inviteDevName}
+                  onChange={(e) => setInviteDevName(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.85rem",
+                    color: "#1F3652",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
 
-                  const token = `DEVIO-INV-${Math.floor(1000 + Math.random() * 9000)}`;
-                  const newInv: CustomPricingInvite = {
-                    id: `inv-${Date.now()}`,
-                    token,
-                    developerName: inviteDevName.trim(),
-                    developerEmail: inviteEmail.trim(),
-                    pricePerUnitMonthly: Number(invitePricePerUnit) || 180,
-                    discountPercentage: Number(inviteDiscount) || 0,
-                    freeTrialMonths: Number(inviteTrialMonths) || 1,
-                    status: "PENDING",
-                    expiresAt: inviteExpiresAt,
-                    createdAt: new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }),
-                    linkUrl: `https://devio.mx/register?invite=${token}`,
-                  };
+              <div style={{ marginBottom: "1.2rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                  Correo del Contacto Principal *
+                </label>
+                <input
+                  type="email"
+                  placeholder="contacto@desarrolladora.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.85rem",
+                    color: "#1F3652",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
 
-                  setInvites([newInv, ...invites]);
-                  showToast("Invitación Creada", `Enlace de registro generado para ${newInv.developerName}.`);
-                  setShowInviteModal(false);
-                  setInviteDevName("");
-                  setInviteEmail("");
-                }}
-                style={{ display: "flex", flexDirection: "column", gap: "0.95rem" }}
-              >
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.2rem" }}>
                 <div>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                    Nombre de la Desarrolladora *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej. Inmobiliaria del Norte"
-                    value={inviteDevName}
-                    onChange={(e) => setInviteDevName(e.target.value)}
-                    className="form-input"
-                    style={{ width: "100%", fontSize: "0.82rem" }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                    Correo del Contacto Principal *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="director@desarrollos.mx"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    className="form-input"
-                    style={{ width: "100%", fontSize: "0.82rem" }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                    Costo por Unidad ($ MXN / unidad / mes)
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                    Tarifa por Unidad (MXN)
                   </label>
                   <input
                     type="number"
                     value={invitePricePerUnit}
                     onChange={(e) => setInvitePricePerUnit(Number(e.target.value))}
-                    className="form-input"
-                    style={{ width: "100%", fontSize: "0.82rem" }}
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.85rem",
+                      color: "#1F3652",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
                   />
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                    Descuento Promocional (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={inviteDiscount}
+                    onChange={(e) => setInviteDiscount(Number(e.target.value))}
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.85rem",
+                      color: "#1F3652",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowInviteModal(false)}
+                  style={{
+                    padding: "0.65rem 1.4rem",
+                    borderRadius: "9999px",
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    color: "#64748B",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!inviteDevName.trim() || !inviteEmail.trim()) {
+                      showToast("Campos Requeridos", "Por favor llena el nombre y correo de la desarrolladora.", "warning");
+                      return;
+                    }
+                    const newInv: CustomPricingInvite = {
+                      id: `inv-${Date.now()}`,
+                      token: `tok_${Date.now()}`,
+                      developerName: inviteDevName.trim(),
+                      developerEmail: inviteEmail.trim(),
+                      pricePerUnitMonthly: invitePricePerUnit,
+                      freeTrialMonths: inviteTrialMonths,
+                      discountPercentage: inviteDiscount,
+                      expiresAt: inviteExpiresAt,
+                      status: "PENDING",
+                      createdAt: new Date().toISOString().split("T")[0] || new Date().toISOString(),
+                      linkUrl: `https://devio.lat/registro?invite=${Date.now()}&dev=${encodeURIComponent(inviteDevName)}&ppu=${invitePricePerUnit}`,
+                    };
+                    setInvites([newInv, ...invites]);
+                    setShowInviteModal(false);
+                    setInviteDevName("");
+                    setInviteEmail("");
+                    showToast("Invitación Creada", `Se generó el enlace para ${newInv.developerName}.`, "success");
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.65rem 1.75rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "#1B3047",
+                    color: "#FFFFFF",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Plus size={16} /> Generar Enlace
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* MODAL 5: PROBAR ENVÍO DE NOTIFICACIÓN EN VIVO                             */}
+        {/* ========================================================================= */}
+        {showLiveTestModal && testTemplate && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.65)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 99999,
+              padding: "1rem",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "1.25rem",
+                width: "100%",
+                maxWidth: "580px",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                padding: "2rem",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                    Probar Notificación en Vivo
+                  </h3>
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                    Plantilla: <strong>{testTemplate.title}</strong> (Alias: <code>{testTemplate.postmark.templateAlias}</code>)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLiveTestModal(false)}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={{ marginBottom: "1.2rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                  Correo Destinatario de Prueba
+                </label>
+                <input
+                  type="email"
+                  value={testEmail}
+                  onChange={(e) => setTestEmail(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.85rem",
+                    color: "#1F3652",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "1.5rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                  Variables de Prueba (JSON TemplateModel)
+                </label>
+                <textarea
+                  rows={5}
+                  value={testPayloadJson}
+                  onChange={(e) => setTestPayloadJson(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.85rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.82rem",
+                    fontFamily: "monospace",
+                    color: "#1F3652",
+                    outline: "none",
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowLiveTestModal(false)}
+                  style={{
+                    padding: "0.65rem 1.4rem",
+                    borderRadius: "9999px",
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    color: "#64748B",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isSendingTest}
+                  onClick={handleExecuteLiveTest}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.45rem",
+                    padding: "0.65rem 1.75rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "#1B3047",
+                    color: "#FFFFFF",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: isSendingTest ? "not-allowed" : "pointer",
+                    opacity: isSendingTest ? 0.7 : 1,
+                  }}
+                >
+                  <Send size={15} /> {isSendingTest ? "Enviando..." : "Enviar Correo de Prueba"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* MODAL 6: DETALLE DE ERROR DE LOG                                         */}
+        {/* ========================================================================= */}
+        {selectedLogForDetail && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.65)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 99999,
+              padding: "1rem",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "1.25rem",
+                width: "100%",
+                maxWidth: "540px",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                padding: "2rem",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#DC2626", margin: 0 }}>
+                    Detalle de Falla en Entrega
+                  </h3>
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                    {selectedLogForDetail.triggerName} • {selectedLogForDetail.timestamp}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLogForDetail(null)}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={{ backgroundColor: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: "0.75rem", padding: "1.25rem", marginBottom: "1.5rem" }}>
+                <span style={{ fontSize: "0.72rem", color: "#991B1B", fontWeight: 700, textTransform: "uppercase" }}>
+                  Respuesta del Proveedor (Postmark / API)
+                </span>
+                <p style={{ fontSize: "0.88rem", color: "#7F1D1D", fontWeight: 600, margin: "0.5rem 0 0 0", wordBreak: "break-word" }}>
+                  {selectedLogForDetail.errorDetails || "Error desconocido al procesar la entrega."}
+                </p>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", fontSize: "0.8rem", color: "#1F3652", marginBottom: "1.5rem" }}>
+                <div>
+                  <span style={{ color: "#64748B", display: "block" }}>Destinatario:</span>
+                  <strong>{selectedLogForDetail.recipient}</strong>
+                </div>
+                <div>
+                  <span style={{ color: "#64748B", display: "block" }}>Desarrolladora:</span>
+                  <strong>{selectedLogForDetail.developerName}</strong>
+                </div>
+                <div>
+                  <span style={{ color: "#64748B", display: "block" }}>Canal:</span>
+                  <strong>{selectedLogForDetail.channel}</strong>
+                </div>
+                <div>
+                  <span style={{ color: "#64748B", display: "block" }}>Template Alias:</span>
+                  <code>{selectedLogForDetail.metadata?.templateAlias || "N/A"}</code>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLogForDetail(null)}
+                  style={{
+                    padding: "0.65rem 1.5rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "#1B3047",
+                    color: "#FFFFFF",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* MODAL 7: EDITAR TARIFA DE COBRO POR UNIDAD (DESARROLLADORA O PROYECTO)   */}
+        {/* ========================================================================= */}
+        {showPriceModal && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.65)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 99999,
+              padding: "1rem",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "1.25rem",
+                width: "100%",
+                maxWidth: "480px",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                padding: "2rem",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                    {priceEditScope === "PROJECT" ? "Tarifa de Cobro por Proyecto" : "Tarifa de Cobro Desarrolladora"}
+                  </h3>
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                    Configurar costo unitario mensual ($/u/mes)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPriceModal(false)}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "0.75rem", padding: "1rem", marginBottom: "1.25rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <span style={{ fontSize: "0.75rem", color: "#64748B", fontWeight: 700, textTransform: "uppercase" }}>
+                    {priceEditScope === "PROJECT" ? "Proyecto Seleccionado" : "Desarrolladora"}
+                  </span>
+                  <span style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem", borderRadius: "9999px", backgroundColor: "#EFF6FF", color: "#2F80ED", fontWeight: 700 }}>
+                    {priceEditUnitsCount} {priceEditUnitsCount === 1 ? "Unidad" : "Unidades"}
+                  </span>
+                </div>
+                <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                  {priceEditTargetName}
+                </h4>
+              </div>
+
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#475569", marginBottom: "0.4rem" }}>
+                  Precio Mensual por Unidad (MXN / u / mes)
+                </label>
+                <div style={{ position: "relative" }}>
+                  <span style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", color: "#64748B", fontWeight: 700, fontSize: "0.9rem" }}>
+                    $
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={priceEditValue}
+                    onChange={(e) => setPriceEditValue(Math.max(1, Number(e.target.value)))}
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem 0.65rem 2rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.95rem",
+                      fontWeight: 700,
+                      color: "#1F3652",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <span style={{ position: "absolute", right: "0.85rem", top: "50%", transform: "translateY(-50%)", color: "#94A3B8", fontSize: "0.75rem", fontWeight: 600 }}>
+                    MXN
+                  </span>
+                </div>
+              </div>
+
+              {/* Projected Revenue Calculation Box */}
+              <div style={{ backgroundColor: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: "0.75rem", padding: "1rem", marginBottom: "1.5rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                      Meses de Prueba Gratis
+                    <span style={{ fontSize: "0.72rem", color: "#166534", fontWeight: 700, textTransform: "uppercase" }}>
+                      Cobro Mensual Estimado
+                    </span>
+                    <p style={{ fontSize: "0.75rem", color: "#15803D", margin: "0.2rem 0 0 0" }}>
+                      {priceEditUnitsCount} unidades × ${priceEditValue.toLocaleString("es-MX")} MXN
+                    </p>
+                  </div>
+                  <span style={{ fontSize: "1.15rem", fontWeight: 900, color: "#15803D" }}>
+                    ${(priceEditUnitsCount * priceEditValue).toLocaleString("es-MX")} <span style={{ fontSize: "0.7rem", fontWeight: 600 }}>MXN/mes</span>
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowPriceModal(false)}
+                  style={{
+                    padding: "0.65rem 1.25rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "#F1F5F9",
+                    color: "#475569",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSavePrice}
+                  style={{
+                    padding: "0.65rem 1.5rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "#1B3047",
+                    color: "#FFFFFF",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  Guardar Tarifa
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* MODAL 8: PROGRAMAR NOTIFICACIÓN MANUAL                                    */}
+        {/* ========================================================================= */}
+        {showCreateScheduleModal && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.65)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 99999,
+              padding: "1rem",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "1.25rem",
+                width: "100%",
+                maxWidth: "560px",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                padding: "2rem",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                    Programar Notificación Manual
+                  </h3>
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                    Encolar automatización o recordatorio para una fecha/hora específica
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateScheduleModal(false)}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1.5rem" }}>
+                {/* Trigger Template */}
+                <div>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
+                    Tipo de Notificación / Evento
+                  </label>
+                  <select
+                    value={newScheduleTriggerKey}
+                    onChange={(e) => setNewScheduleTriggerKey(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.85rem",
+                      color: "#1F3652",
+                      backgroundColor: "#FFFFFF",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    {templates.map((tpl) => (
+                      <option key={tpl.id} value={tpl.triggerKey}>
+                        {tpl.title} ({tpl.triggerKey})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Channel & Schedule Date/Time */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
+                      Canal
                     </label>
                     <select
-                      value={inviteTrialMonths}
-                      onChange={(e) => setInviteTrialMonths(Number(e.target.value))}
-                      className="form-input"
-                      style={{ width: "100%", fontSize: "0.82rem" }}
+                      value={newScheduleChannel}
+                      onChange={(e) => setNewScheduleChannel(e.target.value as any)}
+                      style={{
+                        width: "100%",
+                        padding: "0.65rem 0.85rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #CBD5E1",
+                        fontSize: "0.85rem",
+                        color: "#1F3652",
+                        backgroundColor: "#FFFFFF",
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
                     >
-                      <option value={0}>Sin periodo gratis</option>
-                      <option value={1}>1 Mes Gratis</option>
-                      <option value={2}>2 Meses Gratis</option>
-                      <option value={3}>3 Meses Gratis</option>
+                      <option value="POSTMARK">Email (Postmark)</option>
+                      <option value="WHATSAPP">WhatsApp</option>
+                      <option value="PUSH">Push</option>
                     </select>
                   </div>
 
                   <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                      Descuento Adicional (%)
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
+                      Fecha de Envío
                     </label>
                     <input
-                      type="number"
-                      value={inviteDiscount}
-                      onChange={(e) => setInviteDiscount(Number(e.target.value))}
-                      className="form-input"
-                      style={{ width: "100%", fontSize: "0.82rem" }}
+                      type="date"
+                      value={newScheduleDate}
+                      onChange={(e) => setNewScheduleDate(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.65rem 0.85rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #CBD5E1",
+                        fontSize: "0.85rem",
+                        color: "#1F3652",
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
+                      Hora de Envío
+                    </label>
+                    <input
+                      type="time"
+                      value={newScheduleTime}
+                      onChange={(e) => setNewScheduleTime(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.65rem 0.85rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #CBD5E1",
+                        fontSize: "0.85rem",
+                        color: "#1F3652",
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
                     />
                   </div>
                 </div>
 
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowInviteModal(false)}
-                    className="btn btn-outline"
-                    style={{ fontSize: "0.8rem", padding: "0.45rem 0.9rem" }}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    style={{ fontSize: "0.8rem", padding: "0.45rem 1rem" }}
-                  >
-                    Generar Enlace
-                  </button>
+                {/* Recipient Details */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
+                      Nombre del Destinatario *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Sofía Garza"
+                      value={newScheduleRecipientName}
+                      onChange={(e) => setNewScheduleRecipientName(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.65rem 0.85rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #CBD5E1",
+                        fontSize: "0.85rem",
+                        color: "#1F3652",
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
+                      Contacto (Email o WhatsApp) *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="correo@ejemplo.com o +5281..."
+                      value={newScheduleRecipientContact}
+                      onChange={(e) => setNewScheduleRecipientContact(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.65rem 0.85rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #CBD5E1",
+                        fontSize: "0.85rem",
+                        color: "#1F3652",
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
                 </div>
-              </form>
+
+                {/* Project and Unit */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
+                      Proyecto
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Torre Lúmina"
+                      value={newScheduleProject}
+                      onChange={(e) => setNewScheduleProject(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.65rem 0.85rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #CBD5E1",
+                        fontSize: "0.85rem",
+                        color: "#1F3652",
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
+                      Unidad / Lote
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Depto 402"
+                      value={newScheduleUnit}
+                      onChange={(e) => setNewScheduleUnit(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.65rem 0.85rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #CBD5E1",
+                        fontSize: "0.85rem",
+                        color: "#1F3652",
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Payload Summary */}
+                <div>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
+                    Resumen o Mensaje de Contexto
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Recordatorio de pago mensualidad #4 ($18,500 MXN)"
+                    value={newSchedulePayloadSummary}
+                    onChange={(e) => setNewSchedulePayloadSummary(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.85rem",
+                      color: "#1F3652",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateScheduleModal(false)}
+                  style={{
+                    padding: "0.65rem 1.25rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "#F1F5F9",
+                    color: "#475569",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateScheduledNotification}
+                  style={{
+                    padding: "0.65rem 1.5rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "#1B3047",
+                    color: "#FFFFFF",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  Programar Notificación
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -2481,6 +4279,29 @@ export default function SuperAdminPage() {
   );
 }
 
-function ttplCheckedColor(enabled: boolean) {
-  return enabled ? "#009E70" : "#94A3B8";
+export default function SuperAdminPage() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#F8FAFC",
+            color: "#64748B",
+            fontWeight: 600,
+            fontSize: "0.9rem",
+          }}
+        >
+          Cargando consola Super Admin...
+        </div>
+      }
+    >
+      <SuperAdminContent />
+    </Suspense>
+  );
 }
+
+

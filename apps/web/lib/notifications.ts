@@ -2,9 +2,11 @@ import {
   NotificationChannelConfig,
   NotificationDeliveryLog,
   NotificationTemplate,
+  ScheduledNotification,
   INITIAL_NOTIFICATION_CHANNELS,
   INITIAL_NOTIFICATION_TEMPLATES,
   INITIAL_NOTIFICATION_DELIVERY_LOGS,
+  INITIAL_SCHEDULED_NOTIFICATIONS,
 } from "@/data/super-admin-data";
 
 const STORAGE_KEY_CHANNELS = "devio_notification_channels_config";
@@ -65,6 +67,27 @@ export function saveNotificationDeliveryLogs(logs: NotificationDeliveryLog[]) {
   sessionStorage.setItem(STORAGE_KEY_LOGS, str);
   // Dispatch custom event for real-time reactive updates
   window.dispatchEvent(new CustomEvent("devio_notification_logs_changed", { detail: { logs } }));
+}
+
+const STORAGE_KEY_SCHEDULED = "devio_scheduled_notifications";
+
+export function getScheduledNotifications(): ScheduledNotification[] {
+  if (typeof window === "undefined") return INITIAL_SCHEDULED_NOTIFICATIONS;
+  const stored = localStorage.getItem(STORAGE_KEY_SCHEDULED) || sessionStorage.getItem(STORAGE_KEY_SCHEDULED);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch (e) {}
+  }
+  return INITIAL_SCHEDULED_NOTIFICATIONS;
+}
+
+export function saveScheduledNotifications(scheduled: ScheduledNotification[]) {
+  if (typeof window === "undefined") return;
+  const str = JSON.stringify(scheduled);
+  localStorage.setItem(STORAGE_KEY_SCHEDULED, str);
+  sessionStorage.setItem(STORAGE_KEY_SCHEDULED, str);
+  window.dispatchEvent(new CustomEvent("devio_scheduled_notifications_changed", { detail: { scheduled } }));
 }
 
 /**
