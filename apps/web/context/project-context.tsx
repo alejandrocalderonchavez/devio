@@ -358,9 +358,81 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Load from localStorage / sessionStorage & listen to updates
+  // Load from localStorage / sessionStorage & listen to updates + sync with live API
   useEffect(() => {
     loadFromStorage();
+
+    // Fetch live developer and projects data from Supabase / API
+    fetch("/api/developers")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.developers) && data.developers.length > 0) {
+          const storedUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
+          const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
+          const storedImp = localStorage.getItem("devio_impersonation") || sessionStorage.getItem("devio_impersonation");
+
+          let currentEmail = "";
+          let activeDevName = "";
+          let activeDevId = "";
+
+          if (storedImp) {
+            try {
+              const imp = JSON.parse(storedImp);
+              if (imp.active) {
+                currentEmail = imp.userEmail || "";
+                activeDevName = imp.developerName || "";
+                activeDevId = imp.developerId || "";
+              }
+            } catch (e) {}
+          }
+
+          if (!currentEmail && storedUser) {
+            try {
+              const u = JSON.parse(storedUser);
+              currentEmail = u.email || "";
+              activeDevName = u.activeDeveloper || "";
+            } catch (e) {}
+          }
+
+          if (!activeDevName && storedDev) {
+            try {
+              const d = JSON.parse(storedDev);
+              activeDevName = d.name || d.commercialName || "";
+              activeDevId = d.id || "";
+            } catch (e) {}
+          }
+
+          // Find matching developer
+          let matched = data.developers.find((d: any) => {
+            if (activeDevId && d.id === activeDevId) return true;
+            if (activeDevName && d.name.toLowerCase() === activeDevName.toLowerCase()) return true;
+            if (currentEmail) {
+              return (d.memberships || []).some((m: any) => m.user?.email?.toLowerCase().trim() === currentEmail.toLowerCase().trim()) ||
+                     d.email?.toLowerCase().trim() === currentEmail.toLowerCase().trim();
+            }
+            return false;
+          });
+
+          // Campero fallback
+          if (!matched && currentEmail && (currentEmail.includes("campero") || currentEmail === "desarrolloscampero@gmail.com")) {
+            matched = data.developers.find((d: any) => d.name.toLowerCase().includes("campero"));
+          }
+
+          if (!matched && data.developers.length > 0) {
+            matched = data.developers[0];
+          }
+
+          if (matched) {
+            setDeveloperName(matched.name);
+            if (Array.isArray(matched.projects) && matched.projects.length > 0) {
+              setProjects(matched.projects);
+              localStorage.setItem("devio_projects_state", JSON.stringify(matched.projects));
+              sessionStorage.setItem("devio_projects_state", JSON.stringify(matched.projects));
+            }
+          }
+        }
+      })
+      .catch((err) => console.warn("Could not sync projects from API:", err));
 
     const handleStorageUpdate = () => {
       loadFromStorage();

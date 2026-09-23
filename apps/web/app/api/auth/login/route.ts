@@ -111,12 +111,17 @@ export async function POST(request: Request) {
       : matchedMembership?.role || "Director Comercial";
 
     const mappedProjects = (matchedDev?.projects || []).map((p: any) => {
+      // If already formatted with unitsInventory
+      if (Array.isArray(p.unitsInventory) && p.unitsInventory.length > 0) {
+        return p;
+      }
+
       const mappedUnits = (p.units || []).map((u: any, idx: number) => ({
         id: u.id,
         unit: u.unitNumber || `U-${idx + 1}`,
-        type: "Departamento",
+        type: u.category === "HOUSE" ? "Casa" : "Departamento",
         price: parseFloat(u.basePrice) || 3500000,
-        areaM2: 85,
+        areaM2: parseFloat(u.totalAreaM2) || 85,
         floor: u.level || 1,
         status:
           u.status === "SOLD"
@@ -124,17 +129,44 @@ export async function POST(request: Request) {
             : u.status === "AVAILABLE"
             ? "DISPONIBLE"
             : "BLOQUEADA",
-        client: "",
+        client: "-",
       }));
+
+      const totalUnits = mappedUnits.length;
+      const soldUnits = mappedUnits.filter((u: any) => u.status === "VENDIDA").length;
+      const availableUnits = mappedUnits.filter((u: any) => u.status === "DISPONIBLE").length;
 
       return {
         id: p.id,
         name: p.name,
         type: (p.projectType || "VERTICAL").toUpperCase(),
         status: p.status || "ACTIVE",
-        logo: p.coverImagePath || matchedDev?.logoPath || "",
-        units: mappedUnits,
-        sales: [],
+        image: p.coverImagePath || matchedDev?.logoPath || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
+        totalUnits,
+        soldUnits,
+        availableUnits,
+        blockedUnits: Math.max(0, totalUnits - soldUnits - availableUnits),
+        metrics: p.metrics || {
+          totalCobrado: 0,
+          porCobrar: 0,
+          pagosAtrasados: 0,
+          avanceVentasPct: totalUnits > 0 ? Math.round((soldUnits / totalUnits) * 100) : 0,
+          unidadesVendidasCount: soldUnits,
+          unidadesTotalesCount: totalUnits,
+          porVenderUnidades: availableUnits,
+          valorComercialVendido: 0,
+          valorComercialTotal: mappedUnits.reduce((acc: number, u: any) => acc + (u.price || 0), 0),
+          porVenderMonto: 0,
+          flujoFuturoMonto: 0,
+          precioPromedio: totalUnits > 0 ? Math.round(mappedUnits.reduce((acc: number, u: any) => acc + (u.price || 0), 0) / totalUnits) : 0,
+          inventarioMonetarioPct: 0,
+          totalFacturado: 0,
+          distribucionPct: 0,
+        },
+        unitsInventory: mappedUnits,
+        sales: p.sales || [],
+        monthlyBilling: [],
+        overdueClients: [],
         paymentPlans: [],
         documents: [],
         additionals: [],

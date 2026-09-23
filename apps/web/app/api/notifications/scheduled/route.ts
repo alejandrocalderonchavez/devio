@@ -1,15 +1,9 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import scheduledNotifs from "@/data/migrated-scheduled-notifications.json";
 
 export async function GET() {
   try {
-    const filePath = path.join(process.cwd(), "data/migrated-scheduled-notifications.json");
-    if (fs.existsSync(filePath)) {
-      const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      return NextResponse.json({ success: true, scheduled: data });
-    }
-    return NextResponse.json({ success: true, scheduled: [] });
+    return NextResponse.json({ success: true, scheduled: scheduledNotifs });
   } catch (error: any) {
     console.error("Error reading scheduled notifications:", error);
     return NextResponse.json(

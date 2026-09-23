@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import migratedDevelopers from "@/data/migrated-developers.json";
 
 export async function GET() {
   try {
@@ -18,18 +17,12 @@ export async function GET() {
           }
         }
       } catch (e) {
-        console.warn("Direct API fetch failed, falling back to migrated JSON data:", e);
+        console.warn("Direct API fetch failed, falling back to bundled JSON data:", e);
       }
     }
 
     // Fallback to bundled migrated data
-    const filePath = path.join(process.cwd(), "data/migrated-developers.json");
-    if (fs.existsSync(filePath)) {
-      const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      return NextResponse.json({ success: true, developers: data });
-    }
-
-    return NextResponse.json({ success: true, developers: [] });
+    return NextResponse.json({ success: true, developers: migratedDevelopers });
   } catch (error: any) {
     console.error("Error in /api/developers:", error);
     return NextResponse.json(
