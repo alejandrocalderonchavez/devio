@@ -456,12 +456,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener("devio_projects_updated", handleStorageUpdate);
     window.addEventListener("devio_payment_plans_updated", handleStorageUpdate);
     window.addEventListener("devio_postventa_updated", handleStorageUpdate);
+    window.addEventListener("devio_developer_updated", handleStorageUpdate);
 
     return () => {
       window.removeEventListener("storage", handleStorageUpdate);
       window.removeEventListener("devio_projects_updated", handleStorageUpdate);
       window.removeEventListener("devio_payment_plans_updated", handleStorageUpdate);
       window.removeEventListener("devio_postventa_updated", handleStorageUpdate);
+      window.removeEventListener("devio_developer_updated", handleStorageUpdate);
     };
   }, []);
 

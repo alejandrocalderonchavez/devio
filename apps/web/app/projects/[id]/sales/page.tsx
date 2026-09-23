@@ -69,6 +69,8 @@ export default function ProjectSalesPage() {
     hasPermission,
     userName,
     userEmail,
+    developerName,
+    developerLogo,
   } = useProject();
   const project = getProject(projectId);
 
@@ -419,17 +421,19 @@ export default function ProjectSalesPage() {
   const handleDownloadQuotePDF = (quote: QuoteRecord) => {
     if (!project) return;
     const devLogoUrl =
+      developerLogo ||
       (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
-      "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+      "";
     const projLogoUrl =
-      (project?.image && project.image.startsWith("http"))
-        ? project.image
-        : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+      project?.logoFileName ||
+      project?.logoUrl ||
+      project?.logo ||
+      (project?.image && project.image.startsWith("http") ? project.image : devLogoUrl);
 
     const unitObj = project.unitsInventory?.find((u) => u.unit === quote.unit);
     const unitPhoto = (unitObj?.images && unitObj.images.length > 0 && unitObj.images[0])
       ? unitObj.images[0]
-      : (project.coverFileName || project.image || project.logoFileName || "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg");
+      : (project.coverFileName || project.image || project.logoFileName || devLogoUrl);
 
     const floorPlanUrl =
       (unitObj?.floorPlan && project.floorPlans?.find((fp) => fp.name === unitObj.floorPlan || fp.id === unitObj.floorPlan)?.imageUrl) ||
@@ -505,12 +509,14 @@ export default function ProjectSalesPage() {
     }
     const projName = project ? project.name : "Proyecto";
     const devLogoUrl =
+      developerLogo ||
       (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
-      "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+      "";
     const projLogoUrl =
-      (project?.image && project.image.startsWith("http"))
-        ? project.image
-        : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+      project?.logoFileName ||
+      project?.logoUrl ||
+      project?.logo ||
+      (project?.image && project.image.startsWith("http") ? project.image : devLogoUrl);
 
     setResendingQuoteId(quote.id);
     try {

@@ -654,11 +654,12 @@ export default function QuoteUnitWizardModal({
     const curProj = projects.find((p) => p.id === targetProjId);
     const devLogo =
       (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
-      "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+      "";
     const projLogo =
-      (curProj?.image && curProj.image.startsWith("http"))
-        ? curProj.image
-        : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+      curProj?.logoFileName ||
+      curProj?.logoUrl ||
+      curProj?.logo ||
+      (curProj?.image && curProj.image.startsWith("http") ? curProj.image : devLogo);
 
     const unitPhoto = (unit?.images && unit.images.length > 0 && unit.images[0])
       ? unit.images[0]
@@ -773,11 +774,12 @@ export default function QuoteUnitWizardModal({
       const activeProj = projects.find((p) => p.id === targetProjId) || projects[0];
       const devLogoUrl =
         (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
-        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+        "";
       const projLogoUrl =
-        (activeProj?.image && activeProj.image.startsWith("http"))
-          ? activeProj.image
-          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+        activeProj?.logoFileName ||
+        activeProj?.logoUrl ||
+        activeProj?.logo ||
+        (activeProj?.image && activeProj.image.startsWith("http") ? activeProj.image : devLogoUrl);
 
       targets.forEach((t) => {
         fetch("/api/notifications/send", {

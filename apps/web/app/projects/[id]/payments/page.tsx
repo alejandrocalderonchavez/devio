@@ -78,6 +78,8 @@ export default function ProjectPaymentsPage() {
     updateSalePayment,
     deleteSalePayment,
     hasPermission,
+    developerName,
+    developerLogo,
   } = useProject();
   const project = getProject(projectId);
 
@@ -2440,20 +2442,26 @@ export default function ProjectPaymentsPage() {
                 {/* Header de Logos del Documento */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "1rem", borderBottom: "2px solid #1F3652", marginBottom: "1.2rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <img
-                      src={
-                        (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
-                        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg"
-                      }
-                      style={{ height: "36px", maxWidth: "120px", objectFit: "contain" }}
-                      alt="Logo Desarrollador"
-                    />
+                    {(developerLogo || (typeof window !== "undefined" && localStorage.getItem("devio_developer_logo"))) ? (
+                      <img
+                        src={
+                          developerLogo ||
+                          (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+                          ""
+                        }
+                        style={{ height: "36px", maxWidth: "120px", objectFit: "contain" }}
+                        alt="Logo Desarrollador"
+                      />
+                    ) : (
+                      <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "#1F3652" }}>{developerName || "Devio"}</span>
+                    )}
                     <div style={{ width: "1px", height: "26px", backgroundColor: "#CBD5E1" }}></div>
                     <img
                       src={
-                        (project?.image && project.image.startsWith("http"))
-                          ? project.image
-                          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg"
+                        project?.logoFileName ||
+                        project?.logoUrl ||
+                        project?.logo ||
+                        (project?.image && project.image.startsWith("http") ? project.image : developerLogo || "")
                       }
                       style={{ height: "36px", maxWidth: "120px", objectFit: "contain", borderRadius: "4px" }}
                       alt="Logo Proyecto"
@@ -2503,12 +2511,14 @@ export default function ProjectPaymentsPage() {
                   type="button"
                   onClick={() => {
                     const devLogoUrl =
+                      developerLogo ||
                       (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
-                      "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+                      "";
                     const projLogoUrl =
-                      (project?.image && project.image.startsWith("http"))
-                        ? project.image
-                        : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+                      project?.logoFileName ||
+                      project?.logoUrl ||
+                      project?.logo ||
+                      (project?.image && project.image.startsWith("http") ? project.image : devLogoUrl);
 
                     openReceiptInNewTab({
                       folio: selectedReceiptForView.folio || selectedReceiptForView.receiptFolio || `REC-DEV-${selectedReceiptForView.unit}-${Date.now().toString().slice(-4)}`,
@@ -2522,7 +2532,7 @@ export default function ProjectPaymentsPage() {
                       emissionDate: selectedReceiptForView.paymentDate || new Date().toLocaleDateString("es-MX"),
                       developerLogoUrl: devLogoUrl,
                       projectLogoUrl: projLogoUrl,
-                      developerName: "Desarrolladora Inmobiliaria",
+                      developerName: developerName || "Desarrolladora Inmobiliaria",
                     });
                   }}
                   style={{
@@ -2548,12 +2558,14 @@ export default function ProjectPaymentsPage() {
                     try {
                       showToast("Generando Recibo...", "Preparando documento oficial para descarga.", "info");
                       const devLogoUrl =
+                        developerLogo ||
                         (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
-                        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+                        "";
                       const projLogoUrl =
-                        (project?.image && project.image.startsWith("http"))
-                          ? project.image
-                          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+                        project?.logoFileName ||
+                        project?.logoUrl ||
+                        project?.logo ||
+                        (project?.image && project.image.startsWith("http") ? project.image : devLogoUrl);
 
                       await generateReceiptPDF({
                         folio: selectedReceiptForView.folio || selectedReceiptForView.receiptFolio || `REC-DEV-${selectedReceiptForView.unit}-${Date.now().toString().slice(-4)}`,
@@ -2567,7 +2579,7 @@ export default function ProjectPaymentsPage() {
                         emissionDate: selectedReceiptForView.paymentDate || new Date().toLocaleDateString("es-MX"),
                         developerLogoUrl: devLogoUrl,
                         projectLogoUrl: projLogoUrl,
-                        developerName: "Desarrolladora Inmobiliaria",
+                        developerName: developerName || "Desarrolladora Inmobiliaria",
                       });
                       showToast("Descarga Lista", "Se descargó el recibo en formato PDF.", "success");
                     } catch (err) {

@@ -68,6 +68,8 @@ export default function SettingsPage() {
   const {
     developerName,
     setDeveloperName,
+    developerLogo,
+    setDeveloperLogo,
     showToast,
     projects,
     resetToCleanState,
@@ -413,6 +415,7 @@ export default function SettingsPage() {
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
+      const storedLogo = localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo");
       const storedUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
       const storedSystemUsers = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
       const storedTeam = localStorage.getItem("devio_team_members") || sessionStorage.getItem("devio_team_members");
@@ -430,10 +433,13 @@ export default function SettingsPage() {
         } catch (e) {}
       }
 
+      const activeLogo = storedLogo || developerLogo || "";
+
       if (storedDev) {
         try {
           const d = JSON.parse(storedDev);
           const tName = d.name || d.commercialName || d.tradeName || developerName || "Mi Desarrolladora";
+          const dLogo = d.logoPath || d.logoUrl || d.logo || activeLogo;
           setDevData((prev) => ({
             ...prev,
             businessName: d.legalName || d.businessName || prev.businessName,
@@ -447,8 +453,8 @@ export default function SettingsPage() {
             phone: d.phoneNumber || d.phone || prev.phone,
             billingEmail: d.email || d.billingEmail || prev.billingEmail,
             contactEmail: d.email || d.contactEmail || prev.contactEmail,
-            logoUrl: d.logoUrl || prev.logoUrl,
-            logoName: d.logoName || (d.logoUrl ? "logo-desarrolladora.png" : prev.logoName),
+            logoUrl: dLogo || prev.logoUrl,
+            logoName: d.logoName || (dLogo ? "logo-desarrolladora.png" : prev.logoName),
           }));
 
           if (d.email && (!storedUser || !currentAdminEmail)) {
@@ -457,7 +463,16 @@ export default function SettingsPage() {
           if (tName) {
             setDeveloperName(tName);
           }
+          if (dLogo && !developerLogo) {
+            setDeveloperLogo(dLogo);
+          }
         } catch (e) {}
+      } else if (activeLogo) {
+        setDevData((prev) => ({
+          ...prev,
+          logoUrl: activeLogo,
+          logoName: "logo-desarrolladora.png",
+        }));
       }
 
       setCurrentUser({
@@ -646,6 +661,9 @@ export default function SettingsPage() {
   const handleSaveDeveloperData = (e: React.FormEvent) => {
     e.preventDefault();
     setDeveloperName(devData.tradeName);
+    if (devData.logoUrl) {
+      setDeveloperLogo(devData.logoUrl);
+    }
     if (typeof window !== "undefined") {
       const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
       let baseData = {};
@@ -655,22 +673,39 @@ export default function SettingsPage() {
       const updated = {
         ...baseData,
         name: devData.tradeName,
+        commercialName: devData.tradeName,
         legalName: devData.businessName,
         taxId: devData.rfc,
+        rfc: devData.rfc,
+        taxRegime: devData.taxRegime,
         addressLine1: devData.addressStreet,
         neighborhood: devData.addressCol,
         city: devData.city,
         state: devData.state,
         postalCode: devData.zipCode,
         phoneNumber: devData.phone,
+        phone: devData.phone,
         email: devData.contactEmail || devData.billingEmail,
+        billingEmail: devData.billingEmail,
+        contactEmail: devData.contactEmail,
+        bankName: devData.bankName,
+        bankAccountName: devData.bankAccountName,
+        clabe: devData.clabe,
+        logoPath: devData.logoUrl,
         logoUrl: devData.logoUrl,
+        logo: devData.logoUrl,
         logoName: devData.logoName,
       };
       localStorage.setItem("devio_developer_onboarding", JSON.stringify(updated));
       sessionStorage.setItem("devio_developer_onboarding", JSON.stringify(updated));
+      if (devData.logoUrl) {
+        localStorage.setItem("devio_developer_logo", devData.logoUrl);
+        sessionStorage.setItem("devio_developer_logo", devData.logoUrl);
+      }
+      window.dispatchEvent(new Event("devio_developer_updated"));
+      window.dispatchEvent(new Event("storage"));
     }
-    showToast("Datos de Desarrolladora Guardados", "Se actualizaron los datos corporativos y fiscales de la empresa.");
+    showToast("Datos de Desarrolladora Guardados", "Se actualizaron los datos corporativos, fiscales y el logotipo oficial de la empresa.");
     setShowDeveloperModal(false);
   };
 

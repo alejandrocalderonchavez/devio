@@ -133,6 +133,8 @@ export interface ProjectItem {
   estimatedDeliveryDate?: string;
   currency?: "MXN" | "USD";
   logoFileName?: string;
+  logoUrl?: string;
+  logo?: string;
   coverFileName?: string;
   teamIds?: string[];
   team?: ProjectTeamMember[];
