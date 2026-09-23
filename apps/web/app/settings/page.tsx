@@ -488,6 +488,23 @@ export default function SettingsPage() {
       }));
 
       // Load System Users
+      let teamSource: any[] | null = null;
+      if (storedDev) {
+        try {
+          const d = JSON.parse(storedDev);
+          if (Array.isArray(d.teamMembers) && d.teamMembers.length > 0) {
+            teamSource = d.teamMembers;
+          }
+        } catch (e) {}
+      }
+
+      if (!teamSource && storedTeam) {
+        try {
+          const t = JSON.parse(storedTeam);
+          if (Array.isArray(t) && t.length > 0) teamSource = t;
+        } catch (e) {}
+      }
+
       if (storedSystemUsers) {
         try {
           const parsed = JSON.parse(storedSystemUsers);
@@ -498,28 +515,15 @@ export default function SettingsPage() {
         } catch (e) {}
       }
 
-      const teamSource = storedTeam ? JSON.parse(storedTeam) : (storedDev ? JSON.parse(storedDev).teamMembers : null);
       if (Array.isArray(teamSource) && teamSource.length > 0) {
-        const usersList: SystemUser[] = [
-          {
-            id: "usr-admin",
-            name: currentAdminName,
-            email: currentAdminEmail,
-            role: "Super Admin",
-            status: "ACTIVO",
-            permissions: ["all"],
-          },
-          ...teamSource.map((m: any, idx: number) => ({
-            id: m.id || `usr-team-${idx + 1}`,
-            name: m.fullName || m.name || `Usuario ${idx + 1}`,
-            email: m.email || `usuario${idx + 1}@desarrolladora.mx`,
-            role: (m.role || "Comercial") as SystemUser["role"],
-            status: "ACTIVO" as const,
-            permissions: typeof m.permissions === "object" && m.permissions
-              ? Object.keys(m.permissions).filter((k: string) => m.permissions[k])
-              : (Array.isArray(m.permissions) ? m.permissions : ["units.view", "clients.view", "sales.view"]),
-          })),
-        ];
+        const usersList: SystemUser[] = teamSource.map((m: any, idx: number) => ({
+          id: m.id || `usr-team-${idx + 1}`,
+          name: m.fullName || m.name || `Usuario ${idx + 1}`,
+          email: m.email || `usuario${idx + 1}@desarrolladora.mx`,
+          role: (m.role || "Asesor de Ventas") as SystemUser["role"],
+          status: (m.status || "ACTIVO") as "ACTIVO" | "INVITADO" | "INACTIVO",
+          permissions: m.permissions || (m.role === "Super Admin" ? ["all"] : ["units.view", "clients.view", "sales.view"]),
+        }));
         setSystemUsers(usersList);
       } else {
         setSystemUsers([
@@ -527,7 +531,7 @@ export default function SettingsPage() {
             id: "usr-admin",
             name: currentAdminName,
             email: currentAdminEmail,
-            role: "Super Admin",
+            role: currentAdminRole,
             status: "ACTIVO",
             permissions: ["all"],
           },
@@ -561,9 +565,19 @@ export default function SettingsPage() {
     if (typeof window !== "undefined") {
       localStorage.setItem("devio_system_users", JSON.stringify(newUsers));
       sessionStorage.setItem("devio_system_users", JSON.stringify(newUsers));
-      const teamOnly = newUsers.filter((u) => u.id !== "usr-admin");
+      const teamOnly = newUsers.filter((u) => u.role !== "Super Admin");
       localStorage.setItem("devio_team_members", JSON.stringify(teamOnly));
       sessionStorage.setItem("devio_team_members", JSON.stringify(teamOnly));
+
+      const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
+      if (storedDev) {
+        try {
+          const parsedDev = JSON.parse(storedDev);
+          parsedDev.teamMembers = newUsers;
+          localStorage.setItem("devio_developer_onboarding", JSON.stringify(parsedDev));
+          sessionStorage.setItem("devio_developer_onboarding", JSON.stringify(parsedDev));
+        } catch (e) {}
+      }
     }
   };
 
@@ -1198,14 +1212,19 @@ export default function SettingsPage() {
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <strong style={{ fontSize: "0.88rem", color: "#1F3652", display: "block" }}>
-                        {user.name}
-                      </strong>
-                      <span style={{ fontSize: "0.75rem", color: "#64748B", display: "block" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <strong style={{ fontSize: "0.88rem", color: "#1F3652", display: "block" }}>
+                          {user.name}
+                        </strong>
+                        <span style={{ fontSize: "0.68rem", backgroundColor: user.role === "Super Admin" ? "rgba(47, 128, 237, 0.12)" : "#E2E8F0", color: user.role === "Super Admin" ? "#2F80ED" : "#475569", fontWeight: 700, padding: "0.15rem 0.45rem", borderRadius: "9999px" }}>
+                          {user.role}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: "0.75rem", color: "#64748B", display: "block", marginTop: "1px" }}>
                         {user.email}
                       </span>
-                      <span style={{ fontSize: "0.72rem", color: "#2F80ED", fontWeight: 700, display: "block", marginTop: "2px" }}>
-                        Rol: {user.role}
+                      <span style={{ fontSize: "0.72rem", color: "#10B981", fontWeight: 600, display: "block", marginTop: "2px" }}>
+                        {user.permissions?.includes("all") ? "✓ Acceso Total (Super Admin)" : `✓ ${user.permissions?.length || 0} permisos asignados`}
                       </span>
                     </div>
 

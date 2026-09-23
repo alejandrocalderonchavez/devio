@@ -64,6 +64,102 @@ async function generateRichJson() {
     } catch (e) {}
   }
 
+  const rawUsersPath = path.resolve(__dirname, '../migration-data/export_All-Users-modified--_2026-09-23_20-17-51.json');
+  let rawUsers = [];
+  if (fs.existsSync(rawUsersPath)) {
+    try {
+      rawUsers = JSON.parse(fs.readFileSync(rawUsersPath, 'utf8'));
+    } catch (e) {}
+  }
+
+  const mapBubblePermissions = (rawPermsStr, role) => {
+    if (role === 'Super Admin' || !rawPermsStr) {
+      return ['all'];
+    }
+    const parts = rawPermsStr.split(',').map((s) => s.trim().toLowerCase());
+    const mapped = new Set();
+
+    parts.forEach((p) => {
+      if (p.includes('dashboard general') || p.includes('dashboard proyecto')) {
+        mapped.add('dashboard.view_general');
+        mapped.add('dashboard.view_financials');
+      }
+      if (p.includes('crear proyecto')) mapped.add('projects.create');
+      if (p.includes('editar proyecto')) mapped.add('projects.edit');
+
+      if (p.includes('ver inventario') || p.includes('ver lista y detalle')) {
+        mapped.add('units.view');
+        mapped.add('clients.view');
+      }
+      if (p.includes('editar unidades') || p.includes('editar inventario')) {
+        mapped.add('units.edit_specs');
+        mapped.add('units.change_price');
+      }
+      if (p.includes('exportar unidades')) mapped.add('units.export');
+      if (p.includes('crear cotización') || p.includes('cotizacion')) {
+        mapped.add('units.quote');
+        mapped.add('quotes.view');
+        mapped.add('quotes.create');
+        mapped.add('quotes.edit');
+        mapped.add('quotes.export');
+      }
+      if (p.includes('ver ventas')) mapped.add('sales.view');
+      if (p.includes('registrar venta')) {
+        mapped.add('sales.view');
+        mapped.add('sales.create');
+      }
+      if (p.includes('exportar ventas')) mapped.add('sales.export');
+
+      if (p.includes('ver pagos') || p.includes('ver recibo') || p.includes('ver comprobante')) {
+        mapped.add('payments.view');
+      }
+      if (p.includes('registrar pagos')) {
+        mapped.add('payments.view');
+        mapped.add('payments.register');
+      }
+      if (p.includes('eliminar pagos')) mapped.add('payments.delete');
+      if (p.includes('exportar pagos')) mapped.add('payments.export');
+
+      if (p.includes('ver datos clientes') || p.includes('ver propietario')) {
+        mapped.add('clients.view');
+      }
+      if (p.includes('exportar clientes')) {
+        mapped.add('clients.export_statement');
+      }
+      if (p.includes('subir documentos') || p.includes('añadir documentos')) {
+        mapped.add('documents.upload');
+        mapped.add('clients.upload_docs');
+      }
+      if (p.includes('ver documentos')) {
+        mapped.add('documents.view');
+      }
+      if (p.includes('eliminar documentos')) {
+        mapped.add('documents.delete');
+        mapped.add('clients.delete_docs');
+      }
+      if (p.includes('registrar avances')) {
+        mapped.add('obra.view');
+        mapped.add('obra.register_progress');
+      }
+    });
+
+    return Array.from(mapped);
+  };
+
+  const mapRole = (bubbleRole) => {
+    if (!bubbleRole) return 'Asesor de Ventas';
+    const lower = bubbleRole.toLowerCase().trim();
+    if (lower.includes('super admin')) return 'Super Admin';
+    if (lower.includes('admin')) return 'Director Comercial';
+    if (lower.includes('comercial')) return 'Asesor de Ventas';
+    if (lower.includes('asesor') || lower.includes('ventas')) return 'Asesor de Ventas';
+    if (lower.includes('finanzas') || lower.includes('cobranza')) return 'Finanzas / Cobranza';
+    if (lower.includes('obra')) return 'Residente de Obra';
+    if (lower.includes('postventa')) return 'Coordinador de Postventa';
+    if (lower.includes('legal')) return 'Legal / Notaría';
+    return 'Asesor de Ventas';
+  };
+
   const sanitizeUrl = (url) => {
     if (!url || typeof url !== 'string') return undefined;
     const trimmed = url.trim();
@@ -348,6 +444,68 @@ async function generateRichJson() {
 
     const devLogo = sanitizeUrl(bubbleDev?.Logo) || dev.logoPath || 'https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg';
 
+    // Find and map team members from rawUsers
+    const devBubbleId = bubbleDev?.['unique id'] || dev.bubbleId;
+    const matchedTeamUsers = rawUsers.filter((u) => {
+      const uDevId = u.desarolladora || u.desarrolladora;
+      const matchesDev = uDevId && devBubbleId && uDevId === devBubbleId;
+      const matchesEmail = dev.email && u.email && u.email.toLowerCase().trim() === dev.email.toLowerCase().trim();
+      return (matchesDev || matchesEmail) && u.role !== 'Cliente' && u.email;
+    });
+
+    const teamMembers = matchedTeamUsers.length > 0
+      ? matchedTeamUsers.map((u) => {
+          const role = mapRole(u.role);
+          const perms = mapBubblePermissions(u['Lista de Permisos'], role);
+          const assignedProjIds = u['Proyectos Asignados']
+            ? u['Proyectos Asignados'].split(',').map((s) => s.trim()).filter(Boolean)
+            : [];
+          return {
+            id: u['unique id'] || `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            name: (u.Nombre || dev.name).trim(),
+            fullName: (u.Nombre || dev.name).trim(),
+            email: u.email.trim(),
+            role,
+            status: 'ACTIVO',
+            phone: u.telefono || dev.phone || '',
+            avatarUrl: sanitizeUrl(u['foto de perfil']) || '',
+            assignedProjects: assignedProjIds,
+            permissions: perms,
+            rawPermissions: u['Lista de Permisos'] || '',
+          };
+        })
+      : [
+          {
+            id: `usr-${dev.id}`,
+            name: dev.name,
+            fullName: dev.name,
+            email: dev.email || 'admin@desarrolladora.mx',
+            role: 'Super Admin',
+            status: 'ACTIVO',
+            phone: dev.phone || '',
+            avatarUrl: devLogo,
+            assignedProjects: [],
+            permissions: ['all'],
+            rawPermissions: '',
+          },
+        ];
+
+    const cleanMemberships = teamMembers.map((tm) => ({
+      id: `mem-${tm.id}`,
+      userId: tm.id,
+      developerId: dev.id,
+      role: tm.role === 'Super Admin' ? 'SUPER_ADMIN' : (tm.role === 'Director Comercial' ? 'ADMIN' : 'MEMBER'),
+      user: {
+        id: tm.id,
+        email: tm.email,
+        fullName: tm.name,
+        phone: tm.phone,
+        avatarUrl: tm.avatarUrl,
+        role: tm.role,
+        permissions: tm.permissions,
+      },
+    }));
+
     return {
       id: dev.id,
       name: bubbleDev?.Nombre || dev.name,
@@ -373,7 +531,8 @@ async function generateRichJson() {
       logo: devLogo,
       logoUrl: devLogo,
       logoName: 'logo-desarrolladora.png',
-      memberships: dev.memberships,
+      memberships: cleanMemberships,
+      teamMembers,
       projects: formattedProjects,
       paymentPlans: devPaymentPlans,
     };

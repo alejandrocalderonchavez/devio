@@ -79,6 +79,18 @@ function LoginContent() {
                   sessionStorage.setItem("devio_developer_logo", devLogo);
                 }
               }
+              if (Array.isArray(data.teamMembers) && data.teamMembers.length > 0) {
+                localStorage.setItem("devio_system_users", JSON.stringify(data.teamMembers));
+                sessionStorage.setItem("devio_system_users", JSON.stringify(data.teamMembers));
+                const teamOnly = data.teamMembers.filter((u: any) => u.role !== "Super Admin");
+                localStorage.setItem("devio_team_members", JSON.stringify(teamOnly));
+                sessionStorage.setItem("devio_team_members", JSON.stringify(teamOnly));
+              } else {
+                localStorage.removeItem("devio_system_users");
+                sessionStorage.removeItem("devio_system_users");
+                localStorage.removeItem("devio_team_members");
+                sessionStorage.removeItem("devio_team_members");
+              }
               if (Array.isArray(data.projects)) {
                 localStorage.setItem("devio_projects_state", JSON.stringify(data.projects));
                 sessionStorage.setItem("devio_projects_state", JSON.stringify(data.projects));

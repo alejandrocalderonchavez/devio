@@ -43,9 +43,18 @@ export async function POST(request: Request) {
 
     // Match user to developer and projects
     let matchedDev: any = null;
+    let matchedTeamMember: any = null;
     let matchedMembership: any = null;
 
     for (const dev of developersList) {
+      const tm = (dev.teamMembers || []).find(
+        (m: any) => m.email?.toLowerCase().trim() === cleanEmail
+      );
+      if (tm) {
+        matchedDev = dev;
+        matchedTeamMember = tm;
+        break;
+      }
       const mem = (dev.memberships || []).find(
         (m: any) => m.user?.email?.toLowerCase().trim() === cleanEmail
       );
@@ -170,16 +179,21 @@ export async function POST(request: Request) {
     const devPhone = matchedDev?.phone || "";
 
     const userFullName =
+      matchedTeamMember?.name ||
+      matchedTeamMember?.fullName ||
       matchedMembership?.user?.fullName ||
       (matchedDev ? `${matchedDev.name} Admin` : "Usuario Devio");
 
     const userRole = isSuperAdmin
       ? "Super Admin"
-      : matchedMembership?.role || "Director Comercial";
+      : matchedTeamMember?.role ||
+        (matchedMembership?.role === "SUPER_ADMIN" ? "Super Admin" : (matchedMembership?.role === "ADMIN" ? "Director Comercial" : "Asesor de Ventas"));
 
-    const userRoleTitle = isSuperAdmin
-      ? "Super Administrador"
-      : matchedMembership?.role || "Director Comercial";
+    const userRoleTitle = userRole;
+
+    const userPermissions = isSuperAdmin
+      ? ["all"]
+      : (matchedTeamMember?.permissions || matchedMembership?.user?.permissions || ["all"]);
 
     const mappedProjects = (matchedDev?.projects || []).map((p: any) => {
       // If already formatted with unitsInventory
@@ -260,16 +274,18 @@ export async function POST(request: Request) {
       logoPath: matchedDev?.logoPath || matchedDev?.logoUrl || matchedDev?.logo || null,
       logoUrl: matchedDev?.logoPath || matchedDev?.logoUrl || matchedDev?.logo || null,
       logo: matchedDev?.logoPath || matchedDev?.logoUrl || matchedDev?.logo || null,
+      teamMembers: matchedDev?.teamMembers || [],
     };
 
     const userObj = {
-      id: matchedMembership?.user?.id || `usr-${Date.now()}`,
+      id: matchedTeamMember?.id || matchedMembership?.user?.id || `usr-${Date.now()}`,
       fullName: userFullName,
       email: cleanEmail,
-      phone: matchedMembership?.user?.phone || devPhone,
+      phone: matchedTeamMember?.phone || matchedMembership?.user?.phone || devPhone,
       role: userRole,
       roleTitle: userRoleTitle,
-      permissions: ["all"],
+      permissions: userPermissions,
+      assignedProjects: matchedTeamMember?.assignedProjects || [],
       isSuperAdmin: isSuperAdmin,
       activeDeveloper: devName,
     };
@@ -281,6 +297,7 @@ export async function POST(request: Request) {
       user: userObj,
       developer: developerObj,
       activeDeveloper: developerObj,
+      teamMembers: matchedDev?.teamMembers || [],
       projects: mappedProjects,
       token,
     });
