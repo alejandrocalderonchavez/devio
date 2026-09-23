@@ -140,7 +140,7 @@ export interface ScheduledNotification {
   projectName: string;
   unitName: string;
   sourceEvent: string;
-  status: "PROGRAMADA" | "EN_COLA" | "PAUSADA" | "ENVIADA" | "CANCELADA";
+  status: "PROGRAMADA" | "EN_COLA" | "PAUSADA" | "ENVIADA" | "CANCELADA" | "FALLIDA";
   payloadSummary?: string;
   metadata?: Record<string, any>;
 }
@@ -597,8 +597,8 @@ export const INITIAL_SCHEDULED_NOTIFICATIONS: ScheduledNotification[] = [
     triggerName: "Reporte Mensual de Avance de Obra",
     category: "OBRA",
     channel: "POSTMARK",
-    scheduledFor: "2026-09-30T10:00:00",
-    scheduledForFormatted: "30 Sep 2026, 10:00 a.m.",
+    scheduledFor: "2026-09-30T09:00:00",
+    scheduledForFormatted: "30 Sep 2026, 09:00 a.m.",
     relativeTime: "Fin de Mes",
     recipientName: "Inversionistas y Compradores",
     recipientContact: "Lista de 4 propietarios",
@@ -619,8 +619,8 @@ export const INITIAL_SCHEDULED_NOTIFICATIONS: ScheduledNotification[] = [
     triggerName: "Alerta de Morosidad (+10 días vencido)",
     category: "COBRANZA",
     channel: "WHATSAPP",
-    scheduledFor: "2026-10-10T11:00:00",
-    scheduledForFormatted: "10 Oct 2026, 11:00 a.m.",
+    scheduledFor: "2026-10-10T09:00:00",
+    scheduledForFormatted: "10 Oct 2026, 09:00 a.m.",
     relativeTime: "En 17 días (Si no hay abono)",
     recipientName: "Juan Salvador",
     recipientContact: "+52 33 1892 4012",
@@ -641,8 +641,8 @@ export const INITIAL_SCHEDULED_NOTIFICATIONS: ScheduledNotification[] = [
     triggerName: "Seguimiento y Encuesta de Entrega",
     category: "POSTVENTA",
     channel: "WHATSAPP",
-    scheduledFor: "2026-10-15T12:00:00",
-    scheduledForFormatted: "15 Oct 2026, 12:00 p.m.",
+    scheduledFor: "2026-10-15T09:00:00",
+    scheduledForFormatted: "15 Oct 2026, 09:00 a.m.",
     relativeTime: "En 22 días",
     recipientName: "Alex Legaius",
     recipientContact: "+52 33 3490 8821",

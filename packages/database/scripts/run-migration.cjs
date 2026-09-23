@@ -635,6 +635,7 @@ async function runMigration() {
     if (status === 'PENDING' || status === 'OVERDUE') {
       const clientEmail = item['mail_cliente'] || 'comprador@ejemplo.com';
       const scheduledNotifDate = new Date(dueDate.getTime() - 5 * 24 * 60 * 60 * 1000);
+      scheduledNotifDate.setHours(9, 0, 0, 0);
       scheduledNotifsToGenerate.push({
         id: `sch-bubble-${bubbleId}`,
         triggerKey: status === 'OVERDUE' ? 'payments.overdue_notice' : 'payments.upcoming_reminder',

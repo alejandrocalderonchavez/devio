@@ -36,6 +36,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Server,
   Zap,
   Globe,
@@ -167,6 +168,8 @@ function SuperAdminContent() {
   const [scheduledChannelFilter, setScheduledChannelFilter] = useState("ALL");
   const [scheduledCategoryFilter, setScheduledCategoryFilter] = useState("ALL");
   const [scheduledStatusFilter, setScheduledStatusFilter] = useState("ALL");
+  const [scheduledQuickFilter, setScheduledQuickFilter] = useState<"ALL" | "PROGRAMADA" | "ENVIADA" | "FALLIDA" | "PAUSADA">("ALL");
+  const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>(null);
   const [logChannelFilter, setLogChannelFilter] = useState<string>("ALL");
   const [logSearchQuery, setLogSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
@@ -869,24 +872,129 @@ function SuperAdminContent() {
     });
   }, [deliveryLogs, logChannelFilter, logSearchQuery]);
 
-  // Filtered Scheduled Notifications (Automations triggered by sales/events)
+  // Filtered Scheduled Notifications (Automations grouped by event & channels, sorted chronologically at 9:00 AM)
   const filteredScheduled = useMemo(() => {
-    return scheduledNotifications.filter((sch) => {
-      const matchChannel = scheduledChannelFilter === "ALL" || sch.channel === scheduledChannelFilter;
-      const matchCategory = scheduledCategoryFilter === "ALL" || sch.category === scheduledCategoryFilter;
-      const matchStatus = scheduledStatusFilter === "ALL" || sch.status === scheduledStatusFilter;
+    // 1. Group individual notifications by triggerKey + recipientName + date + sourceEvent
+    const groupMap = new Map<
+      string,
+      {
+        id: string;
+        triggerKey: string;
+        triggerName: string;
+        category: "COBRANZA" | "VENTAS" | "OBRA" | "POSTVENTA" | "DOCUMENTOS" | "USUARIOS";
+        scheduledFor: string;
+        scheduledForFormatted: string;
+        relativeTime: string;
+        recipientName: string;
+        recipientContact: string;
+        recipientRole: string;
+        developerName: string;
+        projectName: string;
+        unitName: string;
+        sourceEvent: string;
+        status: "PROGRAMADA" | "EN_COLA" | "PAUSADA" | "ENVIADA" | "FALLIDA" | "CANCELADA";
+        payloadSummary?: string;
+        channels: Array<{
+          id: string;
+          channel: "WHATSAPP" | "POSTMARK" | "PUSH";
+          recipientContact: string;
+          status: "PROGRAMADA" | "EN_COLA" | "PAUSADA" | "ENVIADA" | "FALLIDA" | "CANCELADA";
+          payloadSummary?: string;
+          original: ScheduledNotification;
+        }>;
+      }
+    >();
+
+    scheduledNotifications.forEach((sch) => {
+      const dateKey = (sch.scheduledFor || "").slice(0, 10);
+      const groupKey = `${sch.triggerKey}__${sch.recipientName}__${dateKey}__${sch.sourceEvent}`;
+
+      if (!groupMap.has(groupKey)) {
+        groupMap.set(groupKey, {
+          id: sch.id,
+          triggerKey: sch.triggerKey,
+          triggerName: sch.triggerName,
+          category: sch.category,
+          scheduledFor: sch.scheduledFor,
+          scheduledForFormatted: sch.scheduledForFormatted,
+          relativeTime: sch.relativeTime,
+          recipientName: sch.recipientName,
+          recipientContact: sch.recipientContact,
+          recipientRole: sch.recipientRole,
+          developerName: sch.developerName,
+          projectName: sch.projectName,
+          unitName: sch.unitName,
+          sourceEvent: sch.sourceEvent,
+          status: sch.status as any,
+          payloadSummary: sch.payloadSummary,
+          channels: [],
+        });
+      }
+
+      const group = groupMap.get(groupKey)!;
+      group.channels.push({
+        id: sch.id,
+        channel: sch.channel,
+        recipientContact: sch.recipientContact,
+        status: sch.status as any,
+        payloadSummary: sch.payloadSummary,
+        original: sch,
+      });
+
+      if (sch.status === "PROGRAMADA" || sch.status === "EN_COLA") {
+        group.status = "PROGRAMADA";
+      } else if (sch.status === "PAUSADA" && group.status !== "PROGRAMADA") {
+        group.status = "PAUSADA";
+      }
+    });
+
+    const groups = Array.from(groupMap.values());
+
+    // 2. Sort chronologically by scheduledFor (earliest 9:00 AM upcoming dates first)
+    groups.sort((a, b) => {
+      const timeA = new Date(a.scheduledFor).getTime() || 0;
+      const timeB = new Date(b.scheduledFor).getTime() || 0;
+      return timeA - timeB;
+    });
+
+    // 3. Filter by search, channel, category, status, and quick filter
+    return groups.filter((g) => {
+      // Quick filter
+      if (scheduledQuickFilter === "PROGRAMADA") {
+        if (g.status !== "PROGRAMADA" && g.status !== "EN_COLA" && !g.channels.some((c) => c.status === "PROGRAMADA" || c.status === "EN_COLA")) {
+          return false;
+        }
+      } else if (scheduledQuickFilter === "ENVIADA") {
+        if (g.status !== "ENVIADA" && !g.channels.some((c) => c.status === "ENVIADA")) {
+          return false;
+        }
+      } else if (scheduledQuickFilter === "FALLIDA") {
+        if (g.status !== "FALLIDA" && !g.channels.some((c) => c.status === "FALLIDA")) {
+          return false;
+        }
+      } else if (scheduledQuickFilter === "PAUSADA") {
+        if (g.status !== "PAUSADA" && !g.channels.some((c) => c.status === "PAUSADA")) {
+          return false;
+        }
+      }
+
+      // Dropdown filters
+      const matchChannel = scheduledChannelFilter === "ALL" || g.channels.some((c) => c.channel === scheduledChannelFilter);
+      const matchCategory = scheduledCategoryFilter === "ALL" || g.category === scheduledCategoryFilter;
+      const matchStatus = scheduledStatusFilter === "ALL" || g.status === scheduledStatusFilter || g.channels.some((c) => c.status === scheduledStatusFilter);
       const q = scheduledSearch.toLowerCase().trim();
       const matchSearch =
         !q ||
-        sch.recipientName.toLowerCase().includes(q) ||
-        sch.recipientContact.toLowerCase().includes(q) ||
-        sch.projectName.toLowerCase().includes(q) ||
-        sch.unitName.toLowerCase().includes(q) ||
-        sch.triggerName.toLowerCase().includes(q) ||
-        sch.sourceEvent.toLowerCase().includes(q);
+        g.recipientName.toLowerCase().includes(q) ||
+        g.recipientContact.toLowerCase().includes(q) ||
+        g.projectName.toLowerCase().includes(q) ||
+        g.unitName.toLowerCase().includes(q) ||
+        g.triggerName.toLowerCase().includes(q) ||
+        g.sourceEvent.toLowerCase().includes(q);
+
       return matchChannel && matchCategory && matchStatus && matchSearch;
     });
-  }, [scheduledNotifications, scheduledChannelFilter, scheduledCategoryFilter, scheduledStatusFilter, scheduledSearch]);
+  }, [scheduledNotifications, scheduledChannelFilter, scheduledCategoryFilter, scheduledStatusFilter, scheduledSearch, scheduledQuickFilter]);
 
   // Access check
   if (!isAuthorized) {
@@ -2113,6 +2221,106 @@ function SuperAdminContent() {
 
                 {/* Table Container */}
                 <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                  {/* Quick Filters Toolbar */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748B", marginRight: "0.25rem" }}>Filtros rápidos:</span>
+
+                    <button
+                      type="button"
+                      onClick={() => setScheduledQuickFilter("ALL")}
+                      style={{
+                        padding: "0.35rem 0.85rem",
+                        borderRadius: "9999px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        border: "1px solid",
+                        borderColor: scheduledQuickFilter === "ALL" ? "#1B3047" : "#E2E8F0",
+                        backgroundColor: scheduledQuickFilter === "ALL" ? "#1B3047" : "#FFFFFF",
+                        color: scheduledQuickFilter === "ALL" ? "#FFFFFF" : "#475569",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      Todas ({scheduledNotifications.length})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setScheduledQuickFilter("PROGRAMADA")}
+                      style={{
+                        padding: "0.35rem 0.85rem",
+                        borderRadius: "9999px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        border: "1px solid",
+                        borderColor: scheduledQuickFilter === "PROGRAMADA" ? "#2563EB" : "#E2E8F0",
+                        backgroundColor: scheduledQuickFilter === "PROGRAMADA" ? "#EFF6FF" : "#FFFFFF",
+                        color: scheduledQuickFilter === "PROGRAMADA" ? "#1D4ED8" : "#475569",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      🕒 Programadas (9:00 a.m.) ({scheduledNotifications.filter((s) => s.status === "PROGRAMADA" || s.status === "EN_COLA").length})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setScheduledQuickFilter("ENVIADA")}
+                      style={{
+                        padding: "0.35rem 0.85rem",
+                        borderRadius: "9999px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        border: "1px solid",
+                        borderColor: scheduledQuickFilter === "ENVIADA" ? "#16A34A" : "#E2E8F0",
+                        backgroundColor: scheduledQuickFilter === "ENVIADA" ? "#DCFCE7" : "#FFFFFF",
+                        color: scheduledQuickFilter === "ENVIADA" ? "#15803D" : "#475569",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      ✓ Ya Mandadas / Enviadas ({scheduledNotifications.filter((s) => s.status === "ENVIADA").length})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setScheduledQuickFilter("FALLIDA")}
+                      style={{
+                        padding: "0.35rem 0.85rem",
+                        borderRadius: "9999px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        border: "1px solid",
+                        borderColor: scheduledQuickFilter === "FALLIDA" ? "#DC2626" : "#E2E8F0",
+                        backgroundColor: scheduledQuickFilter === "FALLIDA" ? "#FEE2E2" : "#FFFFFF",
+                        color: scheduledQuickFilter === "FALLIDA" ? "#B91C1C" : "#475569",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      ⚠️ Fallidas / Errores ({scheduledNotifications.filter((s) => s.status === "FALLIDA").length})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setScheduledQuickFilter("PAUSADA")}
+                      style={{
+                        padding: "0.35rem 0.85rem",
+                        borderRadius: "9999px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        border: "1px solid",
+                        borderColor: scheduledQuickFilter === "PAUSADA" ? "#D97706" : "#E2E8F0",
+                        backgroundColor: scheduledQuickFilter === "PAUSADA" ? "#FEF3C7" : "#FFFFFF",
+                        color: scheduledQuickFilter === "PAUSADA" ? "#B45309" : "#475569",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      ⏸ Pausadas ({scheduledNotifications.filter((s) => s.status === "PAUSADA").length})
+                    </button>
+                  </div>
+
                   {/* Toolbar */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
                     <div>
@@ -2120,7 +2328,7 @@ function SuperAdminContent() {
                         Cola de Notificaciones Programadas ({filteredScheduled.length})
                       </h3>
                       <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
-                        Notificaciones calendarizadas automáticamente al registrarse ventas, mensualidades o cierres de obra
+                        Envíos calendarizados automáticamente a las 9:00 a.m. Ordenados cronológicamente con desglose de canales
                       </span>
                     </div>
 
@@ -2225,7 +2433,7 @@ function SuperAdminContent() {
                     </div>
                   </div>
 
-                  {/* Scheduled Table */}
+                  {/* Scheduled Table with Grouping & Expandable Channel Breakdown */}
                   {filteredScheduled.length === 0 ? (
                     <div style={{ padding: "2.5rem", textAlign: "center", backgroundColor: "#F8FAFC", borderRadius: "0.75rem", border: "1px dashed #CBD5E1", color: "#64748B", fontSize: "0.85rem" }}>
                       No se encontraron notificaciones programadas con los filtros seleccionados.
@@ -2235,186 +2443,364 @@ function SuperAdminContent() {
                       <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem" }}>
                         <thead>
                           <tr style={{ borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+                            <th style={{ width: "40px", padding: "0.75rem 0.5rem 0.75rem 0.75rem" }}></th>
                             <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Fecha / Hora Programada</th>
                             <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Evento / Disparador</th>
-                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Canal</th>
+                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Canales ({filteredScheduled.reduce((acc, g) => acc + g.channels.length, 0)})</th>
                             <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Destinatario</th>
                             <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Desarrollo & Unidad</th>
-                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Origen Automatización</th>
                             <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Estado</th>
                             <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Acciones</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredScheduled.map((sch) => (
-                            <tr key={sch.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
-                              <td style={{ padding: "0.85rem 1rem" }}>
-                                <div style={{ color: "#1F3652", fontWeight: 700 }}>{sch.scheduledForFormatted}</div>
-                                <span style={{ fontSize: "0.7rem", color: "#2563EB", backgroundColor: "#EFF6FF", padding: "0.1rem 0.45rem", borderRadius: "99px", fontWeight: 700, display: "inline-block", marginTop: "2px" }}>
-                                  {sch.relativeTime}
-                                </span>
-                              </td>
+                          {filteredScheduled.map((group) => {
+                            const isExpanded = expandedScheduleId === group.id;
+                            const hasWhatsApp = group.channels.some((c) => c.channel === "WHATSAPP");
+                            const hasPostmark = group.channels.some((c) => c.channel === "POSTMARK");
+                            const hasPush = group.channels.some((c) => c.channel === "PUSH");
 
-                              <td style={{ padding: "0.85rem 1rem" }}>
-                                <strong style={{ color: "#1F3652", display: "block" }}>{sch.triggerName}</strong>
-                                <span style={{ fontSize: "0.7rem", color: "#1D4ED8", backgroundColor: "#EFF6FF", padding: "0.1rem 0.45rem", borderRadius: "99px", fontWeight: 700 }}>
-                                  {sch.category}
-                                </span>
-                              </td>
-
-                              <td style={{ padding: "0.85rem 1rem" }}>
-                                <span
+                            return (
+                              <React.Fragment key={group.id}>
+                                <tr
                                   style={{
-                                    fontSize: "0.72rem",
-                                    fontWeight: 700,
-                                    padding: "0.2rem 0.55rem",
-                                    borderRadius: "99px",
-                                    backgroundColor:
-                                      sch.channel === "WHATSAPP"
-                                        ? "#DCFCE7"
-                                        : sch.channel === "POSTMARK"
-                                        ? "#EFF6FF"
-                                        : "#F3E8FF",
-                                    color:
-                                      sch.channel === "WHATSAPP"
-                                        ? "#166534"
-                                        : sch.channel === "POSTMARK"
-                                        ? "#1D4ED8"
-                                        : "#7E22CE",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "0.25rem",
+                                    borderBottom: isExpanded ? "none" : "1px solid #F1F5F9",
+                                    backgroundColor: isExpanded ? "#F8FAFC" : "#FFFFFF",
+                                    transition: "background-color 0.15s ease",
                                   }}
                                 >
-                                  {sch.channel === "WHATSAPP" && <MessageSquare size={12} />}
-                                  {sch.channel === "POSTMARK" && <Mail size={12} />}
-                                  {sch.channel === "PUSH" && <Smartphone size={12} />}
-                                  {sch.channel}
-                                </span>
-                              </td>
+                                  {/* Expand / Collapse Button */}
+                                  <td style={{ padding: "0.85rem 0.5rem 0.85rem 0.75rem", verticalAlign: "middle" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedScheduleId(isExpanded ? null : group.id)}
+                                      title={isExpanded ? "Ocultar desglose de canales" : "Ver desglose de canales"}
+                                      style={{
+                                        width: "26px",
+                                        height: "26px",
+                                        borderRadius: "6px",
+                                        border: "1px solid #CBD5E1",
+                                        backgroundColor: isExpanded ? "#1B3047" : "#FFFFFF",
+                                        color: isExpanded ? "#FFFFFF" : "#64748B",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        cursor: "pointer",
+                                        transition: "all 0.15s ease",
+                                      }}
+                                    >
+                                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                    </button>
+                                  </td>
 
-                              <td style={{ padding: "0.85rem 1rem" }}>
-                                <div style={{ color: "#1F3652", fontWeight: 700 }}>{sch.recipientName}</div>
-                                <div style={{ fontSize: "0.72rem", color: "#64748B" }}>{sch.recipientContact}</div>
-                                <span style={{ fontSize: "0.68rem", color: "#94A3B8" }}>{sch.recipientRole}</span>
-                              </td>
-
-                              <td style={{ padding: "0.85rem 1rem" }}>
-                                <strong style={{ color: "#1F3652", display: "block" }}>{sch.projectName}</strong>
-                                <span style={{ fontSize: "0.72rem", color: "#64748B" }}>{sch.unitName}</span>
-                              </td>
-
-                              <td style={{ padding: "0.85rem 1rem" }}>
-                                <div style={{ fontSize: "0.76rem", color: "#1F3652", fontWeight: 600 }}>{sch.sourceEvent}</div>
-                                {sch.payloadSummary && (
-                                  <div style={{ fontSize: "0.7rem", color: "#64748B", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {sch.payloadSummary}
-                                  </div>
-                                )}
-                              </td>
-
-                              <td style={{ padding: "0.85rem 1rem" }}>
-                                <span
-                                  style={{
-                                    fontSize: "0.72rem",
-                                    fontWeight: 700,
-                                    padding: "0.15rem 0.55rem",
-                                    borderRadius: "99px",
-                                    backgroundColor:
-                                      sch.status === "PROGRAMADA"
-                                        ? "#EFF6FF"
-                                        : sch.status === "EN_COLA"
-                                        ? "#FEF3C7"
-                                        : sch.status === "ENVIADA"
-                                        ? "#DCFCE7"
-                                        : "#F1F5F9",
-                                    color:
-                                      sch.status === "PROGRAMADA"
-                                        ? "#1D4ED8"
-                                        : sch.status === "EN_COLA"
-                                        ? "#92400E"
-                                        : sch.status === "ENVIADA"
-                                        ? "#166534"
-                                        : "#64748B",
-                                  }}
-                                >
-                                  {sch.status === "PROGRAMADA" && "● Programada"}
-                                  {sch.status === "EN_COLA" && "⏳ En Cola"}
-                                  {sch.status === "PAUSADA" && "⏸ Pausada"}
-                                  {sch.status === "ENVIADA" && "✓ Enviada"}
-                                </span>
-                              </td>
-
-                              <td style={{ padding: "0.85rem 1rem" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                                  {sch.status !== "ENVIADA" && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        disabled={dispatchingScheduleId === sch.id}
-                                        onClick={() => handleDispatchScheduledNow(sch)}
-                                        style={{
-                                          display: "inline-flex",
-                                          alignItems: "center",
-                                          gap: "0.25rem",
-                                          padding: "0.3rem 0.65rem",
-                                          borderRadius: "9999px",
-                                          backgroundColor: "#1B3047",
-                                          color: "#FFFFFF",
-                                          fontSize: "0.72rem",
-                                          fontWeight: 700,
-                                          border: "none",
-                                          cursor: dispatchingScheduleId === sch.id ? "not-allowed" : "pointer",
-                                          opacity: dispatchingScheduleId === sch.id ? 0.6 : 1,
-                                        }}
-                                        title="Enviar inmediatamente ahora"
-                                      >
-                                        <Send size={11} /> {dispatchingScheduleId === sch.id ? "Enviando..." : "Enviar Ya"}
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() => handleTogglePauseScheduled(sch.id)}
-                                        style={{
-                                          background: "none",
-                                          border: "1px solid #CBD5E1",
-                                          borderRadius: "9999px",
-                                          padding: "0.3rem 0.5rem",
-                                          color: "#1F3652",
-                                          cursor: "pointer",
-                                          fontSize: "0.7rem",
-                                          fontWeight: 700,
-                                        }}
-                                        title={sch.status === "PAUSADA" ? "Reanudar" : "Pausar"}
-                                      >
-                                        {sch.status === "PAUSADA" ? <Play size={11} /> : <Pause size={11} />}
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDeleteScheduled(sch.id)}
-                                        style={{
-                                          background: "none",
-                                          border: "none",
-                                          color: "#EF4444",
-                                          cursor: "pointer",
-                                          padding: "4px",
-                                        }}
-                                        title="Cancelar notificación programada"
-                                      >
-                                        <Trash2 size={13} />
-                                      </button>
-                                    </>
-                                  )}
-                                  {sch.status === "ENVIADA" && (
-                                    <span style={{ fontSize: "0.72rem", color: "#166534", fontWeight: 700 }}>
-                                      Completado
+                                  {/* Fecha / Hora Programada */}
+                                  <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                                    <div style={{ color: "#1F3652", fontWeight: 700 }}>{group.scheduledForFormatted}</div>
+                                    <span style={{ fontSize: "0.7rem", color: "#2563EB", backgroundColor: "#EFF6FF", padding: "0.1rem 0.45rem", borderRadius: "99px", fontWeight: 700, display: "inline-block", marginTop: "2px" }}>
+                                      {group.relativeTime}
                                     </span>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                                  </td>
+
+                                  {/* Evento / Disparador */}
+                                  <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                                    <strong style={{ color: "#1F3652", display: "block" }}>{group.triggerName}</strong>
+                                    <span style={{ fontSize: "0.7rem", color: "#1D4ED8", backgroundColor: "#EFF6FF", padding: "0.1rem 0.45rem", borderRadius: "99px", fontWeight: 700 }}>
+                                      {group.category}
+                                    </span>
+                                  </td>
+
+                                  {/* Canales Badges */}
+                                  <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+                                      {hasWhatsApp && (
+                                        <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.45rem", borderRadius: "99px", backgroundColor: "#DCFCE7", color: "#166534", display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
+                                          <MessageSquare size={11} /> WhatsApp
+                                        </span>
+                                      )}
+                                      {hasPostmark && (
+                                        <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.45rem", borderRadius: "99px", backgroundColor: "#EFF6FF", color: "#1D4ED8", display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
+                                          <Mail size={11} /> Email
+                                        </span>
+                                      )}
+                                      {hasPush && (
+                                        <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.45rem", borderRadius: "99px", backgroundColor: "#F3E8FF", color: "#7E22CE", display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
+                                          <Smartphone size={11} /> Push
+                                        </span>
+                                      )}
+                                      <span
+                                        onClick={() => setExpandedScheduleId(isExpanded ? null : group.id)}
+                                        style={{ fontSize: "0.68rem", color: "#64748B", cursor: "pointer", textDecoration: "underline", marginLeft: "2px" }}
+                                      >
+                                        ({group.channels.length} {group.channels.length === 1 ? "canal" : "canales"})
+                                      </span>
+                                    </div>
+                                  </td>
+
+                                  {/* Destinatario */}
+                                  <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                                    <div style={{ color: "#1F3652", fontWeight: 700 }}>{group.recipientName}</div>
+                                    <div style={{ fontSize: "0.72rem", color: "#64748B" }}>{group.recipientContact}</div>
+                                    <span style={{ fontSize: "0.68rem", color: "#94A3B8" }}>{group.recipientRole}</span>
+                                  </td>
+
+                                  {/* Desarrollo & Unidad */}
+                                  <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                                    <strong style={{ color: "#1F3652", display: "block" }}>{group.projectName}</strong>
+                                    <span style={{ fontSize: "0.72rem", color: "#64748B" }}>{group.unitName}</span>
+                                  </td>
+
+                                  {/* Estado General */}
+                                  <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                                    <span
+                                      style={{
+                                        fontSize: "0.72rem",
+                                        fontWeight: 700,
+                                        padding: "0.15rem 0.55rem",
+                                        borderRadius: "99px",
+                                        backgroundColor:
+                                          group.status === "PROGRAMADA"
+                                            ? "#EFF6FF"
+                                            : group.status === "EN_COLA"
+                                            ? "#FEF3C7"
+                                            : group.status === "ENVIADA"
+                                            ? "#DCFCE7"
+                                            : group.status === "FALLIDA"
+                                            ? "#FEE2E2"
+                                            : "#F1F5F9",
+                                        color:
+                                          group.status === "PROGRAMADA"
+                                            ? "#1D4ED8"
+                                            : group.status === "EN_COLA"
+                                            ? "#92400E"
+                                            : group.status === "ENVIADA"
+                                            ? "#166534"
+                                            : group.status === "FALLIDA"
+                                            ? "#DC2626"
+                                            : "#64748B",
+                                      }}
+                                    >
+                                      {group.status === "PROGRAMADA" && "● Programada (09:00 a.m.)"}
+                                      {group.status === "EN_COLA" && "⏳ En Cola"}
+                                      {group.status === "PAUSADA" && "⏸ Pausada"}
+                                      {group.status === "ENVIADA" && "✓ Enviada"}
+                                      {group.status === "FALLIDA" && "⚠️ Fallida"}
+                                    </span>
+                                  </td>
+
+                                  {/* Acciones */}
+                                  <td style={{ padding: "0.85rem 1rem", verticalAlign: "middle" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                                      {group.status !== "ENVIADA" && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            disabled={group.channels.some((c) => dispatchingScheduleId === c.id)}
+                                            onClick={() => {
+                                              group.channels.forEach((c) => {
+                                                if (c.status !== "ENVIADA") {
+                                                  handleDispatchScheduledNow(c.original);
+                                                }
+                                              });
+                                            }}
+                                            style={{
+                                              display: "inline-flex",
+                                              alignItems: "center",
+                                              gap: "0.25rem",
+                                              padding: "0.3rem 0.65rem",
+                                              borderRadius: "9999px",
+                                              backgroundColor: "#1B3047",
+                                              color: "#FFFFFF",
+                                              fontSize: "0.72rem",
+                                              fontWeight: 700,
+                                              border: "none",
+                                              cursor: "pointer",
+                                            }}
+                                            title="Despachar inmediatamente todos los canales programados"
+                                          >
+                                            <Send size={11} /> Enviar Ya
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              group.channels.forEach((c) => handleTogglePauseScheduled(c.id));
+                                            }}
+                                            style={{
+                                              background: "none",
+                                              border: "1px solid #CBD5E1",
+                                              borderRadius: "9999px",
+                                              padding: "0.3rem 0.5rem",
+                                              color: "#1F3652",
+                                              cursor: "pointer",
+                                              fontSize: "0.7rem",
+                                              fontWeight: 700,
+                                            }}
+                                            title={group.status === "PAUSADA" ? "Reanudar" : "Pausar"}
+                                          >
+                                            {group.status === "PAUSADA" ? <Play size={11} /> : <Pause size={11} />}
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              group.channels.forEach((c) => handleDeleteScheduled(c.id));
+                                            }}
+                                            style={{
+                                              background: "none",
+                                              border: "none",
+                                              color: "#EF4444",
+                                              cursor: "pointer",
+                                              padding: "4px",
+                                            }}
+                                            title="Cancelar notificación programada"
+                                          >
+                                            <Trash2 size={13} />
+                                          </button>
+                                        </>
+                                      )}
+                                      {group.status === "ENVIADA" && (
+                                        <span style={{ fontSize: "0.72rem", color: "#166534", fontWeight: 700 }}>
+                                          Completado
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+
+                                {/* Expanded Channel Breakdown Accordion */}
+                                {isExpanded && (
+                                  <tr style={{ borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+                                    <td colSpan={8} style={{ padding: "0.75rem 1.25rem 1.25rem 2.5rem" }}>
+                                      <div
+                                        style={{
+                                          backgroundColor: "#FFFFFF",
+                                          borderRadius: "0.75rem",
+                                          border: "1px solid #E2E8F0",
+                                          padding: "1rem 1.25rem",
+                                          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                                        }}
+                                      >
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                                          <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                                            <Layers size={14} color="#2563EB" />
+                                            <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "#1F3652" }}>
+                                              Desglose de Canales Programados (Hora de Despacho: 9:00 a.m.)
+                                            </span>
+                                          </div>
+                                          <span style={{ fontSize: "0.72rem", color: "#64748B" }}>
+                                            Origen: {group.sourceEvent}
+                                          </span>
+                                        </div>
+
+                                        <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                                          {group.channels.map((chan) => (
+                                            <div
+                                              key={chan.id}
+                                              style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "space-between",
+                                                padding: "0.6rem 0.85rem",
+                                                backgroundColor: "#F8FAFC",
+                                                borderRadius: "0.5rem",
+                                                border: "1px solid #E2E8F0",
+                                                flexWrap: "wrap",
+                                                gap: "0.5rem",
+                                              }}
+                                            >
+                                              <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                                                <span
+                                                  style={{
+                                                    fontSize: "0.72rem",
+                                                    fontWeight: 700,
+                                                    padding: "0.15rem 0.5rem",
+                                                    borderRadius: "99px",
+                                                    backgroundColor:
+                                                      chan.channel === "WHATSAPP"
+                                                        ? "#DCFCE7"
+                                                        : chan.channel === "POSTMARK"
+                                                        ? "#EFF6FF"
+                                                        : "#F3E8FF",
+                                                    color:
+                                                      chan.channel === "WHATSAPP"
+                                                        ? "#166534"
+                                                        : chan.channel === "POSTMARK"
+                                                        ? "#1D4ED8"
+                                                        : "#7E22CE",
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    gap: "0.25rem",
+                                                  }}
+                                                >
+                                                  {chan.channel === "WHATSAPP" && <MessageSquare size={11} />}
+                                                  {chan.channel === "POSTMARK" && <Mail size={11} />}
+                                                  {chan.channel === "PUSH" && <Smartphone size={11} />}
+                                                  {chan.channel === "WHATSAPP" ? "WhatsApp API" : chan.channel === "POSTMARK" ? "Correo (Postmark)" : "Web Push"}
+                                                </span>
+
+                                                <div>
+                                                  <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "#1F3652" }}>
+                                                    {chan.recipientContact}
+                                                  </div>
+                                                  {chan.payloadSummary && (
+                                                    <div style={{ fontSize: "0.7rem", color: "#64748B" }}>
+                                                      {chan.payloadSummary}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+
+                                              <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                                                <span style={{ fontSize: "0.72rem", color: "#2563EB", fontWeight: 700, backgroundColor: "#EFF6FF", padding: "0.1rem 0.45rem", borderRadius: "99px" }}>
+                                                  🕒 09:00 a.m.
+                                                </span>
+
+                                                <span
+                                                  style={{
+                                                    fontSize: "0.7rem",
+                                                    fontWeight: 700,
+                                                    padding: "0.1rem 0.45rem",
+                                                    borderRadius: "99px",
+                                                    backgroundColor: chan.status === "ENVIADA" ? "#DCFCE7" : "#EFF6FF",
+                                                    color: chan.status === "ENVIADA" ? "#166534" : "#1D4ED8",
+                                                  }}
+                                                >
+                                                  {chan.status === "ENVIADA" ? "✓ Enviada" : "● Programada"}
+                                                </span>
+
+                                                {chan.status !== "ENVIADA" && (
+                                                  <button
+                                                    type="button"
+                                                    disabled={dispatchingScheduleId === chan.id}
+                                                    onClick={() => handleDispatchScheduledNow(chan.original)}
+                                                    style={{
+                                                      display: "inline-flex",
+                                                      alignItems: "center",
+                                                      gap: "0.2rem",
+                                                      padding: "0.25rem 0.55rem",
+                                                      borderRadius: "9999px",
+                                                      backgroundColor: "#1B3047",
+                                                      color: "#FFFFFF",
+                                                      fontSize: "0.68rem",
+                                                      fontWeight: 700,
+                                                      border: "none",
+                                                      cursor: "pointer",
+                                                    }}
+                                                  >
+                                                    <Send size={10} /> {dispatchingScheduleId === chan.id ? "Enviando..." : "Enviar Este Canal"}
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
