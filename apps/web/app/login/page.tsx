@@ -52,17 +52,21 @@ function LoginContent() {
         if (response.ok) {
           const data = await response.json();
           if (data.user) {
-            loggedUser = {
-              id: data.user.id,
-              fullName: data.user.fullName || (data.user.isSuperAdmin ? "Alejandro Calderón" : "Administrador"),
-              email: data.user.email || cleanEmail,
-              phone: data.user.phone || "",
-              role: data.user.role || (data.user.isSuperAdmin ? "Super Admin" : "Director Comercial"),
-              roleTitle: data.user.roleTitle || (data.user.isSuperAdmin ? "Super Administrador" : "Director / Administrador"),
-              activeDeveloper: data.activeDeveloper?.name || "Mi Desarrolladora",
-              permissions: data.user.permissions || ["all"],
-            };
+            loggedUser = data.user;
             sessionToken = data.token || `devio_session_${Date.now()}`;
+
+            if (typeof window !== "undefined") {
+              if (data.developer) {
+                localStorage.setItem("devio_developer_onboarding", JSON.stringify(data.developer));
+                sessionStorage.setItem("devio_developer_onboarding", JSON.stringify(data.developer));
+              }
+              if (Array.isArray(data.projects) && data.projects.length > 0) {
+                localStorage.setItem("devio_projects_state", JSON.stringify(data.projects));
+                sessionStorage.setItem("devio_projects_state", JSON.stringify(data.projects));
+              }
+              localStorage.removeItem("devio_impersonation");
+              sessionStorage.removeItem("devio_impersonation");
+            }
           }
         }
       } catch (apiErr) {
@@ -134,7 +138,10 @@ function LoginContent() {
 
         setTimeout(() => {
           setIsSubmitting(false);
-          router.push(redirectTarget);
+          const destination = loggedUser.isSuperAdmin && redirectTarget === "/dashboard"
+            ? "/super-admin"
+            : redirectTarget;
+          router.push(destination);
         }, 400);
         return;
       }

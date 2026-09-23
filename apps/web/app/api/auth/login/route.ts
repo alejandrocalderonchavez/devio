@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import fs from "fs";
+import path from "path";
 
 export async function POST(request: Request) {
   try {
@@ -14,21 +16,55 @@ export async function POST(request: Request) {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // Check SUPERADMIN_EMAILS environment variable (comma/semicolon/space separated)
+    // Check SUPERADMIN_EMAILS environment variable
     const rawSuperAdminEnv = process.env.SUPERADMIN_EMAILS || "acalderoncha@gmail.com";
     const superAdminList = rawSuperAdminEnv
       .split(/[,;\s]+/)
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean);
 
-    // Fallback default superadmin email
     if (!superAdminList.includes("acalderoncha@gmail.com")) {
       superAdminList.push("acalderoncha@gmail.com");
     }
 
     const isSuperAdmin = superAdminList.includes(cleanEmail);
 
-    if (isSuperAdmin) {
+    // Read migrated developers list
+    let developersList: any[] = [];
+    try {
+      const devsPath = path.join(process.cwd(), "data/migrated-developers.json");
+      if (fs.existsSync(devsPath)) {
+        developersList = JSON.parse(fs.readFileSync(devsPath, "utf-8"));
+      }
+    } catch (e) {
+      console.warn("Could not read migrated-developers.json:", e);
+    }
+
+    // Match user to developer and projects
+    let matchedDev: any = null;
+    let matchedMembership: any = null;
+
+    for (const dev of developersList) {
+      const mem = (dev.memberships || []).find(
+        (m: any) => m.user?.email?.toLowerCase().trim() === cleanEmail
+      );
+      if (mem) {
+        matchedDev = dev;
+        matchedMembership = mem;
+        break;
+      }
+      if (dev.email?.toLowerCase().trim() === cleanEmail) {
+        matchedDev = dev;
+        break;
+      }
+    }
+
+    // If still not found and email contains campero / campero developer
+    if (!matchedDev && (cleanEmail.includes("campero") || cleanEmail === "desarrolloscampero@gmail.com")) {
+      matchedDev = developersList.find((d) => d.name.toLowerCase().includes("campero"));
+    }
+
+    if (isSuperAdmin && !matchedDev) {
       const user = {
         id: `sa-${Date.now()}`,
         fullName: cleanEmail === "acalderoncha@gmail.com" ? "Alejandro Calderón" : "Super Administrador",
@@ -51,32 +87,93 @@ export async function POST(request: Request) {
           id: "dev-global",
           name: "Devio Global",
         },
+        projects: [],
       });
     }
 
-    // Generic staff or client user login
-    const user = {
-      id: `usr-${Date.now()}`,
-      fullName: "Usuario Devio",
+    const devName = matchedDev?.name || "Desarrolladora Devio";
+    const devLegal = matchedDev?.legalName || devName;
+    const devRfc = matchedDev?.taxId || "RFC-PENDIENTE";
+    const devCity = matchedDev?.city || matchedDev?.neighborhood || "Guadalajara";
+    const devEmail = matchedDev?.email || cleanEmail;
+    const devPhone = matchedDev?.phone || "";
+
+    const userFullName =
+      matchedMembership?.user?.fullName ||
+      (matchedDev ? `${matchedDev.name} Admin` : "Usuario Devio");
+
+    const userRole = isSuperAdmin
+      ? "Super Admin"
+      : matchedMembership?.role || "Director Comercial";
+
+    const userRoleTitle = isSuperAdmin
+      ? "Super Administrador"
+      : matchedMembership?.role || "Director Comercial";
+
+    const mappedProjects = (matchedDev?.projects || []).map((p: any) => {
+      const mappedUnits = (p.units || []).map((u: any, idx: number) => ({
+        id: u.id,
+        unit: u.unitNumber || `U-${idx + 1}`,
+        type: "Departamento",
+        price: parseFloat(u.basePrice) || 3500000,
+        areaM2: 85,
+        floor: u.level || 1,
+        status:
+          u.status === "SOLD"
+            ? "VENDIDA"
+            : u.status === "AVAILABLE"
+            ? "DISPONIBLE"
+            : "BLOQUEADA",
+        client: "",
+      }));
+
+      return {
+        id: p.id,
+        name: p.name,
+        type: (p.projectType || "VERTICAL").toUpperCase(),
+        status: p.status || "ACTIVE",
+        logo: p.coverImagePath || matchedDev?.logoPath || "",
+        units: mappedUnits,
+        sales: [],
+        paymentPlans: [],
+        documents: [],
+        additionals: [],
+      };
+    });
+
+    const developerObj = {
+      id: matchedDev?.id || `dev-${Date.now()}`,
+      name: devName,
+      commercialName: devName,
+      legalName: devLegal,
+      rfc: devRfc,
+      city: devCity,
+      email: devEmail,
+      phone: devPhone,
+      logoPath: matchedDev?.logoPath || null,
+    };
+
+    const userObj = {
+      id: matchedMembership?.user?.id || `usr-${Date.now()}`,
+      fullName: userFullName,
       email: cleanEmail,
-      phone: "",
-      role: "Director Comercial",
-      roleTitle: "Director / Administrador",
+      phone: matchedMembership?.user?.phone || devPhone,
+      role: userRole,
+      roleTitle: userRoleTitle,
       permissions: ["all"],
-      isSuperAdmin: false,
-      activeDeveloper: "Mi Desarrolladora",
+      isSuperAdmin: isSuperAdmin,
+      activeDeveloper: devName,
     };
 
     const token = `devio_token_usr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
     return NextResponse.json({
       success: true,
-      user,
+      user: userObj,
+      developer: developerObj,
+      activeDeveloper: developerObj,
+      projects: mappedProjects,
       token,
-      activeDeveloper: {
-        id: "dev-default",
-        name: "Mi Desarrolladora",
-      },
     });
   } catch (error: any) {
     console.error("Error in /api/auth/login:", error);
