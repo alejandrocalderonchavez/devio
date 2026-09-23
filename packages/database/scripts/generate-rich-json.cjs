@@ -40,6 +40,23 @@ async function generateRichJson() {
     },
   });
 
+  const rawProjectsPath = path.resolve(__dirname, '../migration-data/export_All-Projects-modified--_2026-09-23_20-17-08.json');
+  let rawProjects = [];
+  if (fs.existsSync(rawProjectsPath)) {
+    try {
+      rawProjects = JSON.parse(fs.readFileSync(rawProjectsPath, 'utf8'));
+    } catch (e) {}
+  }
+
+  const sanitizeUrl = (url) => {
+    if (!url || typeof url !== 'string') return undefined;
+    const trimmed = url.trim();
+    if (!trimmed) return undefined;
+    if (trimmed.startsWith('//')) return `https:${trimmed}`;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+    return `https://${trimmed}`;
+  };
+
   const formattedDevs = developers.map((dev) => {
     // Filter out dummy/empty projects
     const validProjects = dev.projects.filter(
@@ -47,6 +64,9 @@ async function generateRichJson() {
     );
 
     const formattedProjects = validProjects.map((p) => {
+      const bubbleProj = rawProjects.find((rp) => rp['unique id'] === p.bubbleId || (rp.name && rp.name.trim().toLowerCase() === p.name.trim().toLowerCase()));
+      const projLogo = sanitizeUrl(bubbleProj?.logo) || p.coverImagePath || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80';
+
       // Calculate unit stats
       const totalUnits = p.units.length;
       const soldUnits = p.units.filter((u) => u.status === 'SOLD').length;
@@ -246,6 +266,10 @@ async function generateRichJson() {
         name: p.name,
         type: p.projectType === 'HOUSE_DEVELOPMENT' ? 'Horizontal' : 'Vertical',
         image: p.coverImagePath || (p.galleryPaths && p.galleryPaths[0]) || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80',
+        coverFileName: p.coverImagePath || (p.galleryPaths && p.galleryPaths[0]) || undefined,
+        logo: projLogo,
+        logoUrl: projLogo,
+        logoFileName: projLogo,
         progressPct: p.constructionProgress && p.constructionProgress[0] ? Number(p.constructionProgress[0].overallPercentage) : 0,
         address: p.addressLine1 || 'Guadalajara, Jalisco',
         totalUnits,
@@ -271,6 +295,8 @@ async function generateRichJson() {
       legalName: dev.legalName,
       taxId: dev.taxId,
       logoPath: dev.logoPath,
+      logo: dev.logoPath,
+      logoUrl: dev.logoPath,
       phone: dev.phone,
       email: dev.email,
       website: dev.website,

@@ -141,7 +141,11 @@ export async function POST(request: Request) {
         name: p.name,
         type: (p.projectType || "VERTICAL").toUpperCase(),
         status: p.status || "ACTIVE",
-        image: p.coverImagePath || matchedDev?.logoPath || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
+        image: p.coverImagePath || p.image || matchedDev?.logoPath || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
+        coverFileName: p.coverImagePath || p.image || null,
+        logoFileName: p.logoFileName || p.logoUrl || p.logo || null,
+        logoUrl: p.logoFileName || p.logoUrl || p.logo || null,
+        logo: p.logoFileName || p.logoUrl || p.logo || null,
         totalUnits,
         soldUnits,
         availableUnits,
@@ -182,7 +186,9 @@ export async function POST(request: Request) {
       city: devCity,
       email: devEmail,
       phone: devPhone,
-      logoPath: matchedDev?.logoPath || null,
+      logoPath: matchedDev?.logoPath || matchedDev?.logoUrl || matchedDev?.logo || null,
+      logoUrl: matchedDev?.logoPath || matchedDev?.logoUrl || matchedDev?.logo || null,
+      logo: matchedDev?.logoPath || matchedDev?.logoUrl || matchedDev?.logo || null,
     };
 
     const userObj = {

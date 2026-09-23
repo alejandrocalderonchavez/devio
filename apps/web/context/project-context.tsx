@@ -97,6 +97,8 @@ interface ProjectContextType {
   formatMoney: (amount: number) => string;
   developerName: string;
   setDeveloperName: (name: string) => void;
+  developerLogo: string;
+  setDeveloperLogo: (logo: string) => void;
   userName: string;
   setUserName: (name: string) => void;
   userEmail: string;
@@ -207,6 +209,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [currency, setCurrency] = useState<Currency>("MXN");
   const [developerName, setDeveloperName] = useState<string>("Mi Desarrolladora");
+  const [developerLogo, setDeveloperLogo] = useState<string>("");
   const [userName, setUserName] = useState<string>("Usuario");
   const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<UserRole>("Super Admin");
@@ -223,10 +226,15 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const isNewUser = localStorage.getItem("devio_is_new_user") || sessionStorage.getItem("devio_is_new_user");
     const storedProjects = localStorage.getItem("devio_projects_state") || sessionStorage.getItem("devio_projects_state");
     const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
+    const storedLogo = localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo");
     const storedUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
     const storedPlans = localStorage.getItem("devio_developer_payment_plans") || sessionStorage.getItem("devio_developer_payment_plans");
     const storedLibraryPlans = localStorage.getItem("devio_payment_plans_library") || sessionStorage.getItem("devio_payment_plans_library");
     const storedIncidents = localStorage.getItem("devio_postventa_incidents") || sessionStorage.getItem("devio_postventa_incidents");
+
+    if (storedLogo) {
+      setDeveloperLogo(storedLogo);
+    }
 
     if (storedProjects) {
       try {
@@ -325,6 +333,11 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         if (parsed.name) setDeveloperName(parsed.name);
         else if (parsed.commercialName) setDeveloperName(parsed.commercialName);
         else if (parsed.legalName) setDeveloperName(parsed.legalName);
+        const l = parsed.logoPath || parsed.logoUrl || parsed.logo;
+        if (l) {
+          setDeveloperLogo(l);
+          localStorage.setItem("devio_developer_logo", l);
+        }
       } catch (e) {}
     }
 
@@ -349,6 +362,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           if (parsedImp.userName) setUserName(parsedImp.userName);
           if (parsedImp.userEmail) setUserEmail(parsedImp.userEmail);
           if (parsedImp.developerName) setDeveloperName(parsedImp.developerName);
+          if (parsedImp.developerLogo) {
+            setDeveloperLogo(parsedImp.developerLogo);
+            localStorage.setItem("devio_developer_logo", parsedImp.developerLogo);
+          }
           if (parsedImp.role) setUserRole(parsedImp.role as UserRole);
           if (Array.isArray(parsedImp.projects) && parsedImp.projects.length > 0) {
             setProjects(parsedImp.projects);
@@ -424,6 +441,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
           if (matched) {
             setDeveloperName(matched.name);
+            const dLogo = matched.logoPath || matched.logo || matched.logoUrl || "";
+            if (dLogo) {
+              setDeveloperLogo(dLogo);
+              localStorage.setItem("devio_developer_logo", dLogo);
+              sessionStorage.setItem("devio_developer_logo", dLogo);
+            }
             if (Array.isArray(matched.projects) && matched.projects.length > 0) {
               setProjects(matched.projects);
               localStorage.setItem("devio_projects_state", JSON.stringify(matched.projects));
@@ -2261,6 +2284,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         formatMoney,
         developerName,
         setDeveloperName,
+        developerLogo,
+        setDeveloperLogo,
         userName,
         setUserName,
         userEmail,

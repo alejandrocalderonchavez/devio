@@ -60,7 +60,7 @@ export default function AppLayout({
   headerActions,
 }: AppLayoutProps) {
   const pathname = usePathname();
-  const { projects, currency, setCurrency, userName, userEmail, toast, hideToast, showToast, logout, hasPermission } = useProject();
+  const { projects, currency, setCurrency, userName, userEmail, developerName, developerLogo, toast, hideToast, showToast, logout, hasPermission } = useProject();
 
   const [impersonation, setImpersonation] = React.useState<{
     active: boolean;
@@ -187,7 +187,7 @@ export default function AppLayout({
       >
         <div>
           {/* Logo Devio Oficial + Badge de Modo Admin */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", paddingLeft: "0.25rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", paddingLeft: "0.25rem" }}>
             <Link
               href={isAdminMode ? "/super-admin" : "/dashboard"}
               style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "0.6rem" }}
@@ -195,7 +195,7 @@ export default function AppLayout({
               <img
                 src="/brand/13.png"
                 alt="Devio"
-                style={{ height: "30px", width: "auto", objectFit: "contain" }}
+                style={{ height: "28px", width: "auto", objectFit: "contain" }}
               />
             </Link>
             {isAdminMode && (
@@ -214,6 +214,65 @@ export default function AppLayout({
               </span>
             )}
           </div>
+
+          {/* Insignia Oficial de la Desarrolladora Activa con su Logotipo */}
+          {!isAdminMode && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.6rem",
+                padding: "0.5rem 0.65rem",
+                marginBottom: "1.25rem",
+                backgroundColor: "#F8FAFC",
+                borderRadius: "0.75rem",
+                border: "1px solid #E2E8F0",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+              }}
+            >
+              {developerLogo ? (
+                <img
+                  src={developerLogo}
+                  alt={developerName}
+                  style={{
+                    height: "26px",
+                    width: "26px",
+                    objectFit: "contain",
+                    borderRadius: "6px",
+                    backgroundColor: "#FFFFFF",
+                    padding: "2px",
+                    border: "1px solid #E2E8F0",
+                    flexShrink: 0,
+                  }}
+                  onError={(e) => { (e.currentTarget as HTMLElement).style.display = "none"; }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: "26px",
+                    height: "26px",
+                    borderRadius: "6px",
+                    backgroundColor: "rgba(47, 128, 237, 0.08)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#2F80ED",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Building2 size={14} />
+                </div>
+              )}
+              <div style={{ display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
+                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.04em", lineHeight: 1 }}>
+                  Desarrolladora
+                </span>
+                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#1F3652", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: "2px" }}>
+                  {developerName}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Menú: Modo Super Admin Exclusivo vs Modo Proyecto vs Modo General */}
           {isAdminMode ? (
@@ -367,10 +426,28 @@ export default function AppLayout({
                 <ChevronLeft size={14} /> Proyectos
               </Link>
 
-              {/* Nombre del Proyecto Activo */}
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.6rem", marginBottom: "0.75rem", backgroundColor: "rgba(47, 128, 237, 0.08)", borderRadius: "0.6rem", color: "#2F80ED" }}>
-                <BarChart3 size={18} />
-                <span style={{ fontSize: "0.82rem", fontWeight: 700, lineHeight: 1.2, color: "#1F3652" }}>
+              {/* Nombre y Logotipo del Proyecto Activo */}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", padding: "0.5rem 0.65rem", marginBottom: "0.75rem", backgroundColor: "rgba(47, 128, 237, 0.08)", borderRadius: "0.6rem", color: "#2F80ED" }}>
+                {(activeProject.logoFileName || (activeProject as any).logo || (activeProject as any).logoUrl) ? (
+                  <img
+                    src={activeProject.logoFileName || (activeProject as any).logo || (activeProject as any).logoUrl}
+                    alt={activeProject.name}
+                    style={{
+                      height: "26px",
+                      width: "26px",
+                      objectFit: "contain",
+                      borderRadius: "5px",
+                      backgroundColor: "#FFFFFF",
+                      padding: "2px",
+                      border: "1px solid rgba(47, 128, 237, 0.2)",
+                      flexShrink: 0,
+                    }}
+                    onError={(e) => { (e.currentTarget as HTMLElement).style.display = "none"; }}
+                  />
+                ) : (
+                  <BarChart3 size={18} style={{ flexShrink: 0 }} />
+                )}
+                <span style={{ fontSize: "0.82rem", fontWeight: 700, lineHeight: 1.2, color: "#1F3652", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {activeProject.name}
                 </span>
               </div>

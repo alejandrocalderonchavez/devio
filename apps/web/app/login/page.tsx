@@ -59,6 +59,11 @@ function LoginContent() {
               if (data.developer) {
                 localStorage.setItem("devio_developer_onboarding", JSON.stringify(data.developer));
                 sessionStorage.setItem("devio_developer_onboarding", JSON.stringify(data.developer));
+                if (data.developer.logoPath || data.developer.logoUrl || data.developer.logo) {
+                  const devLogo = data.developer.logoPath || data.developer.logoUrl || data.developer.logo;
+                  localStorage.setItem("devio_developer_logo", devLogo);
+                  sessionStorage.setItem("devio_developer_logo", devLogo);
+                }
               }
               if (Array.isArray(data.projects) && data.projects.length > 0) {
                 localStorage.setItem("devio_projects_state", JSON.stringify(data.projects));

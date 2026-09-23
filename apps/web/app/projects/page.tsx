@@ -173,13 +173,38 @@ export default function ProjectsPage() {
                   transition: "transform 0.2s ease, box-shadow 0.2s ease",
                 }}
               >
-                {/* Foto de Portada */}
+                {/* Foto de Portada con Logo del Proyecto flotante */}
                 <div style={{ width: "100%", height: "150px", position: "relative", overflow: "hidden" }}>
                   <img
                     src={project.image}
                     alt={project.name}
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
+                  {(project.logoFileName || (project as any).logo || (project as any).logoUrl) && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: "10px",
+                        left: "10px",
+                        backgroundColor: "#FFFFFF",
+                        borderRadius: "8px",
+                        padding: "4px 8px",
+                        boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        border: "1px solid rgba(226, 232, 240, 0.9)",
+                        maxWidth: "80%",
+                      }}
+                    >
+                      <img
+                        src={project.logoFileName || (project as any).logo || (project as any).logoUrl}
+                        alt={project.name}
+                        style={{ height: "24px", width: "auto", maxWidth: "80px", objectFit: "contain" }}
+                        onError={(e) => { (e.currentTarget as HTMLElement).style.display = "none"; }}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Cuerpo de la Tarjeta */}
