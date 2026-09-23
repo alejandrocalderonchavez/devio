@@ -104,31 +104,60 @@ async function generateRichJson() {
         const clientPhone = s.primaryClient?.phone || '-';
         const clientRfc = s.primaryClient?.taxId || '-';
 
-        const scheduled = (s.scheduledObligations || []).map((o, idx) => ({
-          id: o.id,
-          concept: o.concept || `Mensualidad ${idx + 1}`,
-          unit: u?.unitNumber || 'N/A',
-          montoProgramado: Number(o.scheduledAmount),
-          fechaProgramada: o.dueDate ? o.dueDate.toISOString().split('T')[0] : '2026-10-01',
-          montoPagado: Number(o.paidAmount) || 0,
-          montoPendiente: Number(o.scheduledAmount) - (Number(o.paidAmount) || 0),
-          fechaPago: o.paidAt ? o.paidAt.toISOString().split('T')[0] : 'Pendiente',
-          planPago: 'Personalizado',
-          metodoPago: 'Transferencia SPEI',
-          status: o.status === 'PAID' ? 'Pagado' : o.status === 'OVERDUE' ? 'Atrasado' : 'Pendiente',
-          interesMoratorio: 0,
-        }));
+        const scheduled = (s.scheduledObligations || []).map((o, idx) => {
+          const sAmount = Number(o.scheduledAmount) || 0;
+          const pAmount = Number(o.paidAmount) || 0;
+          const pendAmount = Math.max(0, sAmount - pAmount);
+          const sDate = o.dueDate ? o.dueDate.toISOString().split('T')[0] : '2026-10-01';
+          const pDate = o.paidAt ? o.paidAt.toISOString().split('T')[0] : 'Pendiente';
+          const stat = o.status === 'PAID' ? 'Pagado' : o.status === 'OVERDUE' ? 'Atrasado' : 'Pendiente';
 
-        const receipts = (s.paymentReceipts || []).map((r) => ({
-          id: r.id,
-          fechaPago: r.paymentDate ? r.paymentDate.toISOString().split('T')[0] : '2026-09-01',
-          metodoPago: 'Transferencia SPEI',
-          monto: Number(r.amount),
-          unit: u?.unitNumber || 'N/A',
-          reciboFolio: r.receiptFolio || `REC-${r.id.slice(-6)}`,
-          comprobanteUrl: r.notes?.includes('Recibo: ') ? r.notes.split('Recibo: ')[1]?.split(' ')[0] : undefined,
-          voucherName: 'Comprobante_Pago.pdf',
-        }));
+          return {
+            id: o.id,
+            concept: o.concept || `Mensualidad ${idx + 1}`,
+            unit: u?.unitNumber || 'N/A',
+            scheduledAmount: sAmount,
+            montoProgramado: sAmount,
+            scheduledDate: sDate,
+            fechaProgramada: sDate,
+            paidAmount: pAmount,
+            montoPagado: pAmount,
+            pendingAmount: pendAmount,
+            montoPendiente: pendAmount,
+            paidDate: pDate,
+            fechaPago: pDate,
+            planPago: 'Personalizado',
+            paymentPlan: 'Personalizado',
+            metodoPago: 'Transferencia SPEI',
+            paymentMethod: 'Transferencia SPEI',
+            status: stat,
+            interesMoratorio: 0,
+            moratoryAmount: 0,
+          };
+        });
+
+        const receipts = (s.paymentReceipts || []).map((r) => {
+          const rAmount = Number(r.amount) || 0;
+          const rDate = r.paymentDate ? r.paymentDate.toISOString().split('T')[0] : '2026-09-01';
+          const rFolio = r.receiptFolio || `REC-${r.id.slice(-6)}`;
+          const rVoucher = r.notes?.includes('Recibo: ') ? r.notes.split('Recibo: ')[1]?.split(' ')[0] : undefined;
+
+          return {
+            id: r.id,
+            amount: rAmount,
+            monto: rAmount,
+            paymentDate: rDate,
+            fechaPago: rDate,
+            metodoPago: 'Transferencia SPEI',
+            paymentMethod: 'Transferencia SPEI',
+            unit: u?.unitNumber || 'N/A',
+            reciboFolio: rFolio,
+            receiptFolio: rFolio,
+            comprobanteUrl: rVoucher,
+            voucherName: 'Comprobante_Pago.pdf',
+            moratoryAmount: 0,
+          };
+        });
 
         const totalScheduled = scheduled.reduce((acc, o) => acc + o.montoProgramado, 0);
         const totalPaidFromReceipts = receipts.reduce((acc, r) => acc + r.monto, 0);

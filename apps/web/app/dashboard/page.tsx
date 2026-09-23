@@ -63,26 +63,28 @@ export default function DashboardPage() {
       );
 
       activeSales.forEach((sale) => {
-        (sale.schedule || []).forEach((inst) => {
-          if (inst.status === "Atrasado" || (inst.pendingAmount > 0 && inst.scheduledDate)) {
+        (sale.schedule || []).forEach((inst: any) => {
+          const sDate = inst.scheduledDate || inst.fechaProgramada || "";
+          const pendingAmt = Number(inst.pendingAmount ?? inst.montoPendiente) || 0;
+          if (inst.status === "Atrasado" || (pendingAmt > 0 && sDate)) {
             let instDate: Date | null = null;
-            if (inst.scheduledDate.includes("-")) {
-              const parts = inst.scheduledDate.split("-").map(Number);
+            if (typeof sDate === "string" && sDate.includes("-")) {
+              const parts = sDate.split("-").map(Number);
               if (parts[0]! > 1000) {
                 instDate = new Date(parts[0]!, parts[1]! - 1, parts[2]!);
               } else {
                 instDate = new Date(parts[2]!, parts[1]! - 1, parts[0]!);
               }
-            } else if (inst.scheduledDate.includes("/")) {
-              const parts = inst.scheduledDate.split("/").map(Number);
+            } else if (typeof sDate === "string" && sDate.includes("/")) {
+              const parts = sDate.split("/").map(Number);
               instDate = new Date(parts[2]!, parts[1]! - 1, parts[0]!);
             }
-            if (instDate && instDate < now && inst.pendingAmount > 0) {
+            if (instDate && !isNaN(instDate.getTime()) && instDate < now && pendingAmt > 0) {
               const diffDays = Math.max(1, Math.floor((now.getTime() - instDate.getTime()) / (1000 * 60 * 60 * 24)));
               globalOverdueList.push({
-                name: sale.clientName,
-                amount: inst.pendingAmount,
-                unit: sale.unit,
+                name: sale.clientName || "Cliente",
+                amount: pendingAmt,
+                unit: sale.unit || "N/A",
                 daysOverdue: diffDays,
                 projectName: p.name,
               });
@@ -208,12 +210,13 @@ export default function DashboardPage() {
 
       // Process active sales schedule cuotas & real receipts
       activeSales.forEach((sale) => {
-        (sale.schedule || []).forEach((inst) => {
-          const mKey = parseMonthKey(inst.scheduledDate);
+        (sale.schedule || []).forEach((inst: any) => {
+          const sDate = inst.scheduledDate || inst.fechaProgramada || "";
+          const mKey = parseMonthKey(sDate);
           const entry = monthsMap[mKey];
           if (entry) {
-            entry.cobrado += Number(inst.paidAmount) || 0;
-            entry.porCobrar += Number(inst.pendingAmount) || 0;
+            entry.cobrado += Number(inst.paidAmount ?? inst.montoPagado) || 0;
+            entry.porCobrar += Number(inst.pendingAmount ?? inst.montoPendiente) || 0;
           }
         });
       });
@@ -279,11 +282,12 @@ export default function DashboardPage() {
         );
 
         activeSales.forEach((sale) => {
-          (sale.schedule || []).forEach((inst) => {
-            const parsed = parseDateParts(inst.scheduledDate);
+          (sale.schedule || []).forEach((inst: any) => {
+            const sDate = inst.scheduledDate || inst.fechaProgramada || "";
+            const parsed = parseDateParts(sDate);
             if (parsed && parsed.year === targetYear && parsed.month === targetMonth) {
-              cobrado += Number(inst.paidAmount) || 0;
-              porCobrar += Number(inst.pendingAmount) || 0;
+              cobrado += Number(inst.paidAmount ?? inst.montoPagado) || 0;
+              porCobrar += Number(inst.pendingAmount ?? inst.montoPendiente) || 0;
             }
           });
         });
