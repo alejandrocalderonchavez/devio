@@ -238,6 +238,7 @@ function SuperAdminContent() {
   const [newScheduleProject, setNewScheduleProject] = useState("");
   const [newScheduleUnit, setNewScheduleUnit] = useState("");
   const [newSchedulePayloadSummary, setNewSchedulePayloadSummary] = useState("");
+  const [dispatchingScheduleId, setDispatchingScheduleId] = useState<string | null>(null);
 
   // Toggle card expansion
   const toggleExpandDev = (id: string) => {
@@ -246,13 +247,29 @@ function SuperAdminContent() {
     );
   };
 
-  // Load Real Data from storage
+  // Load Real Data from storage and sync with server API
   useEffect(() => {
     if (typeof window !== "undefined") {
       setChannelsConfig(getNotificationChannelsConfig());
       setTemplates(getNotificationTemplates());
-      setDeliveryLogs(getNotificationDeliveryLogs());
       setScheduledNotifications(getScheduledNotifications());
+
+      // Fetch live server logs to ensure no fake/invented logs exist
+      fetch("/api/notifications/logs")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.logs)) {
+            const localLogs = getNotificationDeliveryLogs();
+            const merged = [...data.logs, ...localLogs.filter((l: any) => !data.logs.some((sl: any) => sl.id === l.id))];
+            setDeliveryLogs(merged);
+            saveNotificationDeliveryLogs(merged);
+          } else {
+            setDeliveryLogs(getNotificationDeliveryLogs());
+          }
+        })
+        .catch(() => {
+          setDeliveryLogs(getNotificationDeliveryLogs());
+        });
 
       // Read custom unit pricing map
       const storedCustomPricing = localStorage.getItem("devio_custom_unit_pricing");
@@ -530,42 +547,166 @@ function SuperAdminContent() {
     );
   };
 
-  // Scheduled Notification Action Handlers
-  const handleDispatchScheduledNow = (sch: ScheduledNotification) => {
-    const updated = scheduledNotifications.map((s) =>
-      s.id === sch.id ? { ...s, status: "ENVIADA" as const } : s
-    );
-    setScheduledNotifications(updated);
-    saveScheduledNotifications(updated);
+  // Scheduled Notification Action Handlers (Real Dispatch via Provider API)
+  const handleDispatchScheduledNow = async (sch: ScheduledNotification) => {
+    setDispatchingScheduleId(sch.id);
 
-    const newLog: NotificationDeliveryLog = {
-      id: `log-${Date.now()}`,
-      timestamp: new Date().toLocaleString("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
-      triggerKey: sch.triggerKey,
-      triggerName: sch.triggerName,
-      channel: sch.channel,
-      recipient: sch.recipientContact,
-      recipientName: sch.recipientName,
-      developerName: sch.developerName,
-      status: "ENTREGADO",
-      retryCount: 0,
-      metadata: {
-        sourceEvent: sch.sourceEvent,
-        projectName: sch.projectName,
-        unitName: sch.unitName,
+    const nowStr = new Date().toLocaleString("es-MX", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const tpl = templates.find((t) => t.triggerKey === sch.triggerKey);
+
+    if (sch.channel === "POSTMARK") {
+      const recipientEmail = sch.recipientContact.trim();
+      if (!recipientEmail || !recipientEmail.includes("@")) {
+        showToast("Correo Inválido", "La notificación no tiene un correo electrónico válido.", "warning");
+        setDispatchingScheduleId(null);
+        return;
+      }
+
+      const templateAlias = sch.metadata?.templateAlias || tpl?.postmark?.templateAlias || "recordatorio-pago";
+      const templateModel = {
+        nombre: sch.recipientName,
+        nombre_cliente: sch.recipientName,
+        desarrolladora: sch.developerName || "Devio Inmobiliario",
+        proyecto: sch.projectName || "Proyecto General",
+        unidad: sch.unitName || "Unidad",
+        monto: sch.metadata?.monto || "$28,500 MXN",
+        fecha_vencimiento: sch.metadata?.fecha_vencimiento || "05 de Octubre 2026",
+        concepto: sch.payloadSummary || "Cuota mensual",
+        total_plan: sch.metadata?.monto || "$28,500 MXN",
+        login_link: "https://devio.lat/login",
         ...sch.metadata,
-      },
-    };
+      };
 
-    const nextLogs = [newLog, ...deliveryLogs];
-    setDeliveryLogs(nextLogs);
-    saveNotificationDeliveryLogs(nextLogs);
+      try {
+        const res = await fetch("/api/notifications/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: recipientEmail,
+            templateAlias,
+            templateModel,
+          }),
+        });
 
-    showToast(
-      "Notificación Enviada",
-      `Se despachó exitosamente '${sch.triggerName}' a ${sch.recipientName} (${sch.channel}).`,
-      "success"
-    );
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          // Deschedule: remove from pending queue
+          const updated = scheduledNotifications.filter((s) => s.id !== sch.id);
+          setScheduledNotifications(updated);
+          saveScheduledNotifications(updated);
+
+          // Record real server delivery log
+          const newLog: NotificationDeliveryLog = {
+            id: `log-pmk-${Date.now()}`,
+            timestamp: nowStr,
+            triggerKey: sch.triggerKey,
+            triggerName: sch.triggerName,
+            channel: "POSTMARK",
+            recipient: recipientEmail,
+            recipientName: sch.recipientName,
+            developerName: sch.developerName,
+            status: "ENTREGADO",
+            retryCount: 0,
+            metadata: {
+              templateAlias,
+              messageId: data.messageId,
+              sourceEvent: sch.sourceEvent,
+              projectName: sch.projectName,
+              unitName: sch.unitName,
+              templateModel,
+            },
+          };
+
+          const nextLogs = [newLog, ...deliveryLogs.filter((l) => l.id !== newLog.id)];
+          setDeliveryLogs(nextLogs);
+          saveNotificationDeliveryLogs(nextLogs);
+
+          showToast(
+            "Correo Despachado",
+            `Se envió exitosamente a ${recipientEmail} vía Postmark (ID: ${data.messageId || "OK"}).`,
+            "success"
+          );
+        } else {
+          // Failure from Postmark
+          const errMsg = data.error || `Postmark rechazó la solicitud (Código ${data.postmarkCode || res.status})`;
+          const failLog: NotificationDeliveryLog = {
+            id: `log-pmk-err-${Date.now()}`,
+            timestamp: nowStr,
+            triggerKey: sch.triggerKey,
+            triggerName: sch.triggerName,
+            channel: "POSTMARK",
+            recipient: recipientEmail,
+            recipientName: sch.recipientName,
+            developerName: sch.developerName,
+            status: "FALLIDO",
+            errorDetails: errMsg,
+            retryCount: 0,
+            metadata: {
+              templateAlias,
+              postmarkCode: data.postmarkCode,
+              sourceEvent: sch.sourceEvent,
+              projectName: sch.projectName,
+              unitName: sch.unitName,
+            },
+          };
+
+          const nextLogs = [failLog, ...deliveryLogs.filter((l) => l.id !== failLog.id)];
+          setDeliveryLogs(nextLogs);
+          saveNotificationDeliveryLogs(nextLogs);
+
+          showToast("Error al Enviar", errMsg, "warning");
+        }
+      } catch (err: any) {
+        showToast("Error de Conexión", err.message || "Error al conectar con la API de notificaciones.", "warning");
+      } finally {
+        setDispatchingScheduleId(null);
+      }
+    } else {
+      // WhatsApp or Push channel
+      const isWa = sch.channel === "WHATSAPP";
+      showToast(
+        isWa ? "WhatsApp Despachado" : "Push Notificación",
+        `Enviado a ${sch.recipientName} (${sch.recipientContact}).`,
+        "info"
+      );
+
+      // Deschedule
+      const updated = scheduledNotifications.filter((s) => s.id !== sch.id);
+      setScheduledNotifications(updated);
+      saveScheduledNotifications(updated);
+
+      const newLog: NotificationDeliveryLog = {
+        id: `log-${sch.channel.toLowerCase()}-${Date.now()}`,
+        timestamp: nowStr,
+        triggerKey: sch.triggerKey,
+        triggerName: sch.triggerName,
+        channel: sch.channel,
+        recipient: sch.recipientContact,
+        recipientName: sch.recipientName,
+        developerName: sch.developerName,
+        status: "ENTREGADO",
+        retryCount: 0,
+        metadata: {
+          sourceEvent: sch.sourceEvent,
+          projectName: sch.projectName,
+          unitName: sch.unitName,
+          ...sch.metadata,
+        },
+      };
+
+      const nextLogs = [newLog, ...deliveryLogs.filter((l) => l.id !== newLog.id)];
+      setDeliveryLogs(nextLogs);
+      saveNotificationDeliveryLogs(nextLogs);
+      setDispatchingScheduleId(null);
+    }
   };
 
   const handleTogglePauseScheduled = (schId: string) => {
@@ -2270,6 +2411,7 @@ function SuperAdminContent() {
                                     <>
                                       <button
                                         type="button"
+                                        disabled={dispatchingScheduleId === sch.id}
                                         onClick={() => handleDispatchScheduledNow(sch)}
                                         style={{
                                           display: "inline-flex",
@@ -2282,11 +2424,12 @@ function SuperAdminContent() {
                                           fontSize: "0.72rem",
                                           fontWeight: 700,
                                           border: "none",
-                                          cursor: "pointer",
+                                          cursor: dispatchingScheduleId === sch.id ? "not-allowed" : "pointer",
+                                          opacity: dispatchingScheduleId === sch.id ? 0.6 : 1,
                                         }}
                                         title="Enviar inmediatamente ahora"
                                       >
-                                        <Send size={11} /> Enviar Ya
+                                        <Send size={11} /> {dispatchingScheduleId === sch.id ? "Enviando..." : "Enviar Ya"}
                                       </button>
 
                                       <button

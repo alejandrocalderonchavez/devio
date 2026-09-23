@@ -538,53 +538,7 @@ export const INITIAL_NOTIFICATION_TEMPLATES: NotificationTemplate[] = [
   },
 ];
 
-export const INITIAL_NOTIFICATION_DELIVERY_LOGS: NotificationDeliveryLog[] = [
-  {
-    id: "log-pmk-init-1",
-    timestamp: "22 Sep 2026, 17:40",
-    triggerKey: "auth.welcome_client",
-    triggerName: "Bienvenida y Credenciales Portal Cliente",
-    channel: "POSTMARK",
-    recipient: "acalderoncha@gmail.com",
-    recipientName: "Alejandro Calderón",
-    developerName: "Devio Inmobiliario",
-    status: "ENTREGADO",
-    retryCount: 0,
-    metadata: {
-      templateAlias: "bienvenida-cliente",
-    },
-  },
-  {
-    id: "log-pmk-init-2",
-    timestamp: "22 Sep 2026, 17:41",
-    triggerKey: "sales.unit_assigned",
-    triggerName: "Asignación de Unidad Formalizada",
-    channel: "POSTMARK",
-    recipient: "acalderoncha@gmail.com",
-    recipientName: "Alejandro Calderón",
-    developerName: "Devio Inmobiliario",
-    status: "ENTREGADO",
-    retryCount: 0,
-    metadata: {
-      templateAlias: "alta-unidad",
-    },
-  },
-  {
-    id: "log-pmk-init-3",
-    timestamp: "22 Sep 2026, 17:42",
-    triggerKey: "payments.payment_receipt",
-    triggerName: "Recibo de Pago de Enganche",
-    channel: "POSTMARK",
-    recipient: "acalderoncha@gmail.com",
-    recipientName: "Alejandro Calderón",
-    developerName: "Devio Inmobiliario",
-    status: "ENTREGADO",
-    retryCount: 0,
-    metadata: {
-      templateAlias: "recibo-pago",
-    },
-  },
-];
+export const INITIAL_NOTIFICATION_DELIVERY_LOGS: NotificationDeliveryLog[] = [];
 
 export const INITIAL_CUSTOM_INVITES: CustomPricingInvite[] = [];
 

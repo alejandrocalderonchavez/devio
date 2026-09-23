@@ -14,53 +14,7 @@ export interface ServerNotificationLog {
 }
 
 // Global server memory store initialized with audit records
-const globalLogs: ServerNotificationLog[] = [
-  {
-    id: "log-pmk-init-1",
-    timestamp: new Date().toLocaleString("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
-    triggerKey: "auth.welcome_client",
-    triggerName: "Bienvenida y Credenciales Portal Cliente",
-    channel: "POSTMARK",
-    recipient: "acalderoncha@gmail.com",
-    recipientName: "Alejandro Calderón",
-    developerName: "Devio Inmobiliario",
-    status: "ENTREGADO",
-    retryCount: 0,
-    metadata: {
-      templateAlias: "bienvenida-cliente",
-    },
-  },
-  {
-    id: "log-pmk-init-2",
-    timestamp: new Date().toLocaleString("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
-    triggerKey: "sales.unit_assigned",
-    triggerName: "Asignación de Unidad Formalizada",
-    channel: "POSTMARK",
-    recipient: "acalderoncha@gmail.com",
-    recipientName: "Alejandro Calderón",
-    developerName: "Devio Inmobiliario",
-    status: "ENTREGADO",
-    retryCount: 0,
-    metadata: {
-      templateAlias: "alta-unidad",
-    },
-  },
-  {
-    id: "log-pmk-init-3",
-    timestamp: new Date().toLocaleString("es-MX", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
-    triggerKey: "payments.payment_receipt",
-    triggerName: "Recibo de Pago de Enganche",
-    channel: "POSTMARK",
-    recipient: "acalderoncha@gmail.com",
-    recipientName: "Alejandro Calderón",
-    developerName: "Devio Inmobiliario",
-    status: "ENTREGADO",
-    retryCount: 0,
-    metadata: {
-      templateAlias: "recibo-pago",
-    },
-  },
-];
+const globalLogs: ServerNotificationLog[] = [];
 
 export function getServerLogs(): ServerNotificationLog[] {
   return [...globalLogs];
