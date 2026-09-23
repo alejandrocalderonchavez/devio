@@ -280,156 +280,75 @@ function SuperAdminContent() {
         } catch (e) {}
       }
 
-      // Load real active developer, projects and users
-      const storedProjects = localStorage.getItem("devio_projects_state") || sessionStorage.getItem("devio_projects_state");
-      const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
-      const storedUsers = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
+      // Fetch live developers from Supabase via API
+      fetch("/api/developers")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.developers) && data.developers.length > 0) {
+            const mappedDevs: SuperAdminDeveloper[] = data.developers.map((d: any) => {
+              const devBasePrice = customPricingMap[d.id]?.devPrice || 180;
+              const mappedProjects: SuperAdminProject[] = (d.projects || []).map((p: any) => {
+                const totalUnits = (p.units || []).length;
+                const soldUnits = (p.units || []).filter((u: any) => u.status === "SOLD").length;
+                const availableUnits = (p.units || []).filter((u: any) => u.status === "AVAILABLE").length;
+                const blockedUnits = (p.units || []).filter((u: any) => u.status === "BLOCKED" || u.status === "RESERVED").length;
+                const projPriceOverride = customPricingMap[d.id]?.projectPrices?.[p.id];
+                const finalPrice = projPriceOverride !== undefined ? projPriceOverride : devBasePrice;
 
-      let devName = "Devio Desarrolladora Demo";
-      let devLegal = "Kitos SAS";
-      let devRfc = "DEV260101XYZ";
-      let devCity = "Guadalajara";
-      let devEmail = "alejandrocalderoncha@gmail.com";
-      let devPhone = "3322567499";
+                return {
+                  id: p.id,
+                  name: p.name,
+                  type: (p.projectType || "VERTICAL").toUpperCase(),
+                  totalUnits: totalUnits,
+                  soldUnits: soldUnits,
+                  availableUnits: availableUnits,
+                  blockedUnits: blockedUnits,
+                  pricePerUnit: finalPrice,
+                  status: (p.status || "ACTIVE").toUpperCase() as any,
+                  assignedUsersCount: (d.memberships || []).length || 1,
+                  createdAt: p.createdAt ? new Date(p.createdAt).toISOString().split("T")[0] : "2026-01-15",
+                };
+              });
 
-      if (storedDev) {
-        try {
-          const parsed = JSON.parse(storedDev);
-          if (parsed.name || parsed.commercialName) devName = parsed.name || parsed.commercialName;
-          if (parsed.legalName) devLegal = parsed.legalName;
-          if (parsed.rfc) devRfc = parsed.rfc;
-          if (parsed.city) devCity = parsed.city;
-          if (parsed.email) devEmail = parsed.email;
-          if (parsed.phone) devPhone = parsed.phone;
-        } catch (e) {}
-      }
-
-      const activeDevId = "dev-active";
-      const devBasePrice = customPricingMap[activeDevId]?.devPrice || 180;
-
-      let realProjects: SuperAdminProject[] = [];
-      if (storedProjects) {
-        try {
-          const parsed = JSON.parse(storedProjects);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            realProjects = parsed.map((p: any) => {
-              const totalUnits = (p.units || []).length || 6;
-              const soldUnits = (p.units || []).filter((u: any) => u.status === "VENDIDA").length || 2;
-              const availableUnits = Math.max(0, totalUnits - soldUnits);
-              const projPriceOverride = customPricingMap[activeDevId]?.projectPrices?.[p.id];
-              const finalPrice = projPriceOverride !== undefined ? projPriceOverride : devBasePrice;
+              const mappedUsers = (d.memberships || []).map((m: any) => ({
+                id: m.user?.id || m.id,
+                name: m.user?.fullName || "Usuario",
+                email: m.user?.email || "usuario@devio.mx",
+                role: m.role || "DIRECTOR COMERCIAL",
+                developerName: d.name,
+                assignedProjectIds: ["Todos los proyectos"],
+                status: "ACTIVE",
+              }));
 
               return {
-                id: p.id || "proj-1",
-                name: p.name || "Proyecto Inmobiliario",
-                type: (p.type || "VERTICAL").toUpperCase(),
-                totalUnits: totalUnits,
-                soldUnits: soldUnits,
-                availableUnits: availableUnits,
-                blockedUnits: 0,
-                pricePerUnit: finalPrice,
-                status: "ACTIVE" as const,
-                assignedUsersCount: 1,
-                createdAt: "2026-01-15",
+                id: d.id,
+                name: d.name,
+                legalName: d.legalName || d.name,
+                rfc: d.taxId || "RFC-PENDIENTE",
+                contactEmail: d.email || `contacto@${d.name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
+                phone: d.phone || "",
+                city: d.city || d.neighborhood || "Guadalajara",
+                subscriptionStatus: "ACTIVE",
+                pricePerUnitMonthly: devBasePrice,
+                createdAt: d.createdAt ? new Date(d.createdAt).toISOString().split("T")[0] : "2026-01-15",
+                projects: mappedProjects,
+                users: mappedUsers,
               };
             });
+            setDevelopers(mappedDevs);
           }
-        } catch (e) {}
-      }
+        })
+        .catch((err) => console.error("Error loading developers from Supabase:", err));
 
-      if (realProjects.length === 0) {
-        const p1Price = customPricingMap[activeDevId]?.projectPrices?.["proj-1730106268757"] ?? devBasePrice;
-        realProjects = [
-          {
-            id: "proj-1730106268757",
-            name: "Black eleven demo",
-            type: "VERTICAL",
-            totalUnits: 6,
-            soldUnits: 2,
-            availableUnits: 4,
-            blockedUnits: 0,
-            pricePerUnit: p1Price,
-            status: "ACTIVE",
-            assignedUsersCount: 1,
-            createdAt: "2026-01-15",
-          },
-        ];
-      }
-
-      let realUsers: any[] = [];
-      if (storedUsers) {
-        try {
-          const parsed = JSON.parse(storedUsers);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            realUsers = parsed.map((u: any) => ({
-              id: u.id || `usr-${Date.now()}`,
-              name: u.name || "Usuario Devio",
-              email: u.email || "user@devio.mx",
-              role: u.role || "Director Comercial",
-              assignedProjectIds: u.assignedProjectIds || u.assignedProjects || ["Todos los proyectos"],
-              permissions: u.permissions || [],
-            }));
+      // Fetch live scheduled notifications
+      fetch("/api/notifications/scheduled")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.scheduled) && data.scheduled.length > 0) {
+            setScheduledNotifications(data.scheduled);
           }
-        } catch (e) {}
-      }
-
-      if (realUsers.length === 0) {
-        realUsers = [
-          {
-            id: "usr-admin-root",
-            name: `${devName} Admin`,
-            email: devEmail,
-            role: "SUPER ADMIN",
-            developerName: devName,
-            assignedProjectIds: ["Todos los proyectos"],
-            status: "ACTIVE",
-          },
-          {
-            id: "usr-1",
-            name: "juan salvador",
-            email: "0243563@up.edu.mx",
-            role: "DIRECTOR COMERCIAL",
-            developerName: devName,
-            assignedProjectIds: ["Todos los proyectos"],
-            status: "ACTIVE",
-          },
-          {
-            id: "usr-2",
-            name: "Alejandro pruebas",
-            email: "acalderoncha@gmail.com",
-            role: "CLIENT",
-            developerName: devName,
-            assignedProjectIds: ["Todos los proyectos"],
-            status: "ACTIVE",
-          },
-          {
-            id: "usr-3",
-            name: "Alex legaius",
-            email: "alejandro@legaius.com",
-            role: "CLIENT",
-            developerName: devName,
-            assignedProjectIds: ["Todos los proyectos"],
-            status: "ACTIVE",
-          },
-        ];
-      }
-
-      const activeDev: SuperAdminDeveloper = {
-        id: activeDevId,
-        name: devName,
-        legalName: devLegal,
-        rfc: devRfc,
-        contactEmail: devEmail,
-        phone: devPhone,
-        city: devCity,
-        subscriptionStatus: "ACTIVE",
-        pricePerUnitMonthly: devBasePrice,
-        createdAt: "2026-01-15",
-        projects: realProjects,
-        users: realUsers,
-      };
-
-      setDevelopers([activeDev]);
+        })
+        .catch(() => {});
     }
   }, []);
 

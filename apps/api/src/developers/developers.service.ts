@@ -144,11 +144,20 @@ export class DevelopersService {
     return this.prisma.developer.findMany({
       include: {
         projects: {
-          select: {
-            id: true,
-            name: true,
-            projectType: true,
-            status: true,
+          include: {
+            units: {
+              select: {
+                id: true,
+                unitNumber: true,
+                status: true,
+                basePrice: true,
+              },
+            },
+          },
+        },
+        memberships: {
+          include: {
+            user: true,
           },
         },
       },
