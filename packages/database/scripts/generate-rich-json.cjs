@@ -48,6 +48,22 @@ async function generateRichJson() {
     } catch (e) {}
   }
 
+  const rawDevsPath = path.resolve(__dirname, '../migration-data/export_All-Desarrolladoras-modified_2026-09-23_20-16-01.json');
+  let rawDevs = [];
+  if (fs.existsSync(rawDevsPath)) {
+    try {
+      rawDevs = JSON.parse(fs.readFileSync(rawDevsPath, 'utf8'));
+    } catch (e) {}
+  }
+
+  const rawPlansPath = path.resolve(__dirname, '../migration-data/export_All-PaymentPlans-modified_2026-09-23_20-16-38.json');
+  let rawPlans = [];
+  if (fs.existsSync(rawPlansPath)) {
+    try {
+      rawPlans = JSON.parse(fs.readFileSync(rawPlansPath, 'utf8'));
+    } catch (e) {}
+  }
+
   const sanitizeUrl = (url) => {
     if (!url || typeof url !== 'string') return undefined;
     const trimmed = url.trim();
@@ -261,6 +277,26 @@ async function generateRichJson() {
         return acc + saleOverdue;
       }, 0);
 
+      const projPlans = rawPlans
+        .filter((rp) => !rp.client && !rp.unit && rp.Name && (rp.project === bubbleProj?.['unique id'] || rp.project === p.bubbleId))
+        .map((rp) => {
+          const downPct = parseFloat(rp.enganche) > 1 ? parseFloat(rp.enganche) : Math.round(parseFloat(rp.enganche || 0) * 100);
+          const liqPct = parseFloat(rp.Liquidacion) > 1 ? parseFloat(rp.Liquidacion) : Math.round(parseFloat(rp.Liquidacion || 0) * 100);
+          const descPct = parseFloat(rp.descuento) > 1 ? parseFloat(rp.descuento) : Math.round(parseFloat(rp.descuento || 0) * 100);
+          const instCount = parseInt(rp['cantidad de pagos'] || '0', 10) || 0;
+          return {
+            id: rp['unique id'] || `plan-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            name: rp.Name,
+            downPaymentPct: downPct,
+            installmentsCount: instCount,
+            balloonLiquidationPct: liqPct,
+            discountPct: descPct,
+            moratoryRatePct: parseFloat(rp.interes || '3') || 3.0,
+            isActive: true,
+            description: rp.notas || `${downPct}% Enganche, ${instCount} Mensualidades (${Math.max(0, 100 - downPct - liqPct)}%), ${liqPct}% Liquidación`,
+          };
+        });
+
       return {
         id: p.id,
         name: p.name,
@@ -286,23 +322,60 @@ async function generateRichJson() {
         },
         unitsInventory,
         sales: salesList,
+        paymentPlans: projPlans,
       };
     });
 
+    const bubbleDev = rawDevs.find(
+      (rd) =>
+        rd['unique id'] === dev.bubbleId ||
+        (rd.Nombre && dev.name && rd.Nombre.toLowerCase().trim() === dev.name.toLowerCase().trim()) ||
+        (rd.Nombre && dev.name && dev.name.toLowerCase().includes(rd.Nombre.toLowerCase())) ||
+        (rd.Nombre && dev.name && rd.Nombre.toLowerCase().includes(dev.name.toLowerCase()))
+    );
+
+    // Aggregate all template plans for this developer
+    const devPlansSet = new Map();
+    formattedProjects.forEach((fp) => {
+      (fp.paymentPlans || []).forEach((pl) => {
+        if (!devPlansSet.has(pl.name.toLowerCase().trim())) {
+          devPlansSet.set(pl.name.toLowerCase().trim(), pl);
+        }
+      });
+    });
+
+    const devPaymentPlans = Array.from(devPlansSet.values());
+
+    const devLogo = sanitizeUrl(bubbleDev?.Logo) || dev.logoPath || 'https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg';
+
     return {
       id: dev.id,
-      name: dev.name,
-      legalName: dev.legalName,
-      taxId: dev.taxId,
-      logoPath: dev.logoPath,
-      logo: dev.logoPath,
-      logoUrl: dev.logoPath,
-      phone: dev.phone,
-      email: dev.email,
-      website: dev.website,
-      city: dev.city,
+      name: bubbleDev?.Nombre || dev.name,
+      commercialName: bubbleDev?.Nombre || dev.name,
+      legalName: bubbleDev?.['Razon Social'] || dev.legalName || dev.name,
+      taxId: dev.taxId || 'DEV-RFC-01',
+      taxRegime: '601 - General de Ley Personas Morales',
+      addressStreet: bubbleDev?.domicilio || dev.addressLine1 || 'Av. Principal 100',
+      addressLine1: bubbleDev?.domicilio || dev.addressLine1 || 'Av. Principal 100',
+      neighborhood: bubbleDev?.colonia || dev.neighborhood || 'Centro',
+      addressCol: bubbleDev?.colonia || dev.neighborhood || 'Centro',
+      city: dev.city || 'Guadalajara',
+      state: 'Jalisco',
+      postalCode: bubbleDev?.CP || dev.postalCode || '45000',
+      zipCode: bubbleDev?.CP || dev.postalCode || '45000',
+      phone: bubbleDev?.telefono || dev.phone || '3312345678',
+      phoneNumber: bubbleDev?.telefono || dev.phone || '3312345678',
+      email: dev.email || 'contacto@desarrolladora.mx',
+      billingEmail: dev.email || 'facturacion@desarrolladora.mx',
+      contactEmail: dev.email || 'contacto@desarrolladora.mx',
+      website: bubbleDev?.Paginaweb || dev.website || '',
+      logoPath: devLogo,
+      logo: devLogo,
+      logoUrl: devLogo,
+      logoName: 'logo-desarrolladora.png',
       memberships: dev.memberships,
       projects: formattedProjects,
+      paymentPlans: devPaymentPlans,
     };
   });
 

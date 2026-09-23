@@ -2,15 +2,28 @@
   {
     "id": "ea785401-dfa4-45a7-963e-8a52416e6883",
     "name": "Desarrollos Campero",
+    "commercialName": "Desarrollos Campero",
     "legalName": "Desarrollos Campero",
-    "taxId": null,
+    "taxId": "DEV-RFC-01",
+    "taxRegime": "601 - General de Ley Personas Morales",
+    "addressStreet": "Blvd. Puerta de Hierro 5210",
+    "addressLine1": "Blvd. Puerta de Hierro 5210",
+    "neighborhood": "Puerta de hierro",
+    "addressCol": "Puerta de hierro",
+    "city": "Guadalajara",
+    "state": "Jalisco",
+    "postalCode": "45116",
+    "zipCode": "45116",
+    "phone": "3343475454",
+    "phoneNumber": "3343475454",
+    "email": "contacto@desarrolloscampero.com",
+    "billingEmail": "contacto@desarrolloscampero.com",
+    "contactEmail": "contacto@desarrolloscampero.com",
+    "website": "https://www.desarrolloscampero.com/home",
     "logoPath": "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786129320528x689494565312590000/WhatsApp%20Image%202026-08-07%20at%201.01.25%20p.%C2%A0m..jpeg",
     "logo": "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786129320528x689494565312590000/WhatsApp%20Image%202026-08-07%20at%201.01.25%20p.%C2%A0m..jpeg",
     "logoUrl": "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786129320528x689494565312590000/WhatsApp%20Image%202026-08-07%20at%201.01.25%20p.%C2%A0m..jpeg",
-    "phone": "3343475454",
-    "email": "contacto@desarrolloscampero.com",
-    "website": "https://www.desarrolloscampero.com/home",
-    "city": null,
+    "logoName": "logo-desarrolladora.png",
     "memberships": [
       {
         "id": "38ddfdee-522d-4005-97f0-67ae34c39533",
@@ -19139,6 +19152,162 @@
               }
             ]
           }
+        ],
+        "paymentPlans": [
+          {
+            "id": "1786129017570x575353204357464060",
+            "name": "C(-18%)",
+            "downPaymentPct": 20,
+            "installmentsCount": 36,
+            "balloonLiquidationPct": 20,
+            "discountPct": 18,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "Plan de pagos de Mainstreet Valle Real"
+          },
+          {
+            "id": "1786741604396x235160898572386300",
+            "name": "Plan Rodrigo Gomez",
+            "downPaymentPct": 20,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 70,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 1 Mensualidades (10%), 70% Liquidación"
+          },
+          {
+            "id": "1786741894343x630390630637109200",
+            "name": "Plan 36 meses",
+            "downPaymentPct": 20,
+            "installmentsCount": 36,
+            "balloonLiquidationPct": 60,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 36 Mensualidades (20%), 60% Liquidación"
+          },
+          {
+            "id": "1786743481890x126841534278270980",
+            "name": "Plan Enganche - liquidacion",
+            "downPaymentPct": 30,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 70,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "30% Enganche, 1 Mensualidades (0%), 70% Liquidación"
+          },
+          {
+            "id": "1786745123680x272030909843636220",
+            "name": "Plan Brandon",
+            "downPaymentPct": 30,
+            "installmentsCount": 3,
+            "balloonLiquidationPct": 40,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "30% Enganche, 3 Mensualidades (30%), 40% Liquidación"
+          },
+          {
+            "id": "1787334656244x439224542274781200",
+            "name": "Plan Arturo zamora",
+            "downPaymentPct": 50,
+            "installmentsCount": 36,
+            "balloonLiquidationPct": 10,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "50% Enganche, 36 Mensualidades (40%), 10% Liquidación"
+          },
+          {
+            "id": "1787846925329x540279972667588600",
+            "name": "plan lino oliveros",
+            "downPaymentPct": 80,
+            "installmentsCount": 36,
+            "balloonLiquidationPct": 20,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "80% Enganche, 36 Mensualidades (0%), 20% Liquidación"
+          },
+          {
+            "id": "1787849158278x807649869724385300",
+            "name": "plan uruñuela",
+            "downPaymentPct": 20,
+            "installmentsCount": 30,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 30 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1787854515260x678335130708213800",
+            "name": "plan victoria",
+            "downPaymentPct": 20,
+            "installmentsCount": 30,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 30 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1787935359086x928224425955295200",
+            "name": "Plan mario alejandro",
+            "downPaymentPct": 20,
+            "installmentsCount": 36,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 36 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1788885722149x182607933912645630",
+            "name": "Plan angélica",
+            "downPaymentPct": 80,
+            "installmentsCount": 36,
+            "balloonLiquidationPct": 20,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "80% Enganche, 36 Mensualidades (0%), 20% Liquidación"
+          },
+          {
+            "id": "1788907715991x224931831398793200",
+            "name": "Plan Jean Carlo",
+            "downPaymentPct": 80,
+            "installmentsCount": 36,
+            "balloonLiquidationPct": 20,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "80% Enganche, 36 Mensualidades (0%), 20% Liquidación"
+          },
+          {
+            "id": "1789080286268x506821383190741000",
+            "name": "Plan Alvaro Avila",
+            "downPaymentPct": 80,
+            "installmentsCount": 36,
+            "balloonLiquidationPct": 20,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "80% Enganche, 36 Mensualidades (0%), 20% Liquidación"
+          },
+          {
+            "id": "1790016988275x489861306836058100",
+            "name": "Plan Angelica Tovar",
+            "downPaymentPct": 30,
+            "installmentsCount": 36,
+            "balloonLiquidationPct": 10,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "30% Enganche, 36 Mensualidades (60%), 10% Liquidación"
+          }
         ]
       },
       {
@@ -27709,6 +27878,129 @@
                 "moratoryAmount": 0
               }
             ]
+          }
+        ],
+        "paymentPlans": [
+          {
+            "id": "1786131353121x609685216951795700",
+            "name": "Esquema (22%)",
+            "downPaymentPct": 30,
+            "installmentsCount": 30,
+            "balloonLiquidationPct": 10,
+            "discountPct": 22,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "Plan de pagos de Mainstreet Bucerías"
+          },
+          {
+            "id": "1786718828616x526365022473420800",
+            "name": "Plan vivanco",
+            "downPaymentPct": 50,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 50,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "plan Orlando, Carlos y Eduardo"
+          },
+          {
+            "id": "1786719747578x863972269773029400",
+            "name": "plan enganche y liquidacion",
+            "downPaymentPct": 20,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1786720406511x143178444568002560",
+            "name": "Plan de hector mejia",
+            "downPaymentPct": 20,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1786720714070x121899521136394240",
+            "name": "Plan de hector mejia 2",
+            "downPaymentPct": 20,
+            "installmentsCount": 30,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 30 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1786721996754x855521643759140900",
+            "name": "Plan de Jesus",
+            "downPaymentPct": 20,
+            "installmentsCount": 3,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 3 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1786723549198x900177016861491200",
+            "name": "Plan 30 mensualidades",
+            "downPaymentPct": 20,
+            "installmentsCount": 30,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 30 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1787328338087x693185989612929000",
+            "name": "plan victor manuel correa",
+            "downPaymentPct": 20,
+            "installmentsCount": 24,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 24 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1787329745472x164271358154375170",
+            "name": "Plan Luis Becerra",
+            "downPaymentPct": 20,
+            "installmentsCount": 11,
+            "balloonLiquidationPct": 10,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 11 Mensualidades (70%), 10% Liquidación"
+          },
+          {
+            "id": "1787332656776x891847361768718300",
+            "name": "plan de patricia",
+            "downPaymentPct": 20,
+            "installmentsCount": 15,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 15 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1787944878123x160565972925153280",
+            "name": "santiago sahagun ",
+            "downPaymentPct": 20,
+            "installmentsCount": 30,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 30 Mensualidades (0%), 80% Liquidación"
           }
         ]
       },
@@ -48671,22 +48963,666 @@
               }
             ]
           }
+        ],
+        "paymentPlans": [
+          {
+            "id": "1786127998080x751281395327565800",
+            "name": "C(-18%)",
+            "downPaymentPct": 20,
+            "installmentsCount": 30,
+            "balloonLiquidationPct": 20,
+            "discountPct": 18,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "Plan de pagos con el 18% de descuento"
+          },
+          {
+            "id": "1786728025141x836241660424749000",
+            "name": "Plan Enganche y liquidacion",
+            "downPaymentPct": 20,
+            "installmentsCount": 0,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 0 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1786728630813x539368345255018500",
+            "name": "Plan Gloria",
+            "downPaymentPct": 20,
+            "installmentsCount": 2,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 2 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1786729361258x494867913789931500",
+            "name": "plan 30 mensualidades",
+            "downPaymentPct": 20,
+            "installmentsCount": 30,
+            "balloonLiquidationPct": 30,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 30 Mensualidades (50%), 30% Liquidación"
+          },
+          {
+            "id": "1786731515123x224140432815685630",
+            "name": "Plan Horacio",
+            "downPaymentPct": 25,
+            "installmentsCount": 0,
+            "balloonLiquidationPct": 75,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "25% Enganche, 0 Mensualidades (0%), 75% Liquidación"
+          },
+          {
+            "id": "1786732376886x841301187606347800",
+            "name": "Plan Enganche y liquidacion",
+            "downPaymentPct": 20,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1786736169976x735742066065932300",
+            "name": "Plan Maria Guadalupe",
+            "downPaymentPct": 30,
+            "installmentsCount": 30,
+            "balloonLiquidationPct": 40,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "30% Enganche, 30 Mensualidades (30%), 40% Liquidación"
+          },
+          {
+            "id": "1786738149556x661844242945278000",
+            "name": "Plan Luis Alberto",
+            "downPaymentPct": 70,
+            "installmentsCount": 30,
+            "balloonLiquidationPct": 10,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "70% Enganche, 30 Mensualidades (20%), 10% Liquidación"
+          },
+          {
+            "id": "1787592751921x564875260416229400",
+            "name": "Plan karina barrera",
+            "downPaymentPct": 20,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1787593105932x757879478264266800",
+            "name": "plan karina",
+            "downPaymentPct": 20,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1787677645946x258804948434157570",
+            "name": "plan jorge armando aguirre",
+            "downPaymentPct": 20,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1787679383830x431376244110786560",
+            "name": "Plan raul higinio",
+            "downPaymentPct": 20,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1787680400011x883989339376451600",
+            "name": "Plan rafael ponce",
+            "downPaymentPct": 20,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1787688639489x162417308849930240",
+            "name": "plan alvaro señkovski",
+            "downPaymentPct": 20,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1788292840421x942127881771810800",
+            "name": "ESQUEMA MSLA",
+            "downPaymentPct": 20,
+            "installmentsCount": 30,
+            "balloonLiquidationPct": 20,
+            "discountPct": 18,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 30 Mensualidades (60%), 20% Liquidación"
+          },
+          {
+            "id": "1789771620751x196240541469638660",
+            "name": "Plan paulina",
+            "downPaymentPct": 20,
+            "installmentsCount": 30,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 30 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1790021405888x113898695523827710",
+            "name": "plan eduardo 3.8",
+            "downPaymentPct": 100,
+            "installmentsCount": 0,
+            "balloonLiquidationPct": 0,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "100% Enganche, 0 Mensualidades (0%), 0% Liquidación"
+          },
+          {
+            "id": "1790021673582x558312408874221600",
+            "name": "plan eduardo 4.8",
+            "downPaymentPct": 100,
+            "installmentsCount": 0,
+            "balloonLiquidationPct": 0,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "100% Enganche, 0 Mensualidades (0%), 0% Liquidación"
+          }
         ]
+      }
+    ],
+    "paymentPlans": [
+      {
+        "id": "1786129017570x575353204357464060",
+        "name": "C(-18%)",
+        "downPaymentPct": 20,
+        "installmentsCount": 36,
+        "balloonLiquidationPct": 20,
+        "discountPct": 18,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "Plan de pagos de Mainstreet Valle Real"
+      },
+      {
+        "id": "1786741604396x235160898572386300",
+        "name": "Plan Rodrigo Gomez",
+        "downPaymentPct": 20,
+        "installmentsCount": 1,
+        "balloonLiquidationPct": 70,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 1 Mensualidades (10%), 70% Liquidación"
+      },
+      {
+        "id": "1786741894343x630390630637109200",
+        "name": "Plan 36 meses",
+        "downPaymentPct": 20,
+        "installmentsCount": 36,
+        "balloonLiquidationPct": 60,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 36 Mensualidades (20%), 60% Liquidación"
+      },
+      {
+        "id": "1786743481890x126841534278270980",
+        "name": "Plan Enganche - liquidacion",
+        "downPaymentPct": 30,
+        "installmentsCount": 1,
+        "balloonLiquidationPct": 70,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "30% Enganche, 1 Mensualidades (0%), 70% Liquidación"
+      },
+      {
+        "id": "1786745123680x272030909843636220",
+        "name": "Plan Brandon",
+        "downPaymentPct": 30,
+        "installmentsCount": 3,
+        "balloonLiquidationPct": 40,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "30% Enganche, 3 Mensualidades (30%), 40% Liquidación"
+      },
+      {
+        "id": "1787334656244x439224542274781200",
+        "name": "Plan Arturo zamora",
+        "downPaymentPct": 50,
+        "installmentsCount": 36,
+        "balloonLiquidationPct": 10,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "50% Enganche, 36 Mensualidades (40%), 10% Liquidación"
+      },
+      {
+        "id": "1787846925329x540279972667588600",
+        "name": "plan lino oliveros",
+        "downPaymentPct": 80,
+        "installmentsCount": 36,
+        "balloonLiquidationPct": 20,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "80% Enganche, 36 Mensualidades (0%), 20% Liquidación"
+      },
+      {
+        "id": "1787849158278x807649869724385300",
+        "name": "plan uruñuela",
+        "downPaymentPct": 20,
+        "installmentsCount": 30,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 30 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1787854515260x678335130708213800",
+        "name": "plan victoria",
+        "downPaymentPct": 20,
+        "installmentsCount": 30,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 30 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1787935359086x928224425955295200",
+        "name": "Plan mario alejandro",
+        "downPaymentPct": 20,
+        "installmentsCount": 36,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 36 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1788885722149x182607933912645630",
+        "name": "Plan angélica",
+        "downPaymentPct": 80,
+        "installmentsCount": 36,
+        "balloonLiquidationPct": 20,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "80% Enganche, 36 Mensualidades (0%), 20% Liquidación"
+      },
+      {
+        "id": "1788907715991x224931831398793200",
+        "name": "Plan Jean Carlo",
+        "downPaymentPct": 80,
+        "installmentsCount": 36,
+        "balloonLiquidationPct": 20,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "80% Enganche, 36 Mensualidades (0%), 20% Liquidación"
+      },
+      {
+        "id": "1789080286268x506821383190741000",
+        "name": "Plan Alvaro Avila",
+        "downPaymentPct": 80,
+        "installmentsCount": 36,
+        "balloonLiquidationPct": 20,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "80% Enganche, 36 Mensualidades (0%), 20% Liquidación"
+      },
+      {
+        "id": "1790016988275x489861306836058100",
+        "name": "Plan Angelica Tovar",
+        "downPaymentPct": 30,
+        "installmentsCount": 36,
+        "balloonLiquidationPct": 10,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "30% Enganche, 36 Mensualidades (60%), 10% Liquidación"
+      },
+      {
+        "id": "1786131353121x609685216951795700",
+        "name": "Esquema (22%)",
+        "downPaymentPct": 30,
+        "installmentsCount": 30,
+        "balloonLiquidationPct": 10,
+        "discountPct": 22,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "Plan de pagos de Mainstreet Bucerías"
+      },
+      {
+        "id": "1786718828616x526365022473420800",
+        "name": "Plan vivanco",
+        "downPaymentPct": 50,
+        "installmentsCount": 1,
+        "balloonLiquidationPct": 50,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "plan Orlando, Carlos y Eduardo"
+      },
+      {
+        "id": "1786719747578x863972269773029400",
+        "name": "plan enganche y liquidacion",
+        "downPaymentPct": 20,
+        "installmentsCount": 1,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1786720406511x143178444568002560",
+        "name": "Plan de hector mejia",
+        "downPaymentPct": 20,
+        "installmentsCount": 1,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1786720714070x121899521136394240",
+        "name": "Plan de hector mejia 2",
+        "downPaymentPct": 20,
+        "installmentsCount": 30,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 30 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1786721996754x855521643759140900",
+        "name": "Plan de Jesus",
+        "downPaymentPct": 20,
+        "installmentsCount": 3,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 3 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1786723549198x900177016861491200",
+        "name": "Plan 30 mensualidades",
+        "downPaymentPct": 20,
+        "installmentsCount": 30,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 30 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1787328338087x693185989612929000",
+        "name": "plan victor manuel correa",
+        "downPaymentPct": 20,
+        "installmentsCount": 24,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 24 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1787329745472x164271358154375170",
+        "name": "Plan Luis Becerra",
+        "downPaymentPct": 20,
+        "installmentsCount": 11,
+        "balloonLiquidationPct": 10,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 11 Mensualidades (70%), 10% Liquidación"
+      },
+      {
+        "id": "1787332656776x891847361768718300",
+        "name": "plan de patricia",
+        "downPaymentPct": 20,
+        "installmentsCount": 15,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 15 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1787944878123x160565972925153280",
+        "name": "santiago sahagun ",
+        "downPaymentPct": 20,
+        "installmentsCount": 30,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 30 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1786728630813x539368345255018500",
+        "name": "Plan Gloria",
+        "downPaymentPct": 20,
+        "installmentsCount": 2,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 2 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1786731515123x224140432815685630",
+        "name": "Plan Horacio",
+        "downPaymentPct": 25,
+        "installmentsCount": 0,
+        "balloonLiquidationPct": 75,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "25% Enganche, 0 Mensualidades (0%), 75% Liquidación"
+      },
+      {
+        "id": "1786736169976x735742066065932300",
+        "name": "Plan Maria Guadalupe",
+        "downPaymentPct": 30,
+        "installmentsCount": 30,
+        "balloonLiquidationPct": 40,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "30% Enganche, 30 Mensualidades (30%), 40% Liquidación"
+      },
+      {
+        "id": "1786738149556x661844242945278000",
+        "name": "Plan Luis Alberto",
+        "downPaymentPct": 70,
+        "installmentsCount": 30,
+        "balloonLiquidationPct": 10,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "70% Enganche, 30 Mensualidades (20%), 10% Liquidación"
+      },
+      {
+        "id": "1787592751921x564875260416229400",
+        "name": "Plan karina barrera",
+        "downPaymentPct": 20,
+        "installmentsCount": 1,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1787593105932x757879478264266800",
+        "name": "plan karina",
+        "downPaymentPct": 20,
+        "installmentsCount": 1,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1787677645946x258804948434157570",
+        "name": "plan jorge armando aguirre",
+        "downPaymentPct": 20,
+        "installmentsCount": 1,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1787679383830x431376244110786560",
+        "name": "Plan raul higinio",
+        "downPaymentPct": 20,
+        "installmentsCount": 1,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1787680400011x883989339376451600",
+        "name": "Plan rafael ponce",
+        "downPaymentPct": 20,
+        "installmentsCount": 1,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1787688639489x162417308849930240",
+        "name": "plan alvaro señkovski",
+        "downPaymentPct": 20,
+        "installmentsCount": 1,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 1 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1788292840421x942127881771810800",
+        "name": "ESQUEMA MSLA",
+        "downPaymentPct": 20,
+        "installmentsCount": 30,
+        "balloonLiquidationPct": 20,
+        "discountPct": 18,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 30 Mensualidades (60%), 20% Liquidación"
+      },
+      {
+        "id": "1789771620751x196240541469638660",
+        "name": "Plan paulina",
+        "downPaymentPct": 20,
+        "installmentsCount": 30,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 30 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1790021405888x113898695523827710",
+        "name": "plan eduardo 3.8",
+        "downPaymentPct": 100,
+        "installmentsCount": 0,
+        "balloonLiquidationPct": 0,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "100% Enganche, 0 Mensualidades (0%), 0% Liquidación"
+      },
+      {
+        "id": "1790021673582x558312408874221600",
+        "name": "plan eduardo 4.8",
+        "downPaymentPct": 100,
+        "installmentsCount": 0,
+        "balloonLiquidationPct": 0,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "100% Enganche, 0 Mensualidades (0%), 0% Liquidación"
       }
     ]
   },
   {
     "id": "c006261c-2958-4328-a3f1-07f6e0e19136",
     "name": "Castellana Desarrolladora",
+    "commercialName": "Castellana Desarrolladora",
     "legalName": "Castellana S.A de C.V.",
-    "taxId": null,
+    "taxId": "DEV-RFC-01",
+    "taxRegime": "601 - General de Ley Personas Morales",
+    "addressStreet": "av pablo neruda 3809",
+    "addressLine1": "av pablo neruda 3809",
+    "neighborhood": "colinas de sanjavier",
+    "addressCol": "colinas de sanjavier",
+    "city": "Guadalajara",
+    "state": "Jalisco",
+    "postalCode": "44670",
+    "zipCode": "44670",
+    "phone": "3322564378",
+    "phoneNumber": "3322564378",
+    "email": "contacto@desarrolladora.mx",
+    "billingEmail": "facturacion@desarrolladora.mx",
+    "contactEmail": "contacto@desarrolladora.mx",
+    "website": "https://www.tresgdesarrollos.mx/",
     "logoPath": "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786724454677x606157260487381000/Iconocastellana.png",
     "logo": "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786724454677x606157260487381000/Iconocastellana.png",
     "logoUrl": "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786724454677x606157260487381000/Iconocastellana.png",
-    "phone": "3322564378",
-    "email": null,
-    "website": "https://www.tresgdesarrollos.mx/",
-    "city": null,
+    "logoName": "logo-desarrolladora.png",
     "memberships": [
       {
         "id": "104034b3-d100-485a-8f1d-d698ca15db30",
@@ -53911,6 +54847,74 @@
               }
             ]
           }
+        ],
+        "paymentPlans": [
+          {
+            "id": "1786725312596x448358901046575100",
+            "name": "Plan Oro",
+            "downPaymentPct": 20,
+            "installmentsCount": 12,
+            "balloonLiquidationPct": 30,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 12 Mensualidades (50%), 30% Liquidación"
+          },
+          {
+            "id": "1787204293708x134441388814893060",
+            "name": "Plan engache liquidacion",
+            "downPaymentPct": 0,
+            "installmentsCount": 2,
+            "balloonLiquidationPct": 0,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "0% Enganche, 2 Mensualidades (100%), 0% Liquidación"
+          },
+          {
+            "id": "1787204389601x685559423088459800",
+            "name": "otro",
+            "downPaymentPct": 20,
+            "installmentsCount": 0,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 0 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1787204449500x410670259654623200",
+            "name": "l",
+            "downPaymentPct": 50,
+            "installmentsCount": 0,
+            "balloonLiquidationPct": 50,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "50% Enganche, 0 Mensualidades (0%), 50% Liquidación"
+          },
+          {
+            "id": "1787875072865x434930087872692200",
+            "name": "Plan Interes",
+            "downPaymentPct": 20,
+            "installmentsCount": 12,
+            "balloonLiquidationPct": 50,
+            "discountPct": 0,
+            "moratoryRatePct": 0.1,
+            "isActive": true,
+            "description": "20% Enganche, 12 Mensualidades (30%), 50% Liquidación"
+          },
+          {
+            "id": "1789674998088x216175589240078340",
+            "name": "Plan Descuento",
+            "downPaymentPct": 20,
+            "installmentsCount": 12,
+            "balloonLiquidationPct": 20,
+            "discountPct": 10,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 12 Mensualidades (60%), 20% Liquidación"
+          }
         ]
       },
       {
@@ -54464,22 +55468,182 @@
             ],
             "payments": []
           }
+        ],
+        "paymentPlans": [
+          {
+            "id": "1788413531249x843567119573712900",
+            "name": "Plan Oro",
+            "downPaymentPct": 20,
+            "installmentsCount": 0,
+            "balloonLiquidationPct": 20,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 0 Mensualidades (60%), 20% Liquidación"
+          },
+          {
+            "id": "1788413548923x399704794013106200",
+            "name": "Plan menusalidades",
+            "downPaymentPct": 10,
+            "installmentsCount": 10,
+            "balloonLiquidationPct": 20,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "10% Enganche, 10 Mensualidades (70%), 20% Liquidación"
+          },
+          {
+            "id": "1788413750103x668868402381324300",
+            "name": "Plan Sin mensualidades",
+            "downPaymentPct": 20,
+            "installmentsCount": 0,
+            "balloonLiquidationPct": 80,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 0 Mensualidades (0%), 80% Liquidación"
+          },
+          {
+            "id": "1788414193223x676958007027826700",
+            "name": "Plan 45 mensualidades",
+            "downPaymentPct": 10,
+            "installmentsCount": 45,
+            "balloonLiquidationPct": 20,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "10% Enganche, 45 Mensualidades (70%), 20% Liquidación"
+          }
         ]
+      }
+    ],
+    "paymentPlans": [
+      {
+        "id": "1786725312596x448358901046575100",
+        "name": "Plan Oro",
+        "downPaymentPct": 20,
+        "installmentsCount": 12,
+        "balloonLiquidationPct": 30,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 12 Mensualidades (50%), 30% Liquidación"
+      },
+      {
+        "id": "1787204293708x134441388814893060",
+        "name": "Plan engache liquidacion",
+        "downPaymentPct": 0,
+        "installmentsCount": 2,
+        "balloonLiquidationPct": 0,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "0% Enganche, 2 Mensualidades (100%), 0% Liquidación"
+      },
+      {
+        "id": "1787204389601x685559423088459800",
+        "name": "otro",
+        "downPaymentPct": 20,
+        "installmentsCount": 0,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 0 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1787204449500x410670259654623200",
+        "name": "l",
+        "downPaymentPct": 50,
+        "installmentsCount": 0,
+        "balloonLiquidationPct": 50,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "50% Enganche, 0 Mensualidades (0%), 50% Liquidación"
+      },
+      {
+        "id": "1787875072865x434930087872692200",
+        "name": "Plan Interes",
+        "downPaymentPct": 20,
+        "installmentsCount": 12,
+        "balloonLiquidationPct": 50,
+        "discountPct": 0,
+        "moratoryRatePct": 0.1,
+        "isActive": true,
+        "description": "20% Enganche, 12 Mensualidades (30%), 50% Liquidación"
+      },
+      {
+        "id": "1789674998088x216175589240078340",
+        "name": "Plan Descuento",
+        "downPaymentPct": 20,
+        "installmentsCount": 12,
+        "balloonLiquidationPct": 20,
+        "discountPct": 10,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 12 Mensualidades (60%), 20% Liquidación"
+      },
+      {
+        "id": "1788413548923x399704794013106200",
+        "name": "Plan menusalidades",
+        "downPaymentPct": 10,
+        "installmentsCount": 10,
+        "balloonLiquidationPct": 20,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "10% Enganche, 10 Mensualidades (70%), 20% Liquidación"
+      },
+      {
+        "id": "1788413750103x668868402381324300",
+        "name": "Plan Sin mensualidades",
+        "downPaymentPct": 20,
+        "installmentsCount": 0,
+        "balloonLiquidationPct": 80,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 0 Mensualidades (0%), 80% Liquidación"
+      },
+      {
+        "id": "1788414193223x676958007027826700",
+        "name": "Plan 45 mensualidades",
+        "downPaymentPct": 10,
+        "installmentsCount": 45,
+        "balloonLiquidationPct": 20,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "10% Enganche, 45 Mensualidades (70%), 20% Liquidación"
       }
     ]
   },
   {
     "id": "fc3892bc-e98d-4cbe-9da0-f5ca408ae58f",
     "name": "Desarrollos HH",
+    "commercialName": "Desarrollos HH",
     "legalName": "Desarolladora HH SA DE CV",
-    "taxId": null,
+    "taxId": "DEV-RFC-01",
+    "taxRegime": "601 - General de Ley Personas Morales",
+    "addressStreet": "Americas 1930",
+    "addressLine1": "Americas 1930",
+    "neighborhood": "Providencia",
+    "addressCol": "Providencia",
+    "city": "Guadalajara",
+    "state": "Jalisco",
+    "postalCode": "44630",
+    "zipCode": "44630",
+    "phone": "3331910532",
+    "phoneNumber": "3331910532",
+    "email": "contacto@desarrolladora.mx",
+    "billingEmail": "facturacion@desarrolladora.mx",
+    "contactEmail": "contacto@desarrolladora.mx",
+    "website": "Www.himalia.mx",
     "logoPath": "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786832663615x656374919614716200/IMG_2259.jpeg",
     "logo": "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786832663615x656374919614716200/IMG_2259.jpeg",
     "logoUrl": "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786832663615x656374919614716200/IMG_2259.jpeg",
-    "phone": "3331910532",
-    "email": null,
-    "website": "https://Www.himalia.mx",
-    "city": null,
+    "logoName": "logo-desarrolladora.png",
     "memberships": [
       {
         "id": "cbdd51a7-e376-4b41-91f1-40f0243005ae",
@@ -54502,20 +55666,34 @@
         }
       }
     ],
-    "projects": []
+    "projects": [],
+    "paymentPlans": []
   },
   {
     "id": "afe603cf-0361-4272-b221-e932448d43ba",
     "name": "CB ESPACIOS",
+    "commercialName": "CB ESPACIOS",
     "legalName": "CB Espacios",
-    "taxId": null,
+    "taxId": "DEV-RFC-01",
+    "taxRegime": "601 - General de Ley Personas Morales",
+    "addressStreet": "Santo Tomás de Aquino 5056",
+    "addressLine1": "Santo Tomás de Aquino 5056",
+    "neighborhood": "La Estancia",
+    "addressCol": "La Estancia",
+    "city": "Guadalajara",
+    "state": "Jalisco",
+    "postalCode": "45030",
+    "zipCode": "45030",
+    "phone": "3312030757",
+    "phoneNumber": "3312030757",
+    "email": "contacto@desarrolladora.mx",
+    "billingEmail": "facturacion@desarrolladora.mx",
+    "contactEmail": "contacto@desarrolladora.mx",
+    "website": "",
     "logoPath": "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1788190412879x486634513060204560/WhatsApp%20Image%202026-08-31%20at%209.33.12%20AM.jpeg",
     "logo": "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1788190412879x486634513060204560/WhatsApp%20Image%202026-08-31%20at%209.33.12%20AM.jpeg",
     "logoUrl": "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1788190412879x486634513060204560/WhatsApp%20Image%202026-08-31%20at%209.33.12%20AM.jpeg",
-    "phone": "3312030757",
-    "email": null,
-    "website": null,
-    "city": null,
+    "logoName": "logo-desarrolladora.png",
     "memberships": [
       {
         "id": "1ace2c5e-f54e-4da1-bb68-3c33d10aeda7",
@@ -57230,7 +58408,187 @@
               }
             ]
           }
+        ],
+        "paymentPlans": [
+          {
+            "id": "1788193138285x792150240114769900",
+            "name": "ESQUEMA D - 30, 10, 60",
+            "downPaymentPct": 30,
+            "installmentsCount": 12,
+            "balloonLiquidationPct": 60,
+            "discountPct": 2,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "30% Enganche, 12 Mensualidades (10%), 60% Liquidación"
+          },
+          {
+            "id": "1788193173522x403408047470805000",
+            "name": "ESQUEMA E - 20, 10, 70",
+            "downPaymentPct": 20,
+            "installmentsCount": 12,
+            "balloonLiquidationPct": 70,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 12 Mensualidades (10%), 70% Liquidación"
+          },
+          {
+            "id": "1788193617523x431538404138418200",
+            "name": "PLAN 24 MESES",
+            "downPaymentPct": 7,
+            "installmentsCount": 24,
+            "balloonLiquidationPct": 10,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "7% Enganche, 24 Mensualidades (83%), 10% Liquidación"
+          },
+          {
+            "id": "1788196153814x264088896701726720",
+            "name": "Plan 1 Mensualidad",
+            "downPaymentPct": 20,
+            "installmentsCount": 1,
+            "balloonLiquidationPct": 20,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 1 Mensualidades (60%), 20% Liquidación"
+          },
+          {
+            "id": "1788196680130x234022279144275970",
+            "name": "Plan Margarita Mendoza",
+            "downPaymentPct": 20,
+            "installmentsCount": 13,
+            "balloonLiquidationPct": 20,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 13 Mensualidades (60%), 20% Liquidación"
+          },
+          {
+            "id": "1788197394056x371489542483214340",
+            "name": "Plan Enganche - Liquidacion",
+            "downPaymentPct": 20,
+            "installmentsCount": 0,
+            "balloonLiquidationPct": 20,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 0 Mensualidades (60%), 20% Liquidación"
+          },
+          {
+            "id": "1788198060653x897309408887046100",
+            "name": "Plan Federico Lopez",
+            "downPaymentPct": 20,
+            "installmentsCount": 2,
+            "balloonLiquidationPct": 20,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 2 Mensualidades (60%), 20% Liquidación"
+          },
+          {
+            "id": "1788198443667x883594563474423800",
+            "name": "Plan Federico D507",
+            "downPaymentPct": 20,
+            "installmentsCount": 5,
+            "balloonLiquidationPct": 20,
+            "discountPct": 0,
+            "moratoryRatePct": 3,
+            "isActive": true,
+            "description": "20% Enganche, 5 Mensualidades (60%), 20% Liquidación"
+          }
         ]
+      }
+    ],
+    "paymentPlans": [
+      {
+        "id": "1788193138285x792150240114769900",
+        "name": "ESQUEMA D - 30, 10, 60",
+        "downPaymentPct": 30,
+        "installmentsCount": 12,
+        "balloonLiquidationPct": 60,
+        "discountPct": 2,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "30% Enganche, 12 Mensualidades (10%), 60% Liquidación"
+      },
+      {
+        "id": "1788193173522x403408047470805000",
+        "name": "ESQUEMA E - 20, 10, 70",
+        "downPaymentPct": 20,
+        "installmentsCount": 12,
+        "balloonLiquidationPct": 70,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 12 Mensualidades (10%), 70% Liquidación"
+      },
+      {
+        "id": "1788193617523x431538404138418200",
+        "name": "PLAN 24 MESES",
+        "downPaymentPct": 7,
+        "installmentsCount": 24,
+        "balloonLiquidationPct": 10,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "7% Enganche, 24 Mensualidades (83%), 10% Liquidación"
+      },
+      {
+        "id": "1788196153814x264088896701726720",
+        "name": "Plan 1 Mensualidad",
+        "downPaymentPct": 20,
+        "installmentsCount": 1,
+        "balloonLiquidationPct": 20,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 1 Mensualidades (60%), 20% Liquidación"
+      },
+      {
+        "id": "1788196680130x234022279144275970",
+        "name": "Plan Margarita Mendoza",
+        "downPaymentPct": 20,
+        "installmentsCount": 13,
+        "balloonLiquidationPct": 20,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 13 Mensualidades (60%), 20% Liquidación"
+      },
+      {
+        "id": "1788197394056x371489542483214340",
+        "name": "Plan Enganche - Liquidacion",
+        "downPaymentPct": 20,
+        "installmentsCount": 0,
+        "balloonLiquidationPct": 20,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 0 Mensualidades (60%), 20% Liquidación"
+      },
+      {
+        "id": "1788198060653x897309408887046100",
+        "name": "Plan Federico Lopez",
+        "downPaymentPct": 20,
+        "installmentsCount": 2,
+        "balloonLiquidationPct": 20,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 2 Mensualidades (60%), 20% Liquidación"
+      },
+      {
+        "id": "1788198443667x883594563474423800",
+        "name": "Plan Federico D507",
+        "downPaymentPct": 20,
+        "installmentsCount": 5,
+        "balloonLiquidationPct": 20,
+        "discountPct": 0,
+        "moratoryRatePct": 3,
+        "isActive": true,
+        "description": "20% Enganche, 5 Mensualidades (60%), 20% Liquidación"
       }
     ]
   }

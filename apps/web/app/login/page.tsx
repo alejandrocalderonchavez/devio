@@ -149,8 +149,8 @@ function LoginContent() {
           const destination = loggedUser.isSuperAdmin && redirectTarget === "/dashboard"
             ? "/super-admin"
             : redirectTarget;
-          router.push(destination);
-        }, 400);
+          window.location.href = destination;
+        }, 300);
         return;
       }
 
