@@ -454,7 +454,10 @@ async function runMigration() {
     const projectBubbleId = item['project'];
     const unitBubbleId = item['unidad'];
     const clientBubbleId = item['client'] || item['Clients'];
+    const visible = (item['visible'] || '').trim().toLowerCase();
 
+    // Skip non-visible sales (unfinished drafts / cancelled quotes)
+    if (visible !== 'si') continue;
     if (!projectBubbleId || projectBubbleId === '(deleted thing)') continue;
     if (!unitBubbleId || unitBubbleId === '(deleted thing)') continue;
 
@@ -462,6 +465,12 @@ async function runMigration() {
     const unitId = unitMap.get(unitBubbleId);
 
     if (!projectId || !unitId) continue;
+
+    // Verify unit is actually SOLD or RESERVED
+    const targetUnit = await prisma.unit.findUnique({ where: { id: unitId } });
+    if (targetUnit && targetUnit.status !== 'SOLD' && targetUnit.status !== 'RESERVED') {
+      continue;
+    }
 
     let primaryClientId = clientMap.get(clientBubbleId);
     if (!primaryClientId) {
@@ -520,6 +529,12 @@ async function runMigration() {
 
   for (const item of rawPayments) {
     const bubbleId = item['unique id'];
+    const activo = (item['activo'] || '').trim().toLowerCase();
+    const cotizacionyes = (item['cotizacionyes'] || '').trim().toLowerCase();
+
+    // Skip inactive payments or quote simulations
+    if (activo !== 'si' || cotizacionyes === 'si') continue;
+
     const saleBubbleId = item['sale'];
     let targetSaleId = saleMap.get(saleBubbleId);
 

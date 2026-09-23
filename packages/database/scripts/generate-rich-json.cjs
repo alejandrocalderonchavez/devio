@@ -55,13 +55,17 @@ async function generateRichJson() {
 
       // Build units inventory
       const unitsInventory = p.units.map((u) => {
-        const matchingSale = p.sales.find((s) => s.unitId === u.id);
         const uStatus =
           u.status === 'SOLD' ? 'VENDIDA' : u.status === 'AVAILABLE' ? 'DISPONIBLE' : 'BLOQUEADA';
 
+        // ONLY Sold units can have an active matching sale and client
+        const matchingSale = uStatus === 'VENDIDA'
+          ? p.sales.find((s) => s.unitId === u.id && s.status === 'ACTIVE')
+          : null;
+
         const clientName = matchingSale && matchingSale.primaryClient
           ? (matchingSale.primaryClient.legalName || matchingSale.primaryClient.contactName || 'Cliente Propietario')
-          : (uStatus === 'VENDIDA' ? 'Cliente Propietario' : '-');
+          : '-';
 
         const clientEmail = matchingSale && matchingSale.primaryClient?.email ? matchingSale.primaryClient.email : '-';
         const clientPhone = matchingSale && matchingSale.primaryClient?.phone ? matchingSale.primaryClient.phone : '-';
@@ -80,14 +84,20 @@ async function generateRichJson() {
           bedrooms: u.bedrooms || 1,
           bathrooms: Number(u.bathrooms) || 1,
           parkingSpots: u.parkingSpaces || 0,
-          saleFolio: matchingSale?.saleFolio || (uStatus === 'VENDIDA' ? `VEN-${u.unitNumber}` : undefined),
-          salePaidAmount: matchingSale ? Number(matchingSale.paidAmount) : (uStatus === 'VENDIDA' ? Number(u.basePrice) : 0),
-          salePendingAmount: matchingSale ? (Number(matchingSale.totalPrice) - Number(matchingSale.paidAmount)) : 0,
+          saleFolio: matchingSale?.saleFolio || undefined,
+          salePaidAmount: matchingSale ? Number(matchingSale.paidAmount) : 0,
+          salePendingAmount: matchingSale ? Math.max(0, Number(matchingSale.totalPrice) - Number(matchingSale.paidAmount)) : 0,
         };
       });
 
-      // Build sales list
-      const salesList = p.sales.map((s) => {
+      // Build sales list - only active sales for actually sold units
+      const activeSales = p.sales.filter((s) => {
+        if (s.status !== 'ACTIVE') return false;
+        const u = p.units.find((unit) => unit.id === s.unitId);
+        return u && u.status === 'SOLD';
+      });
+
+      const salesList = activeSales.map((s) => {
         const u = p.units.find((unit) => unit.id === s.unitId);
         const clientName = s.primaryClient?.legalName || s.primaryClient?.contactName || 'Cliente';
         const clientEmail = s.primaryClient?.email || '-';
