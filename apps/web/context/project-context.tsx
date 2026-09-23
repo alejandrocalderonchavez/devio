@@ -15,6 +15,7 @@ import {
   ProjectFloorPlan,
   ProjectConstructionAdvance,
   ProjectDocument,
+  ClientDocument,
   QuoteRecord,
 } from "../data/projects-data";
 import { PostventaIncident, INITIAL_INCIDENTS } from "../data/postventa-data";
@@ -179,6 +180,9 @@ interface ProjectContextType {
   updateProjectDocuments: (projectId: string, documents: ProjectDocument[]) => void;
   addProjectDocument: (projectId: string, doc: ProjectDocument) => void;
   deleteProjectDocument: (projectId: string, docId: string) => void;
+  addClientDocument: (projectId: string, doc: ClientDocument) => void;
+  updateClientDocument: (projectId: string, doc: ClientDocument) => void;
+  deleteClientDocument: (projectId: string, docId: string) => void;
   addQuote: (projectId: string, quote: QuoteRecord) => void;
   updateQuote: (projectId: string, quoteId: string, updatedFields: Partial<QuoteRecord>) => void;
   deleteQuote: (projectId: string, quoteId: string) => void;
@@ -2042,6 +2046,45 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     showToast("Documento Eliminado", "El documento fue eliminado del expediente.", "info");
   };
 
+  const addClientDocument = (projectId: string, doc: ClientDocument) => {
+    const updated = projects.map((p) => {
+      if (p.id !== projectId) return p;
+      const current = p.clientDocuments || [];
+      return {
+        ...p,
+        clientDocuments: [doc, ...current.filter((d) => d.id !== doc.id)],
+      };
+    });
+    saveProjects(updated);
+    showToast("Documento Guardado", `Se guardó "${doc.title}" en el expediente.`);
+  };
+
+  const updateClientDocument = (projectId: string, doc: ClientDocument) => {
+    const updated = projects.map((p) => {
+      if (p.id !== projectId) return p;
+      const current = p.clientDocuments || [];
+      return {
+        ...p,
+        clientDocuments: current.map((d) => (d.id === doc.id ? doc : d)),
+      };
+    });
+    saveProjects(updated);
+    showToast("Documento Actualizado", `Se actualizó "${doc.title}".`);
+  };
+
+  const deleteClientDocument = (projectId: string, docId: string) => {
+    const updated = projects.map((p) => {
+      if (p.id !== projectId) return p;
+      const current = p.clientDocuments || [];
+      return {
+        ...p,
+        clientDocuments: current.filter((d) => d.id !== docId),
+      };
+    });
+    saveProjects(updated);
+    showToast("Documento Eliminado", "El documento fue eliminado del expediente.", "info");
+  };
+
   const savePostventaIncidents = (newIncidents: PostventaIncident[]) => {
     setPostventaIncidents(newIncidents);
     if (typeof window !== "undefined") {
@@ -2169,6 +2212,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         updateProjectDocuments,
         addProjectDocument,
         deleteProjectDocument,
+        addClientDocument,
+        updateClientDocument,
+        deleteClientDocument,
         addQuote,
         updateQuote,
         deleteQuote,

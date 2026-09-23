@@ -146,6 +146,7 @@ export interface ProjectItem {
   quotes?: QuoteRecord[];
   floorPlans?: ProjectFloorPlan[];
   documents?: ProjectDocument[];
+  clientDocuments?: ClientDocument[];
   paymentPlans?: any[];
 }
 
@@ -304,6 +305,22 @@ export interface ProjectDocument {
   url?: string;
   version?: string;
   notes?: string;
+}
+
+export interface ClientDocument {
+  id: string;
+  clientId?: string;
+  clientName?: string;
+  title: string;
+  category?: string;
+  unit: string;
+  fileType?: "PDF" | "DOCX" | "XLSX" | "DWG" | "ZIP" | "IMG" | string;
+  fileSize?: string;
+  uploadDate: string;
+  updatedAt?: string;
+  url?: string;
+  notes?: string;
+  isVisibleToClient?: boolean;
 }
 
 // ---------------------------------------------------------------------------

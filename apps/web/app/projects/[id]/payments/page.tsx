@@ -2645,219 +2645,313 @@ export default function ProjectPaymentsPage() {
                 </button>
               </div>
 
-              {/* Si hay comprobante adjunto, mostrar tarjeta limpia sin dummys */}
-              {selectedVoucherForView.voucherName ? (
-                <div
-                  style={{
-                    border: "1px solid #E2E8F0",
-                    borderRadius: "1rem",
-                    padding: "2rem 1.5rem",
-                    textAlign: "center",
-                    backgroundColor: "#F8FAFC",
-                    marginBottom: "1.5rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "0.75rem",
-                  }}
-                >
-                  <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <FileText size={26} color="#2F80ED" />
-                  </div>
-                  <strong style={{ fontSize: "0.95rem", color: "#1F3652", wordBreak: "break-all" }}>
-                    {selectedVoucherForView.voucherName}
-                  </strong>
-                  <span style={{ fontSize: "0.82rem", color: "#64748B" }}>
-                    Monto transferido: <strong>{formatMoney(selectedVoucherForView.paidAmount || selectedVoucherForView.scheduledAmount || 0)}</strong>
-                    {selectedVoucherForView.reference ? ` • Ref: ${selectedVoucherForView.reference}` : ""}
-                  </span>
-                </div>
-              ) : (
-                /* Si está vacío, mostrar zona para subir el comprobante */
-                <div
-                  onClick={() => {
-                    const input = document.getElementById("voucher-file-input-payments");
-                    if (input) input.click();
-                  }}
-                  style={{
-                    border: "2px dashed #CBD5E1",
-                    borderRadius: "1rem",
-                    padding: "2.5rem 1.5rem",
-                    textAlign: "center",
-                    backgroundColor: "#F8FAFC",
-                    marginBottom: "1.5rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "0.75rem",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F1F5F9")}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
-                >
-                  <input
-                    id="voucher-file-input-payments"
-                    type="file"
-                    accept=".pdf,image/*"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file && selectedVoucherForView) {
-                        setSelectedVoucherForView({
-                          ...selectedVoucherForView,
-                          voucherName: file.name,
-                        });
-                        showToast("Comprobante Guardado", `Se adjuntó "${file.name}" a este pago.`, "success");
-                      }
-                    }}
-                  />
-                  <div style={{ width: "48px", height: "48px", borderRadius: "50%", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <UploadCloud size={24} color="#2F80ED" />
-                  </div>
-                  <div>
-                    <strong style={{ fontSize: "0.95rem", color: "#1F3652", display: "block" }}>
-                      Sin comprobante adjunto
-                    </strong>
-                    <span style={{ fontSize: "0.8rem", color: "#64748B", display: "block", marginTop: "2px" }}>
-                      Haz clic para seleccionar o arrastra el archivo (PDF o Imagen)
-                    </span>
-                  </div>
-                </div>
-              )}
+              {/* Si hay comprobante adjunto, mostrar tarjeta limpia con acciones de ver/descargar */}
+              {(() => {
+                const voucherUrl = (selectedVoucherForView as any).comprobanteUrl || (selectedVoucherForView as any).voucherUrl;
+                const hasVoucher = Boolean(selectedVoucherForView.voucherName || voucherUrl);
 
-              {/* Botones de Acción */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <input
-                    id="voucher-replace-file-input-payments"
-                    type="file"
-                    accept=".pdf,image/*"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file && selectedVoucherForView) {
-                        setSelectedVoucherForView({
-                          ...selectedVoucherForView,
-                          voucherName: file.name,
-                        });
-                        showToast("Comprobante Actualizado", `Se actualizó "${file.name}".`, "success");
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const input = document.getElementById("voucher-replace-file-input-payments");
-                      if (input) input.click();
-                    }}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.4rem",
-                      padding: "0.55rem 1rem",
-                      borderRadius: "9999px",
-                      border: "1px solid #CBD5E1",
-                      backgroundColor: "#FFFFFF",
-                      color: "#64748B",
-                      fontSize: "0.78rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <UploadCloud size={14} /> {selectedVoucherForView.voucherName ? "Cambiar Archivo" : "Subir Archivo"}
-                  </button>
-                </div>
+                if (hasVoucher) {
+                  return (
+                    <>
+                      <div
+                        style={{
+                          border: "1px solid #E2E8F0",
+                          borderRadius: "1rem",
+                          padding: "2rem 1.5rem",
+                          textAlign: "center",
+                          backgroundColor: "#F8FAFC",
+                          marginBottom: "1.5rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                        }}
+                      >
+                        <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <FileText size={26} color="#2F80ED" />
+                        </div>
+                        <strong style={{ fontSize: "0.95rem", color: "#1F3652", wordBreak: "break-all" }}>
+                          {selectedVoucherForView.voucherName || `Comprobante_Unidad_${selectedVoucherForView.unit}.pdf`}
+                        </strong>
+                        <span style={{ fontSize: "0.82rem", color: "#64748B" }}>
+                          Monto transferido: <strong>{formatMoney(selectedVoucherForView.paidAmount || selectedVoucherForView.scheduledAmount || 0)}</strong>
+                          {selectedVoucherForView.reference ? ` • Ref: ${selectedVoucherForView.reference}` : ""}
+                        </span>
+                      </div>
 
-                <div style={{ display: "flex", gap: "0.75rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const devLogoUrl =
-                        (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
-                        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
-                      const projLogoUrl =
-                        (project?.image && project.image.startsWith("http"))
-                          ? project.image
-                          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+                      {/* Botones de Acción cuando SÍ hay comprobante */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <input
+                            id="voucher-replace-file-input-payments"
+                            type="file"
+                            accept=".pdf,image/*"
+                            style={{ display: "none" }}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file && selectedVoucherForView) {
+                                const reader = new FileReader();
+                                reader.onload = (loadEvent) => {
+                                  const dataUrl = (loadEvent.target?.result as string) || "";
+                                  setSelectedVoucherForView({
+                                    ...selectedVoucherForView,
+                                    voucherName: file.name,
+                                    comprobanteUrl: dataUrl,
+                                  });
+                                  updateSalePayment(projectId, selectedVoucherForView.unit, selectedVoucherForView.id, {
+                                    voucherName: file.name,
+                                    voucherUrl: dataUrl,
+                                  });
+                                  showToast("Comprobante Actualizado", `Se actualizó "${file.name}".`, "success");
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const input = document.getElementById("voucher-replace-file-input-payments");
+                              if (input) input.click();
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.4rem",
+                              padding: "0.55rem 1rem",
+                              borderRadius: "9999px",
+                              border: "1px solid #CBD5E1",
+                              backgroundColor: "#FFFFFF",
+                              color: "#64748B",
+                              fontSize: "0.78rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <UploadCloud size={14} /> Cambiar Archivo
+                          </button>
 
-                      openReceiptInNewTab({
-                        folio: selectedVoucherForView.id || `REC-${Date.now().toString().slice(-6)}`,
-                        projectName: project?.name || "Proyecto Inmobiliario",
-                        unitNumber: selectedVoucherForView.unit,
-                        clientName: selectedVoucherForView.client || "Cliente Devio",
-                        paymentMethod: selectedVoucherForView.method || "Transferencia SPEI",
-                        totalAmount: Number(selectedVoucherForView.paidAmount || selectedVoucherForView.scheduledAmount || 0),
-                        capitalAmount: Number(selectedVoucherForView.paidAmount || selectedVoucherForView.scheduledAmount || 0),
-                        interestAmount: 0,
-                        emissionDate: selectedVoucherForView.paymentDate || new Date().toLocaleDateString("es-MX"),
-                        developerLogoUrl: devLogoUrl,
-                        projectLogoUrl: projLogoUrl,
-                        developerName: "Desarrolladora Inmobiliaria",
-                      });
-                    }}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.45rem",
-                      padding: "0.65rem 1.25rem",
-                      borderRadius: "9999px",
-                      border: "1.5px solid #CBD5E1",
-                      backgroundColor: "#FFFFFF",
-                      color: "#1F3652",
-                      fontSize: "0.82rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <ExternalLink size={15} /> Abrir
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const devLogoUrl =
-                        (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
-                        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
-                      const projLogoUrl =
-                        (project?.image && project.image.startsWith("http"))
-                          ? project.image
-                          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm("¿Estás seguro de que deseas eliminar este comprobante?")) {
+                                updateSalePayment(projectId, selectedVoucherForView.unit, selectedVoucherForView.id, {
+                                  voucherName: undefined,
+                                  voucherUrl: undefined,
+                                });
+                                setSelectedVoucherForView({
+                                  ...selectedVoucherForView,
+                                  voucherName: undefined,
+                                  comprobanteUrl: undefined,
+                                });
+                                showToast("Comprobante Eliminado", "Se eliminó el comprobante adjunto.", "info");
+                              }
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.4rem",
+                              padding: "0.55rem 1rem",
+                              borderRadius: "9999px",
+                              border: "1px solid #FCA5A5",
+                              backgroundColor: "#FEF2F2",
+                              color: "#DC2626",
+                              fontSize: "0.78rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Trash2 size={14} /> Eliminar
+                          </button>
+                        </div>
 
-                      await generateReceiptPDF({
-                        folio: selectedVoucherForView.id || `REC-${Date.now().toString().slice(-5)}`,
-                        projectName: project?.name || "Proyecto",
-                        unitNumber: selectedVoucherForView.unit || "101",
-                        clientName: selectedVoucherForView.client || "Cliente",
-                        paymentMethod: selectedVoucherForView.method || "Transferencia SPEI",
-                        totalAmount: Number(selectedVoucherForView.paidAmount || selectedVoucherForView.scheduledAmount || 0),
-                        capitalAmount: Number(selectedVoucherForView.paidAmount || selectedVoucherForView.scheduledAmount || 0),
-                        interestAmount: 0,
-                        emissionDate: selectedVoucherForView.paymentDate || new Date().toISOString().slice(0, 10),
-                        developerLogoUrl: devLogoUrl,
-                        projectLogoUrl: projLogoUrl,
-                        developerName: "Desarrolladora",
-                      });
-                      showToast("Descarga Completa", "Comprobante oficial descargado exitosamente.");
-                      setSelectedVoucherForView(null);
-                    }}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.45rem",
-                      padding: "0.65rem 1.5rem",
-                      borderRadius: "9999px",
-                      border: "none",
-                      backgroundColor: "#1B3047",
-                      color: "#FFFFFF",
-                      fontSize: "0.82rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Download size={15} /> Descargar PDF
-                  </button>
-                </div>
-              </div>
+                        <div style={{ display: "flex", gap: "0.75rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (voucherUrl) {
+                                if (voucherUrl.startsWith("data:") || voucherUrl.startsWith("http") || voucherUrl.startsWith("blob:")) {
+                                  const newTab = window.open();
+                                  if (newTab) {
+                                    if (voucherUrl.startsWith("data:image")) {
+                                      newTab.document.write(`<img src="${voucherUrl}" style="max-width:100%;" />`);
+                                    } else if (voucherUrl.startsWith("data:application/pdf")) {
+                                      newTab.document.write(`<iframe src="${voucherUrl}" style="width:100%; height:100vh; border:none;"></iframe>`);
+                                    } else {
+                                      newTab.location.href = voucherUrl;
+                                    }
+                                  }
+                                } else {
+                                  window.open(voucherUrl, "_blank");
+                                }
+                              } else {
+                                showToast("Vista Previa", `Abriendo comprobante ${selectedVoucherForView.voucherName}...`);
+                              }
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.45rem",
+                              padding: "0.65rem 1.25rem",
+                              borderRadius: "9999px",
+                              border: "1.5px solid #CBD5E1",
+                              backgroundColor: "#FFFFFF",
+                              color: "#1F3652",
+                              fontSize: "0.82rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <ExternalLink size={15} /> Abrir
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const downloadUrl = voucherUrl;
+                              const fileName = selectedVoucherForView.voucherName || `Comprobante_${selectedVoucherForView.unit}.pdf`;
+                              if (downloadUrl) {
+                                const a = document.createElement("a");
+                                a.href = downloadUrl;
+                                a.download = fileName;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                showToast("Descarga Completa", `Descargando ${fileName}...`, "success");
+                              } else {
+                                showToast("Descarga", `Descargando ${fileName}...`, "info");
+                              }
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.45rem",
+                              padding: "0.65rem 1.5rem",
+                              borderRadius: "9999px",
+                              border: "none",
+                              backgroundColor: "#1B3047",
+                              color: "#FFFFFF",
+                              fontSize: "0.82rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Download size={15} /> Descargar Archivo
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  );
+                }
+
+                // Si NO hay comprobante adjunto: SOLO mostrar zona de subida y botón de cerrar
+                return (
+                  <>
+                    <div
+                      onClick={() => {
+                        const input = document.getElementById("voucher-file-input-payments");
+                        if (input) input.click();
+                      }}
+                      style={{
+                        border: "2px dashed #CBD5E1",
+                        borderRadius: "1rem",
+                        padding: "2.5rem 1.5rem",
+                        textAlign: "center",
+                        backgroundColor: "#F8FAFC",
+                        marginBottom: "1.5rem",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: "0.75rem",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F1F5F9")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                    >
+                      <input
+                        id="voucher-file-input-payments"
+                        type="file"
+                        accept=".pdf,image/*"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file && selectedVoucherForView) {
+                            const reader = new FileReader();
+                            reader.onload = (loadEvent) => {
+                              const dataUrl = (loadEvent.target?.result as string) || "";
+                              setSelectedVoucherForView({
+                                ...selectedVoucherForView,
+                                voucherName: file.name,
+                                comprobanteUrl: dataUrl,
+                              });
+                              updateSalePayment(projectId, selectedVoucherForView.unit, selectedVoucherForView.id, {
+                                voucherName: file.name,
+                                voucherUrl: dataUrl,
+                              });
+                              showToast("Comprobante Guardado", `Se adjuntó "${file.name}" a este pago.`, "success");
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                      <div style={{ width: "48px", height: "48px", borderRadius: "50%", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <UploadCloud size={24} color="#2F80ED" />
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: "0.95rem", color: "#1F3652", display: "block" }}>
+                          Sin comprobante adjunto
+                        </strong>
+                        <span style={{ fontSize: "0.8rem", color: "#64748B", display: "block", marginTop: "2px" }}>
+                          Haz clic para seleccionar o arrastra el archivo (PDF o Imagen)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Botones cuando NO hay archivo: Solo subir y cerrar */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const input = document.getElementById("voucher-file-input-payments");
+                          if (input) input.click();
+                        }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          padding: "0.65rem 1.25rem",
+                          borderRadius: "9999px",
+                          border: "1px solid #CBD5E1",
+                          backgroundColor: "#FFFFFF",
+                          color: "#1F3652",
+                          fontSize: "0.82rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <UploadCloud size={15} color="#2F80ED" /> Subir Archivo
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVoucherForView(null)}
+                        style={{
+                          padding: "0.65rem 1.4rem",
+                          borderRadius: "9999px",
+                          border: "none",
+                          backgroundColor: "#1B3047",
+                          color: "#FFFFFF",
+                          fontSize: "0.82rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}

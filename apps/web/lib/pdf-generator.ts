@@ -46,6 +46,22 @@ export async function loadPDFLibraries(): Promise<boolean> {
   }
 }
 
+// Helper to ensure all images in a DOM element finish loading before PDF rasterization
+export async function waitForImagesToLoad(container: HTMLElement): Promise<void> {
+  const images = Array.from(container.querySelectorAll("img"));
+  if (images.length === 0) return;
+  await Promise.all(
+    images.map((img) => {
+      if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        img.addEventListener("load", () => resolve(), { once: true });
+        img.addEventListener("error", () => resolve(), { once: true });
+        setTimeout(resolve, 2500);
+      });
+    })
+  );
+}
+
 // -----------------------------------------------------------------------------
 // 1. RECIBO DE PAGO PDF & PREVIEW
 // -----------------------------------------------------------------------------
@@ -115,9 +131,9 @@ export function getReceiptHTML(data: ReceiptPDFData): string {
       <!-- HEADER CON LOGOS REALES -->
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1F3652; padding-bottom: 18px; margin-bottom: 22px;">
         <div style="display: flex; align-items: center; gap: 14px;">
-          <img src="${devLogo}" style="height: 42px; max-width: 140px; object-fit: contain;" crossorigin="anonymous" alt="${data.developerName || "Desarrolladora"}" />
+          <img src="${devLogo}" style="height: 42px; max-width: 140px; object-fit: contain;" alt="${data.developerName || "Desarrolladora"}" onerror="this.onerror=null; this.src='https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg';" />
           <div style="width: 1.5px; height: 32px; background: #CBD5E1;"></div>
-          <img src="${projLogo}" style="height: 42px; max-width: 140px; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" alt="${data.projectName}" />
+          <img src="${projLogo}" style="height: 42px; max-width: 140px; object-fit: contain; border-radius: 4px;" alt="${data.projectName}" onerror="this.onerror=null; this.src='https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg';" />
         </div>
 
         <div style="text-align: right; font-size: 12px; line-height: 1.6; color: #4b5563;">
@@ -341,6 +357,9 @@ export async function generateReceiptPDF(data: ReceiptPDFData): Promise<{ succes
   document.body.appendChild(ghost);
 
   try {
+    // Wait for all images in ghost to finish loading
+    await waitForImagesToLoad(ghost);
+
     const element = ghost.querySelector("#rp-pdf-container");
     const opt = {
       margin: 0,
@@ -878,6 +897,9 @@ export async function generateQuotePDF(data: QuotePDFData): Promise<{ success: b
   document.body.appendChild(ghost);
 
   try {
+    // Wait for all images to finish loading
+    await waitForImagesToLoad(ghost);
+
     const element = ghost.querySelector("#cot-pdf-container");
     const opt = {
       margin: 0,

@@ -46,7 +46,7 @@ import {
 } from "lucide-react";
 import AppLayout from "../../../../../components/layout/app-layout";
 import { useProject } from "../../../../../context/project-context";
-import { INITIAL_CLIENTS, ClientProfile, ClientOwnedUnit, QuoteRecord } from "../../../../../data/projects-data";
+import { INITIAL_CLIENTS, ClientProfile, ClientOwnedUnit, QuoteRecord, ClientDocument } from "../../../../../data/projects-data";
 import { exportTableToExcel, exportTableToPDF } from "../../../../../lib/export-utils";
 import { generateQuotePDF, openQuoteInNewTab, generateReceiptPDF, openReceiptInNewTab } from "../../../../../lib/pdf-generator";
 import { sendAndLogNotification } from "../../../../../lib/notifications";
@@ -89,16 +89,6 @@ interface PaymentReceipt {
   waiveReason?: string;
 }
 
-interface ClientDocument {
-  id: string;
-  title: string;
-  unit: string;
-  notes?: string;
-  isVisibleToClient: boolean;
-  uploadDate: string;
-  fileSize: string;
-}
-
 export default function ClientDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -115,6 +105,9 @@ export default function ClientDetailPage() {
     updateSaleScheduleInstallment,
     updateSalePayment,
     deleteSalePayment,
+    addClientDocument,
+    updateClientDocument,
+    deleteClientDocument,
     paymentPlans,
     hasPermission,
   } = useProject();
@@ -436,6 +429,8 @@ export default function ClientDetailPage() {
   const [showUploadPaymentsModal, setShowUploadPaymentsModal] = useState(false);
   const [showEditSaleModal, setShowEditSaleModal] = useState(false);
   const [showUploadDocModal, setShowUploadDocModal] = useState(false);
+  const [selectedDocForView, setSelectedDocForView] = useState<ClientDocument | null>(null);
+  const [selectedDocForEdit, setSelectedDocForEdit] = useState<ClientDocument | null>(null);
   const [selectedReceiptForView, setSelectedReceiptForView] = useState<PaymentReceipt | null>(null);
   const [selectedVoucherForView, setSelectedVoucherForView] = useState<PaymentReceipt | null>(null);
   const [showPlanAccordion, setShowPlanAccordion] = useState(false);
@@ -652,8 +647,53 @@ export default function ClientDetailPage() {
     return [];
   }, [currentSale, selectedUnit, project]);
 
-  // Documents List
-  const [clientDocuments, setClientDocuments] = useState<ClientDocument[]>([]);
+  // Documents List derived directly from project context
+  const clientDocuments: ClientDocument[] = useMemo(() => {
+    if (!project) return [];
+    const all = project.clientDocuments || [];
+    const filtered = all.filter(
+      (d) =>
+        d.clientId === clientId ||
+        (rawClient.name && d.clientName?.toLowerCase() === rawClient.name.toLowerCase()) ||
+        (rawClient.ownedUnits && rawClient.ownedUnits.some((ou) => ou.unit === d.unit))
+    );
+    if (filtered.length > 0) return filtered;
+
+    if (rawClient.ownedUnits.length > 0) {
+      const u = rawClient.ownedUnits[0]?.unit || selectedUnit || "101";
+      return [
+        {
+          id: `doc-default-1-${clientId}`,
+          clientId: clientId,
+          clientName: rawClient.name,
+          title: `Contrato de Compraventa - Unidad ${u}`,
+          category: "Contratos",
+          unit: u,
+          fileType: "PDF",
+          fileSize: "2.4 MB",
+          uploadDate: "12 Ago 2026",
+          updatedAt: "12 Ago 2026",
+          notes: "Contrato privado de compraventa con reserva de dominio debidamente firmado.",
+          isVisibleToClient: true,
+        },
+        {
+          id: `doc-default-2-${clientId}`,
+          clientId: clientId,
+          clientName: rawClient.name,
+          title: "Identificación Oficial (INE / Pasaporte)",
+          category: "Identificación",
+          unit: u,
+          fileType: "PDF",
+          fileSize: "1.1 MB",
+          uploadDate: "10 Ago 2026",
+          updatedAt: "10 Ago 2026",
+          notes: "Copia cotejada de identificación oficial vigente del titular.",
+          isVisibleToClient: false,
+        },
+      ];
+    }
+    return [];
+  }, [project, clientId, rawClient, selectedUnit]);
 
   // Base Overdue and Moratory Interest Calculation
   const baseSaldoAtrasado = statementData
@@ -1133,21 +1173,40 @@ export default function ClientDetailPage() {
         : `${Math.round(clientDocUploadedFile.size / 1024)} KB`
       : "1.2 MB";
 
-    const newDoc: ClientDocument = {
-      id: `doc-cli-${Date.now()}`,
-      title: docForm.docName.trim(),
-      unit: docForm.unit ? docForm.unit.split("/").pop()?.trim() || selectedUnit : selectedUnit,
-      notes: docForm.internalNotes.trim() || undefined,
-      isVisibleToClient: docForm.visibleToClient,
-      uploadDate: new Date().toLocaleDateString("es-MX"),
-      fileSize: calculatedSize,
+    const rawExt = clientDocUploadedFile?.name.split(".").pop()?.toUpperCase() || "PDF";
+
+    const finalize = (dataUrl?: string) => {
+      const newDoc: ClientDocument = {
+        id: `doc-cli-${Date.now()}`,
+        clientId: clientId,
+        clientName: rawClient.name,
+        title: docForm.docName.trim(),
+        unit: docForm.unit ? docForm.unit.split("/").pop()?.trim() || selectedUnit : selectedUnit,
+        fileType: rawExt,
+        fileSize: calculatedSize,
+        uploadDate: new Date().toLocaleDateString("es-MX"),
+        updatedAt: new Date().toLocaleDateString("es-MX"),
+        url: dataUrl,
+        notes: docForm.internalNotes.trim() || undefined,
+        isVisibleToClient: docForm.visibleToClient,
+      };
+
+      addClientDocument(projectId, newDoc);
+      setShowUploadDocModal(false);
+      setDocForm({ docName: "", unit: "", internalNotes: "", visibleToClient: true });
+      setClientDocUploadedFile(null);
     };
 
-    setClientDocuments([newDoc, ...clientDocuments]);
-    showToast("Documento Guardado", `Se guardó "${newDoc.title}" en el expediente de ${rawClient.name}.`);
-    setShowUploadDocModal(false);
-    setDocForm({ docName: "", unit: "", internalNotes: "", visibleToClient: true });
-    setClientDocUploadedFile(null);
+    if (clientDocUploadedFile) {
+      const reader = new FileReader();
+      reader.onload = (loadEv) => {
+        const dataUrl = (loadEv.target?.result as string) || "";
+        finalize(dataUrl);
+      };
+      reader.readAsDataURL(clientDocUploadedFile);
+    } else {
+      finalize();
+    }
   };
 
   if (!project) return null;
@@ -2732,47 +2791,202 @@ export default function ClientDetailPage() {
               </span>
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "1rem" }}>
               {clientDocuments.map((doc) => (
                 <div
                   key={doc.id}
                   style={{
-                    padding: "1rem",
-                    borderRadius: "0.85rem",
+                    padding: "1.25rem",
+                    borderRadius: "1rem",
                     border: "1px solid #E2E8F0",
                     backgroundColor: "#FFFFFF",
                     display: "flex",
+                    flexDirection: "column",
                     justifyContent: "space-between",
-                    alignItems: "center",
+                    gap: "1rem",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    <FileText size={20} color="#2F80ED" />
-                    <div>
-                      <strong style={{ fontSize: "0.85rem", color: "#1F3652" }}>{doc.title}</strong>
-                      <span style={{ fontSize: "0.72rem", color: "#64748B", display: "block" }}>
-                        Unidad {doc.unit} • {doc.fileSize}
-                      </span>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
+                    <div
+                      style={{
+                        width: "40px",
+                        height: "40px",
+                        borderRadius: "10px",
+                        backgroundColor: "#EFF6FF",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <FileText size={22} color="#2F80ED" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.25rem" }}>
+                        <strong style={{ fontSize: "0.92rem", color: "#1F3652", wordBreak: "break-word" }}>{doc.title}</strong>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", fontSize: "0.75rem", color: "#64748B" }}>
+                        <span>Unidad <strong>{doc.unit}</strong></span>
+                        <span>•</span>
+                        <span>{doc.fileSize || "1.2 MB"}</span>
+                        <span>•</span>
+                        <span>{doc.uploadDate}</span>
+                      </div>
+                      <div style={{ marginTop: "0.4rem" }}>
+                        <span
+                          style={{
+                            fontSize: "0.68rem",
+                            fontWeight: 700,
+                            padding: "0.15rem 0.5rem",
+                            borderRadius: "9999px",
+                            backgroundColor: doc.isVisibleToClient ? "rgba(0, 196, 140, 0.12)" : "rgba(100, 116, 139, 0.12)",
+                            color: doc.isVisibleToClient ? "#00C48C" : "#64748B",
+                          }}
+                        >
+                          {doc.isVisibleToClient ? "✓ Visible al cliente" : "🔒 Solo uso interno"}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      showToast("Descarga Iniciada", `Descargando ${doc.title}...`);
-                    }}
-                    style={{
-                      padding: "0.35rem 0.85rem",
-                      borderRadius: "9999px",
-                      backgroundColor: "#1B3047",
-                      color: "#FFFFFF",
-                      border: "none",
-                      fontSize: "0.75rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Ver
-                  </button>
+
+                  {/* Barra de Acciones del Documento */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #F1F5F9", paddingTop: "0.75rem" }}>
+                    <div style={{ display: "flex", gap: "0.35rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDocForEdit(doc)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#64748B",
+                          cursor: "pointer",
+                          padding: "0.3rem",
+                          borderRadius: "6px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          gap: "0.25rem",
+                        }}
+                        title="Editar documento"
+                      >
+                        <Edit3 size={14} /> Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`¿Estás seguro de que deseas eliminar "${doc.title}"?`)) {
+                            deleteClientDocument(projectId, doc.id);
+                          }
+                        }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#EF4444",
+                          cursor: "pointer",
+                          padding: "0.3rem",
+                          borderRadius: "6px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          gap: "0.25rem",
+                        }}
+                        title="Eliminar documento"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const docUrl = doc.url;
+                          if (docUrl) {
+                            if (docUrl.startsWith("data:") || docUrl.startsWith("http") || docUrl.startsWith("blob:")) {
+                              const newTab = window.open();
+                              if (newTab) {
+                                if (docUrl.startsWith("data:image")) {
+                                  newTab.document.write(`<img src="${docUrl}" style="max-width:100%;" />`);
+                                } else if (docUrl.startsWith("data:application/pdf")) {
+                                  newTab.document.write(`<iframe src="${docUrl}" style="width:100%; height:100vh; border:none;"></iframe>`);
+                                } else {
+                                  newTab.location.href = docUrl;
+                                }
+                              }
+                            } else {
+                              window.open(docUrl, "_blank");
+                            }
+                          } else {
+                            setSelectedDocForView(doc);
+                          }
+                        }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                          backgroundColor: "rgba(31, 54, 82, 0.08)",
+                          color: "#1F3652",
+                          padding: "0.35rem 0.75rem",
+                          borderRadius: "9999px",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          border: "1px solid rgba(31, 54, 82, 0.15)",
+                          cursor: "pointer",
+                        }}
+                        title="Abrir en pestaña nueva"
+                      >
+                        <ExternalLink size={12} /> Abrir
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const docUrl = doc.url;
+                          const ext = doc.fileType ? doc.fileType.toLowerCase() : "pdf";
+                          const fileName = `${doc.title}.${ext}`;
+                          if (docUrl && (docUrl.startsWith("data:") || docUrl.startsWith("http") || docUrl.startsWith("blob:"))) {
+                            const a = document.createElement("a");
+                            a.href = docUrl;
+                            a.download = fileName;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            showToast("Descarga Completa", `Descargando ${fileName}...`, "success");
+                          } else {
+                            const blob = new Blob([`Expediente Oficial: ${doc.title}\nCliente: ${rawClient.name}\nUnidad: ${doc.unit}\nFecha: ${doc.uploadDate}\nNotas: ${doc.notes || ""}`], { type: "text/plain" });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `${doc.title}.txt`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            showToast("Descarga Completa", `Descargando ${doc.title}...`, "success");
+                          }
+                        }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                          backgroundColor: "#1B3047",
+                          color: "#FFFFFF",
+                          padding: "0.35rem 0.75rem",
+                          borderRadius: "9999px",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          border: "none",
+                          cursor: "pointer",
+                        }}
+                        title="Descargar archivo"
+                      >
+                        <Download size={12} /> PDF
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -4143,6 +4357,417 @@ export default function ClientDetailPage() {
         )}
 
         {/* ============================================================== */}
+        {/* MODAL: VISUALIZAR DOCUMENTO DE CLIENTE                          */}
+        {/* ============================================================== */}
+        {selectedDocForView && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.65)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: "1rem",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "1.25rem",
+                width: "100%",
+                maxWidth: "620px",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                padding: "2rem",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                    {selectedDocForView.title}
+                  </h3>
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                    Unidad {selectedDocForView.unit} • {selectedDocForView.uploadDate} • {selectedDocForView.fileSize || "1.2 MB"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDocForView(null)}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Vista Previa Card */}
+              <div
+                style={{
+                  border: "1px solid #E2E8F0",
+                  borderRadius: "1rem",
+                  padding: "2.5rem 1.5rem",
+                  textAlign: "center",
+                  backgroundColor: "#F8FAFC",
+                  marginBottom: "1.5rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                }}
+              >
+                <div style={{ width: "56px", height: "56px", borderRadius: "14px", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <FileText size={32} color="#2F80ED" />
+                </div>
+                <strong style={{ fontSize: "1.05rem", color: "#1F3652", wordBreak: "break-all" }}>
+                  {selectedDocForView.title}.{selectedDocForView.fileType ? selectedDocForView.fileType.toLowerCase() : "pdf"}
+                </strong>
+                <p style={{ fontSize: "0.85rem", color: "#64748B", margin: 0, maxWidth: "420px" }}>
+                  {selectedDocForView.notes || "Documento oficial del expediente del cliente."}
+                </p>
+                <span
+                  style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    padding: "0.2rem 0.6rem",
+                    borderRadius: "9999px",
+                    backgroundColor: selectedDocForView.isVisibleToClient ? "rgba(0, 196, 140, 0.12)" : "rgba(100, 116, 139, 0.12)",
+                    color: selectedDocForView.isVisibleToClient ? "#00C48C" : "#64748B",
+                  }}
+                >
+                  {selectedDocForView.isVisibleToClient ? "✓ Visible al cliente" : "🔒 Solo uso interno"}
+                </span>
+              </div>
+
+              {/* Botones de Acción */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const docUrl = selectedDocForView.url;
+                    if (docUrl) {
+                      if (docUrl.startsWith("data:") || docUrl.startsWith("http") || docUrl.startsWith("blob:")) {
+                        const newTab = window.open();
+                        if (newTab) {
+                          if (docUrl.startsWith("data:image")) {
+                            newTab.document.write(`<img src="${docUrl}" style="max-width:100%;" />`);
+                          } else if (docUrl.startsWith("data:application/pdf")) {
+                            newTab.document.write(`<iframe src="${docUrl}" style="width:100%; height:100vh; border:none;"></iframe>`);
+                          } else {
+                            newTab.location.href = docUrl;
+                          }
+                        }
+                      } else {
+                        window.open(docUrl, "_blank");
+                      }
+                    } else {
+                      showToast("Vista Previa", `Abriendo ${selectedDocForView.title}...`);
+                    }
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.45rem",
+                    padding: "0.65rem 1.25rem",
+                    borderRadius: "9999px",
+                    border: "1.5px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    color: "#1F3652",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  <ExternalLink size={15} /> Abrir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const docUrl = selectedDocForView.url;
+                    const ext = selectedDocForView.fileType ? selectedDocForView.fileType.toLowerCase() : "pdf";
+                    const fileName = `${selectedDocForView.title}.${ext}`;
+                    if (docUrl && (docUrl.startsWith("data:") || docUrl.startsWith("http") || docUrl.startsWith("blob:"))) {
+                      const a = document.createElement("a");
+                      a.href = docUrl;
+                      a.download = fileName;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      showToast("Descarga Completa", `Descargando ${fileName}...`, "success");
+                    } else {
+                      const blob = new Blob([`Expediente Oficial: ${selectedDocForView.title}\nCliente: ${rawClient.name}\nUnidad: ${selectedDocForView.unit}\nFecha: ${selectedDocForView.uploadDate}\nNotas: ${selectedDocForView.notes || ""}`], { type: "text/plain" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `${selectedDocForView.title}.txt`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                      showToast("Descarga Completa", `Descargando ${selectedDocForView.title}...`, "success");
+                    }
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.45rem",
+                    padding: "0.65rem 1.5rem",
+                    borderRadius: "9999px",
+                    border: "none",
+                    backgroundColor: "#1B3047",
+                    color: "#FFFFFF",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  <Download size={15} /> Descargar Archivo
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* MODAL: EDITAR DOCUMENTO DE CLIENTE                             */}
+        {/* ============================================================== */}
+        {selectedDocForEdit && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.65)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: "1rem",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "1.25rem",
+                width: "100%",
+                maxWidth: "540px",
+                maxHeight: "92vh",
+                overflowY: "auto",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+                padding: "2rem",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                    Editar Documento
+                  </h3>
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>Actualiza los detalles y permisos del documento</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDocForEdit(null)}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!selectedDocForEdit.title.trim()) {
+                    showToast("Campo Requerido", "Por favor ingresa un título para el documento.", "warning");
+                    return;
+                  }
+                  updateClientDocument(projectId, {
+                    ...selectedDocForEdit,
+                    title: selectedDocForEdit.title,
+                    unit: selectedDocForEdit.unit,
+                    notes: selectedDocForEdit.notes,
+                    isVisibleToClient: selectedDocForEdit.isVisibleToClient,
+                  });
+                  showToast("Documento Actualizado", `Se guardaron los cambios de "${selectedDocForEdit.title}".`, "success");
+                  setSelectedDocForEdit(null);
+                }}
+              >
+                <div style={{ marginBottom: "1.2rem" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                    Título del Documento *
+                  </label>
+                  <input
+                    type="text"
+                    value={selectedDocForEdit.title}
+                    onChange={(e) => setSelectedDocForEdit({ ...selectedDocForEdit, title: e.target.value })}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.85rem",
+                      color: "#1F3652",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: "1.2rem" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                    Unidad Asociada
+                  </label>
+                  <select
+                    value={selectedDocForEdit.unit}
+                    onChange={(e) => setSelectedDocForEdit({ ...selectedDocForEdit, unit: e.target.value })}
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.85rem",
+                      color: "#1F3652",
+                      outline: "none",
+                      backgroundColor: "#FFFFFF",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    {rawClient.ownedUnits.map((u) => (
+                      <option key={u.unit} value={u.unit}>Unidad {u.unit} ({u.type})</option>
+                    ))}
+                    <option value="General">General (Todas las unidades)</option>
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: "1.2rem" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.4rem" }}>
+                    Notas / Observaciones
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={selectedDocForEdit.notes || ""}
+                    onChange={(e) => setSelectedDocForEdit({ ...selectedDocForEdit, notes: e.target.value })}
+                    placeholder="Descripción o anotaciones sobre el documento..."
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.85rem",
+                      color: "#1F3652",
+                      outline: "none",
+                      boxSizing: "border-box",
+                      resize: "vertical",
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", marginBottom: "0.5rem" }}>
+                    Visibilidad para el Cliente
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <label
+                      style={{
+                        border: selectedDocForEdit.isVisibleToClient ? "1.5px solid #00C48C" : "1px solid #E2E8F0",
+                        borderRadius: "0.65rem",
+                        padding: "0.75rem",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: "0.5rem",
+                        cursor: "pointer",
+                        backgroundColor: selectedDocForEdit.isVisibleToClient ? "rgba(0, 196, 140, 0.04)" : "#FFFFFF",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="editClientVisibility"
+                        checked={selectedDocForEdit.isVisibleToClient}
+                        onChange={() => setSelectedDocForEdit({ ...selectedDocForEdit, isVisibleToClient: true })}
+                        style={{ marginTop: "2px", accentColor: "#00C48C" }}
+                      />
+                      <span style={{ fontSize: "0.78rem", color: "#1F3652", fontWeight: 600, lineHeight: 1.3 }}>
+                        Sí, visible en el portal del cliente
+                      </span>
+                    </label>
+
+                    <label
+                      style={{
+                        border: !selectedDocForEdit.isVisibleToClient ? "1.5px solid #1B3047" : "1px solid #E2E8F0",
+                        borderRadius: "0.65rem",
+                        padding: "0.75rem",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: "0.5rem",
+                        cursor: "pointer",
+                        backgroundColor: !selectedDocForEdit.isVisibleToClient ? "rgba(27, 48, 71, 0.03)" : "#FFFFFF",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="editClientVisibility"
+                        checked={!selectedDocForEdit.isVisibleToClient}
+                        onChange={() => setSelectedDocForEdit({ ...selectedDocForEdit, isVisibleToClient: false })}
+                        style={{ marginTop: "2px", accentColor: "#1B3047" }}
+                      />
+                      <span style={{ fontSize: "0.78rem", color: "#1F3652", fontWeight: 600, lineHeight: 1.3 }}>
+                        No, documento de uso interno exclusivo
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDocForEdit(null)}
+                    style={{
+                      padding: "0.65rem 1.4rem",
+                      borderRadius: "9999px",
+                      border: "1px solid #CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      color: "#64748B",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="submit"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.45rem",
+                      backgroundColor: "#1B3047",
+                      color: "#FFFFFF",
+                      padding: "0.65rem 1.75rem",
+                      borderRadius: "9999px",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Check size={16} /> Guardar Cambios
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
         {/* MODAL 3: RECIBO OFICIAL DE PAGO (PREVIEW & ABRIR)             */}
         {/* ============================================================== */}
         {selectedReceiptForView && (
@@ -4412,7 +5037,9 @@ export default function ClientDetailPage() {
                   <h3 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
                     Comprobante Bancario SPEI
                   </h3>
-                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>Unidad {selectedVoucherForView.unit} • {selectedVoucherForView.fechaPago}</span>
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                    Unidad {selectedVoucherForView.unit} • {selectedVoucherForView.fechaPago || (selectedVoucherForView as any).paymentDate || "Fecha de pago"}
+                  </span>
                 </div>
                 <button
                   type="button"
@@ -4423,225 +5050,313 @@ export default function ClientDetailPage() {
                 </button>
               </div>
 
-              {/* Si hay comprobante adjunto, mostrar tarjeta limpia sin dummys */}
-              {selectedVoucherForView.voucherName ? (
-                <div
-                  style={{
-                    border: "1px solid #E2E8F0",
-                    borderRadius: "1rem",
-                    padding: "2rem 1.5rem",
-                    textAlign: "center",
-                    backgroundColor: "#F8FAFC",
-                    marginBottom: "1.5rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "0.75rem",
-                  }}
-                >
-                  <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <FileText size={26} color="#2F80ED" />
-                  </div>
-                  <strong style={{ fontSize: "0.95rem", color: "#1F3652", wordBreak: "break-all" }}>
-                    {selectedVoucherForView.voucherName}
-                  </strong>
-                  <span style={{ fontSize: "0.82rem", color: "#64748B" }}>
-                    Monto transferido: <strong>{formatMoney(selectedVoucherForView.monto)}</strong>
-                    {selectedVoucherForView.reference ? ` • Ref: ${selectedVoucherForView.reference}` : ""}
-                  </span>
-                </div>
-              ) : (
-                /* Si está vacío, mostrar zona para subir el comprobante */
-                <div
-                  onClick={() => {
-                    const input = document.getElementById("voucher-file-input-client");
-                    if (input) input.click();
-                  }}
-                  style={{
-                    border: "2px dashed #CBD5E1",
-                    borderRadius: "1rem",
-                    padding: "2.5rem 1.5rem",
-                    textAlign: "center",
-                    backgroundColor: "#F8FAFC",
-                    marginBottom: "1.5rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "0.75rem",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F1F5F9")}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
-                >
-                  <input
-                    id="voucher-file-input-client"
-                    type="file"
-                    accept=".pdf,image/*"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file && selectedVoucherForView) {
-                        updateSalePayment(projectId, selectedVoucherForView.unit, selectedVoucherForView.id, {
-                          voucherName: file.name,
-                        });
-                        setSelectedVoucherForView({
-                          ...selectedVoucherForView,
-                          voucherName: file.name,
-                        });
-                        showToast("Comprobante Guardado", `Se adjuntó "${file.name}" a este pago.`, "success");
-                      }
-                    }}
-                  />
-                  <div style={{ width: "48px", height: "48px", borderRadius: "50%", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <UploadCloud size={24} color="#2F80ED" />
-                  </div>
-                  <div>
-                    <strong style={{ fontSize: "0.95rem", color: "#1F3652", display: "block" }}>
-                      Sin comprobante adjunto
-                    </strong>
-                    <span style={{ fontSize: "0.8rem", color: "#64748B", display: "block", marginTop: "2px" }}>
-                      Haz clic para seleccionar o arrastra el archivo (PDF o Imagen)
-                    </span>
-                  </div>
-                </div>
-              )}
+              {/* Si hay comprobante adjunto, mostrar tarjeta limpia con acciones de ver/descargar */}
+              {(() => {
+                const voucherUrl = (selectedVoucherForView as any).comprobanteUrl || (selectedVoucherForView as any).voucherUrl;
+                const hasVoucher = Boolean(selectedVoucherForView.voucherName || voucherUrl);
 
-              {/* Botones de Acción */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <input
-                    id="voucher-replace-file-input"
-                    type="file"
-                    accept=".pdf,image/*"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file && selectedVoucherForView) {
-                        updateSalePayment(projectId, selectedVoucherForView.unit, selectedVoucherForView.id, {
-                          voucherName: file.name,
-                        });
-                        setSelectedVoucherForView({
-                          ...selectedVoucherForView,
-                          voucherName: file.name,
-                        });
-                        showToast("Comprobante Actualizado", `Se actualizó "${file.name}".`, "success");
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const input = document.getElementById("voucher-replace-file-input");
-                      if (input) input.click();
-                    }}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.4rem",
-                      padding: "0.55rem 1rem",
-                      borderRadius: "9999px",
-                      border: "1px solid #CBD5E1",
-                      backgroundColor: "#FFFFFF",
-                      color: "#64748B",
-                      fontSize: "0.78rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <UploadCloud size={14} /> {selectedVoucherForView.voucherName ? "Cambiar Archivo" : "Subir Archivo"}
-                  </button>
-                </div>
+                if (hasVoucher) {
+                  return (
+                    <>
+                      <div
+                        style={{
+                          border: "1px solid #E2E8F0",
+                          borderRadius: "1rem",
+                          padding: "2rem 1.5rem",
+                          textAlign: "center",
+                          backgroundColor: "#F8FAFC",
+                          marginBottom: "1.5rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                        }}
+                      >
+                        <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <FileText size={26} color="#2F80ED" />
+                        </div>
+                        <strong style={{ fontSize: "0.95rem", color: "#1F3652", wordBreak: "break-all" }}>
+                          {selectedVoucherForView.voucherName || `Comprobante_Unidad_${selectedVoucherForView.unit}.pdf`}
+                        </strong>
+                        <span style={{ fontSize: "0.82rem", color: "#64748B" }}>
+                          Monto transferido: <strong>{formatMoney(selectedVoucherForView.monto || (selectedVoucherForView as any).paidAmount || 0)}</strong>
+                          {selectedVoucherForView.reference ? ` • Ref: ${selectedVoucherForView.reference}` : ""}
+                        </span>
+                      </div>
 
-                <div style={{ display: "flex", gap: "0.75rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const devLogoUrl =
-                        (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
-                        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
-                      const projLogoUrl =
-                        (project?.image && project.image.startsWith("http"))
-                          ? project.image
-                          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+                      {/* Botones de Acción cuando SÍ hay comprobante */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <input
+                            id="voucher-replace-file-input-client"
+                            type="file"
+                            accept=".pdf,image/*"
+                            style={{ display: "none" }}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file && selectedVoucherForView) {
+                                const reader = new FileReader();
+                                reader.onload = (loadEvent) => {
+                                  const dataUrl = (loadEvent.target?.result as string) || "";
+                                  setSelectedVoucherForView({
+                                    ...selectedVoucherForView,
+                                    voucherName: file.name,
+                                    comprobanteUrl: dataUrl,
+                                  });
+                                  updateSalePayment(projectId, selectedVoucherForView.unit, selectedVoucherForView.id, {
+                                    voucherName: file.name,
+                                    voucherUrl: dataUrl,
+                                  });
+                                  showToast("Comprobante Actualizado", `Se actualizó "${file.name}".`, "success");
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const input = document.getElementById("voucher-replace-file-input-client");
+                              if (input) input.click();
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.4rem",
+                              padding: "0.55rem 1rem",
+                              borderRadius: "9999px",
+                              border: "1px solid #CBD5E1",
+                              backgroundColor: "#FFFFFF",
+                              color: "#64748B",
+                              fontSize: "0.78rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <UploadCloud size={14} /> Cambiar Archivo
+                          </button>
 
-                      openReceiptInNewTab({
-                        folio: selectedVoucherForView.id || `REC-${Date.now().toString().slice(-6)}`,
-                        projectName: project?.name || "Proyecto Inmobiliario",
-                        unitNumber: selectedVoucherForView.unit,
-                        clientName: rawClient.name,
-                        paymentMethod: selectedVoucherForView.metodoPago || "Transferencia SPEI",
-                        totalAmount: selectedVoucherForView.monto,
-                        capitalAmount: selectedVoucherForView.monto,
-                        interestAmount: 0,
-                        emissionDate: selectedVoucherForView.fechaPago,
-                        developerLogoUrl: devLogoUrl,
-                        projectLogoUrl: projLogoUrl,
-                        developerName: "Desarrolladora Inmobiliaria",
-                      });
-                    }}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.45rem",
-                      padding: "0.65rem 1.25rem",
-                      borderRadius: "9999px",
-                      border: "1.5px solid #CBD5E1",
-                      backgroundColor: "#FFFFFF",
-                      color: "#1F3652",
-                      fontSize: "0.82rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <ExternalLink size={15} /> Abrir
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const devLogoUrl =
-                        (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
-                        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
-                      const projLogoUrl =
-                        (project?.image && project.image.startsWith("http"))
-                          ? project.image
-                          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm("¿Estás seguro de que deseas eliminar este comprobante?")) {
+                                updateSalePayment(projectId, selectedVoucherForView.unit, selectedVoucherForView.id, {
+                                  voucherName: undefined,
+                                  voucherUrl: undefined,
+                                });
+                                setSelectedVoucherForView({
+                                  ...selectedVoucherForView,
+                                  voucherName: undefined,
+                                  comprobanteUrl: undefined,
+                                });
+                                showToast("Comprobante Eliminado", "Se eliminó el comprobante adjunto.", "info");
+                              }
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.4rem",
+                              padding: "0.55rem 1rem",
+                              borderRadius: "9999px",
+                              border: "1px solid #FCA5A5",
+                              backgroundColor: "#FEF2F2",
+                              color: "#DC2626",
+                              fontSize: "0.78rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Trash2 size={14} /> Eliminar
+                          </button>
+                        </div>
 
-                      await generateReceiptPDF({
-                        folio: selectedVoucherForView.id || `REC-${Date.now().toString().slice(-5)}`,
-                        projectName: project?.name || "Proyecto",
-                        unitNumber: selectedVoucherForView.unit,
-                        clientName: rawClient.name,
-                        paymentMethod: selectedVoucherForView.metodoPago || "Transferencia SPEI",
-                        totalAmount: selectedVoucherForView.monto,
-                        capitalAmount: selectedVoucherForView.monto,
-                        interestAmount: 0,
-                        emissionDate: selectedVoucherForView.fechaPago,
-                        developerLogoUrl: devLogoUrl,
-                        projectLogoUrl: projLogoUrl,
-                        developerName: "Desarrolladora",
-                      });
-                      showToast("Descarga Completa", "Comprobante oficial descargado exitosamente.");
-                      setSelectedVoucherForView(null);
-                    }}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.45rem",
-                      padding: "0.65rem 1.5rem",
-                      borderRadius: "9999px",
-                      border: "none",
-                      backgroundColor: "#1B3047",
-                      color: "#FFFFFF",
-                      fontSize: "0.82rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Download size={15} /> Descargar PDF
-                  </button>
-                </div>
-              </div>
+                        <div style={{ display: "flex", gap: "0.75rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (voucherUrl) {
+                                if (voucherUrl.startsWith("data:") || voucherUrl.startsWith("http") || voucherUrl.startsWith("blob:")) {
+                                  const newTab = window.open();
+                                  if (newTab) {
+                                    if (voucherUrl.startsWith("data:image")) {
+                                      newTab.document.write(`<img src="${voucherUrl}" style="max-width:100%;" />`);
+                                    } else if (voucherUrl.startsWith("data:application/pdf")) {
+                                      newTab.document.write(`<iframe src="${voucherUrl}" style="width:100%; height:100vh; border:none;"></iframe>`);
+                                    } else {
+                                      newTab.location.href = voucherUrl;
+                                    }
+                                  }
+                                } else {
+                                  window.open(voucherUrl, "_blank");
+                                }
+                              } else {
+                                showToast("Vista Previa", `Abriendo comprobante ${selectedVoucherForView.voucherName}...`);
+                              }
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.45rem",
+                              padding: "0.65rem 1.25rem",
+                              borderRadius: "9999px",
+                              border: "1.5px solid #CBD5E1",
+                              backgroundColor: "#FFFFFF",
+                              color: "#1F3652",
+                              fontSize: "0.82rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <ExternalLink size={15} /> Abrir
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const downloadUrl = voucherUrl;
+                              const fileName = selectedVoucherForView.voucherName || `Comprobante_${selectedVoucherForView.unit}.pdf`;
+                              if (downloadUrl) {
+                                const a = document.createElement("a");
+                                a.href = downloadUrl;
+                                a.download = fileName;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                showToast("Descarga Completa", `Descargando ${fileName}...`, "success");
+                              } else {
+                                showToast("Descarga", `Descargando ${fileName}...`, "info");
+                              }
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.45rem",
+                              padding: "0.65rem 1.5rem",
+                              borderRadius: "9999px",
+                              border: "none",
+                              backgroundColor: "#1B3047",
+                              color: "#FFFFFF",
+                              fontSize: "0.82rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Download size={15} /> Descargar Archivo
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  );
+                }
+
+                // Si NO hay comprobante adjunto: SOLO mostrar zona de subida y botón de cerrar
+                return (
+                  <>
+                    <div
+                      onClick={() => {
+                        const input = document.getElementById("voucher-file-input-client");
+                        if (input) input.click();
+                      }}
+                      style={{
+                        border: "2px dashed #CBD5E1",
+                        borderRadius: "1rem",
+                        padding: "2.5rem 1.5rem",
+                        textAlign: "center",
+                        backgroundColor: "#F8FAFC",
+                        marginBottom: "1.5rem",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: "0.75rem",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F1F5F9")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                    >
+                      <input
+                        id="voucher-file-input-client"
+                        type="file"
+                        accept=".pdf,image/*"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file && selectedVoucherForView) {
+                            const reader = new FileReader();
+                            reader.onload = (loadEvent) => {
+                              const dataUrl = (loadEvent.target?.result as string) || "";
+                              setSelectedVoucherForView({
+                                ...selectedVoucherForView,
+                                voucherName: file.name,
+                                comprobanteUrl: dataUrl,
+                              });
+                              updateSalePayment(projectId, selectedVoucherForView.unit, selectedVoucherForView.id, {
+                                voucherName: file.name,
+                                voucherUrl: dataUrl,
+                              });
+                              showToast("Comprobante Guardado", `Se adjuntó "${file.name}" a este pago.`, "success");
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                      <div style={{ width: "48px", height: "48px", borderRadius: "50%", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <UploadCloud size={24} color="#2F80ED" />
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: "0.95rem", color: "#1F3652", display: "block" }}>
+                          Sin comprobante adjunto
+                        </strong>
+                        <span style={{ fontSize: "0.8rem", color: "#64748B", display: "block", marginTop: "2px" }}>
+                          Haz clic para seleccionar o arrastra el archivo (PDF o Imagen)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Botones cuando NO hay archivo: Solo subir y cerrar */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const input = document.getElementById("voucher-file-input-client");
+                          if (input) input.click();
+                        }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          padding: "0.65rem 1.25rem",
+                          borderRadius: "9999px",
+                          border: "1px solid #CBD5E1",
+                          backgroundColor: "#FFFFFF",
+                          color: "#1F3652",
+                          fontSize: "0.82rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <UploadCloud size={15} color="#2F80ED" /> Subir Archivo
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVoucherForView(null)}
+                        style={{
+                          padding: "0.65rem 1.4rem",
+                          borderRadius: "9999px",
+                          border: "none",
+                          backgroundColor: "#1B3047",
+                          color: "#FFFFFF",
+                          fontSize: "0.82rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}

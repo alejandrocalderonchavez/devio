@@ -18,6 +18,7 @@ import {
   FileSpreadsheet,
   Layers,
   Eye,
+  ExternalLink,
 } from "lucide-react";
 import AppLayout from "../../../../components/layout/app-layout";
 import { useProject } from "../../../../context/project-context";
@@ -153,6 +154,7 @@ export default function ProjectDocumentsPage() {
       updatedAt: new Date().toLocaleDateString("es-MX"),
       version: uploadForm.version.trim() || "v1.0",
       notes: uploadForm.notes.trim() || "Documento adjunto al expediente de desarrollo.",
+      url: uploadForm.fileDataUrl || undefined,
     };
 
     addProjectDocument(project.id, newDoc);
@@ -634,27 +636,91 @@ export default function ProjectDocumentsPage() {
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    showToast("Descarga Iniciada", `Descargando ${selectedDocForView.title}.pdf`);
-                  }}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.45rem",
-                    padding: "0.55rem 1.25rem",
-                    borderRadius: "9999px",
-                    border: "1px solid #CBD5E1",
-                    backgroundColor: "#FFFFFF",
-                    color: "#1F3652",
-                    fontSize: "0.82rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  <Download size={15} color="#2F80ED" /> Descargar PDF
-                </button>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const docUrl = selectedDocForView.url;
+                      if (docUrl) {
+                        if (docUrl.startsWith("data:") || docUrl.startsWith("http") || docUrl.startsWith("blob:")) {
+                          const newTab = window.open();
+                          if (newTab) {
+                            if (docUrl.startsWith("data:image")) {
+                              newTab.document.write(`<img src="${docUrl}" style="max-width:100%;" />`);
+                            } else if (docUrl.startsWith("data:application/pdf")) {
+                              newTab.document.write(`<iframe src="${docUrl}" style="width:100%; height:100vh; border:none;"></iframe>`);
+                            } else {
+                              newTab.location.href = docUrl;
+                            }
+                          }
+                        } else {
+                          window.open(docUrl, "_blank");
+                        }
+                      } else {
+                        showToast("Vista Previa", `Abriendo ${selectedDocForView.title}...`);
+                      }
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.45rem",
+                      padding: "0.55rem 1.25rem",
+                      borderRadius: "9999px",
+                      border: "1px solid #CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      color: "#1F3652",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <ExternalLink size={15} color="#2F80ED" /> Abrir en nueva pestaña
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const docUrl = selectedDocForView.url;
+                      const ext = selectedDocForView.fileType ? selectedDocForView.fileType.toLowerCase() : "pdf";
+                      const fileName = `${selectedDocForView.title}.${ext}`;
+                      if (docUrl && (docUrl.startsWith("data:") || docUrl.startsWith("http") || docUrl.startsWith("blob:"))) {
+                        const a = document.createElement("a");
+                        a.href = docUrl;
+                        a.download = fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        showToast("Descarga Completa", `Descargando ${fileName}...`, "success");
+                      } else {
+                        const blob = new Blob([`Expediente Oficial: ${selectedDocForView.title}\nProyecto: ${project.name}\nCategoría: ${selectedDocForView.category}\nVersión: ${selectedDocForView.version || "v1.0"}\nFecha: ${selectedDocForView.uploadDate}\nNotas: ${selectedDocForView.notes || ""}`], { type: "text/plain" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `${selectedDocForView.title}.txt`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        showToast("Descarga Completa", `Descargando ${selectedDocForView.title}...`, "success");
+                      }
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.45rem",
+                      padding: "0.55rem 1.25rem",
+                      borderRadius: "9999px",
+                      border: "none",
+                      backgroundColor: "#1B3047",
+                      color: "#FFFFFF",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Download size={15} color="#FFFFFF" /> Descargar Archivo
+                  </button>
+                </div>
 
                 <button
                   type="button"
@@ -662,9 +728,9 @@ export default function ProjectDocumentsPage() {
                   style={{
                     padding: "0.55rem 1.35rem",
                     borderRadius: "9999px",
-                    backgroundColor: "#1B3047",
-                    color: "#FFFFFF",
-                    border: "none",
+                    backgroundColor: "#F1F5F9",
+                    color: "#64748B",
+                    border: "1px solid #CBD5E1",
                     fontWeight: 600,
                     fontSize: "0.85rem",
                     cursor: "pointer",
