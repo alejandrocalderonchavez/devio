@@ -504,6 +504,14 @@ export default function ProjectSalesPage() {
       return;
     }
     const projName = project ? project.name : "Proyecto";
+    const devLogoUrl =
+      (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+      "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+    const projLogoUrl =
+      (project?.image && project.image.startsWith("http"))
+        ? project.image
+        : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+
     setResendingQuoteId(quote.id);
     try {
       const res = await fetch("/api/notifications/send", {
@@ -511,14 +519,29 @@ export default function ProjectSalesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: quote.clientEmail,
-          templateAlias: "nueva-cotizacion",
+          templateAlias: "cotizacion",
           templateModel: {
+            nombre: quote.clientName,
             nombre_cliente: quote.clientName,
             unidad: quote.unit,
             proyecto: projName,
-            monto_total: quote.totalQuoteAmount,
+            tipo: "Departamento",
+            superficie: "N/A",
+            fecha_entrega: "Por definir",
+            plan_nombre: quote.planName || "Plan Tradicional",
+            enganche: formatMoney(quote.downPaymentAmount || 0),
+            num_pagos: (quote.installmentsCount || 1).toString(),
+            monto_pago: formatMoney(quote.installmentAmount || 0),
+            liquidacion: formatMoney(quote.settlementAmount || 0),
+            total_plan: formatMoney(quote.totalQuoteAmount || 0),
+            monto_total: formatMoney(quote.totalQuoteAmount || 0),
             folio_cotizacion: quote.folio,
-            nombre_asesor: quote.advisorName,
+            nombre_asesor: quote.advisorName || "Asesor Comercial",
+            cotizacion_url: "https://devio.lat",
+            login_link: "https://devio.lat/login",
+            logo_proyecto: projLogoUrl,
+            logo_desarrolladora: devLogoUrl,
+            año: new Date().getFullYear().toString(),
             anio: new Date().getFullYear().toString(),
           },
         }),

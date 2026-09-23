@@ -770,20 +770,44 @@ export default function QuoteUnitWizardModal({
         ? [{ email: primaryClient.email, name: primaryClient.name }]
         : [];
 
+      const activeProj = projects.find((p) => p.id === targetProjId) || projects[0];
+      const devLogoUrl =
+        (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+      const projLogoUrl =
+        (activeProj?.image && activeProj.image.startsWith("http"))
+          ? activeProj.image
+          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+
       targets.forEach((t) => {
         fetch("/api/notifications/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             to: t.email,
-            templateAlias: "nueva-cotizacion",
+            templateAlias: "cotizacion",
             templateModel: {
+              nombre: t.name || primaryClient.name || "Cliente",
               nombre_cliente: t.name || primaryClient.name || "Cliente",
               unidad: unit.unit,
               proyecto: projName,
-              monto_total: netTotalQuoteAmount,
+              tipo: unit.type || "Departamento",
+              superficie: `${unit.areaM2 || (unit as any).area || "300"} m²`,
+              fecha_entrega: (unit as any).deliveryDate || (activeProj as any)?.deliveryDate || "Diciembre 2026",
+              plan_nombre: customPlanName || "Plan Personalizado",
+              enganche: formatMoney(downPaymentAmt),
+              num_pagos: installmentsCount.toString(),
+              monto_pago: formatMoney(instAmt),
+              liquidacion: formatMoney(settlementAmt),
+              total_plan: formatMoney(netTotalQuoteAmount),
+              monto_total: formatMoney(netTotalQuoteAmount),
               folio_cotizacion: quoteFolio,
               nombre_asesor: userName || "Asesor Devio",
+              cotizacion_url: "https://devio.lat",
+              login_link: "https://devio.lat/login",
+              logo_proyecto: projLogoUrl,
+              logo_desarrolladora: devLogoUrl,
+              año: new Date().getFullYear().toString(),
               anio: new Date().getFullYear().toString(),
             },
           }),

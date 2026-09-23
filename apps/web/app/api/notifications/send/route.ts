@@ -41,6 +41,18 @@ export async function POST(request: Request) {
       return fallback;
     };
 
+    // Resolve alias with fallback mappings
+    let resolvedAlias = templateAlias.trim();
+    if (
+      resolvedAlias === "nueva-cotizacion" ||
+      resolvedAlias === "nueva_cotizacion" ||
+      resolvedAlias === "sales.send_quote" ||
+      resolvedAlias === "send_quote" ||
+      resolvedAlias === "quote"
+    ) {
+      resolvedAlias = "cotizacion";
+    }
+
     const defaultPortalLink = "https://devio.lat/login";
     const rawReceiptUrl =
       templateModel.url_recibo ||
@@ -49,6 +61,7 @@ export async function POST(request: Request) {
       templateModel.url ||
       templateModel.link ||
       templateModel.pdf_url ||
+      templateModel.cotizacion_url ||
       templateModel.link_documento ||
       templateModel.portal_link ||
       templateModel.login_link ||
@@ -59,8 +72,24 @@ export async function POST(request: Request) {
     // Construct final model with robust fallback variables for Postmark templates
     const finalTemplateModel = {
       año: new Date().getFullYear().toString(),
+      anio: new Date().getFullYear().toString(),
+      nombre: templateModel.nombre || templateModel.nombre_cliente || "Cliente",
+      nombre_cliente: templateModel.nombre_cliente || templateModel.nombre || "Cliente",
       desarrolladora: templateModel.desarrolladora || "Desarrolladora Inmobiliaria",
       proyecto: templateModel.proyecto || "Proyecto Residencial",
+      unidad: templateModel.unidad || "Unidad",
+      tipo: templateModel.tipo || "Departamento",
+      superficie: templateModel.superficie || "N/A",
+      fecha_entrega: templateModel.fecha_entrega || "Por definir",
+      plan_nombre: templateModel.plan_nombre || templateModel.plan || "Plan de Pagos",
+      enganche: templateModel.enganche || "$0",
+      num_pagos: templateModel.num_pagos || "1",
+      monto_pago: templateModel.monto_pago || "$0",
+      liquidacion: templateModel.liquidacion || "$0",
+      total_plan: templateModel.total_plan || templateModel.monto_total || "$0",
+      monto_total: templateModel.monto_total || templateModel.total_plan || "$0",
+      folio_cotizacion: templateModel.folio_cotizacion || templateModel.folio || "",
+      cotizacion_url: finalReceiptUrl,
       url_recibo: finalReceiptUrl,
       link_recibo: finalReceiptUrl,
       recibo_url: finalReceiptUrl,
@@ -92,12 +121,12 @@ export async function POST(request: Request) {
     const postmarkPayload = {
       From: `${finalFromName} <${finalFromEmail}>`,
       To: to,
-      TemplateAlias: templateAlias,
+      TemplateAlias: resolvedAlias,
       TemplateModel: finalTemplateModel,
       MessageStream: "outbound",
     };
 
-    console.log(`[Postmark] Enviando plantilla "${templateAlias}" a ${to} desde ${finalFromEmail}...`);
+    console.log(`[Postmark] Enviando plantilla "${resolvedAlias}" a ${to} desde ${finalFromEmail}...`);
 
     const response = await fetch("https://api.postmarkapp.com/email/withTemplate", {
       method: "POST",
@@ -112,19 +141,29 @@ export async function POST(request: Request) {
     const data = await response.json();
 
     const triggerName =
-      templateAlias === "bienvenida-cliente"
+      resolvedAlias === "bienvenida-cliente"
         ? "Bienvenida y Credenciales Portal Cliente"
-        : templateAlias === "alta-unidad"
+        : resolvedAlias === "bienvenida-user"
+        ? "Invitación de Staff / Colaborador"
+        : resolvedAlias === "alta-unidad"
         ? "Asignación de Unidad Formalizada"
-        : templateAlias === "recibo-pago"
-        ? "Recibo de Pago de Enganche"
-        : templateAlias === "estado-cuenta"
+        : resolvedAlias === "avance-proyecto"
+        ? "Avance de Proyecto Fotográfico"
+        : resolvedAlias === "registro-porcentaje"
+        ? "Registro de Porcentaje de Obra"
+        : resolvedAlias === "estado-cuenta"
         ? "Estado de Cuenta Digital"
-        : templateAlias === "recordatorio-pago"
+        : resolvedAlias === "recordatorio-pago"
         ? "Recordatorio Preventivo de Pago"
-        : templateAlias === "moroso"
+        : resolvedAlias === "moroso"
         ? "Aviso de Saldo Vencido / Moroso"
-        : `Notificación (${templateAlias})`;
+        : resolvedAlias === "recibo-pago"
+        ? "Recibo de Pago de Enganche"
+        : resolvedAlias === "broadcast-devio"
+        ? "Comunicado General / Broadcast"
+        : resolvedAlias === "cotizacion"
+        ? "12. Enviar Cotización Digital"
+        : `Notificación (${resolvedAlias})`;
 
     if (!response.ok) {
       console.error("[Postmark Error]", response.status, data);
