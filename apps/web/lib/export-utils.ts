@@ -31,7 +31,9 @@ export function exportTableToPDF(
   projectName: string,
   headers: string[],
   rows: (string | number)[][],
-  totalsSummary?: string
+  totalsSummary?: string,
+  developerLogoUrl?: string,
+  projectLogoUrl?: string
 ) {
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
@@ -43,6 +45,17 @@ export function exportTableToPDF(
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  const devLogo =
+    developerLogoUrl && (developerLogoUrl.startsWith("http") || developerLogoUrl.startsWith("data:"))
+      ? developerLogoUrl
+      : (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+
+  const projLogo =
+    projectLogoUrl && (projectLogoUrl.startsWith("http") || projectLogoUrl.startsWith("data:"))
+      ? projectLogoUrl
+      : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -126,15 +139,18 @@ export function exportTableToPDF(
     </head>
     <body>
       <div class="header">
-        <div class="logo-title">
-          <div>
-            <div class="logo-text">DEVIO</div>
-            <div class="report-title">${title} • ${projectName}</div>
+        <div class="logo-title" style="display: flex; align-items: center; gap: 14px;">
+          <img src="${devLogo}" style="height: 38px; max-width: 130px; object-fit: contain;" crossorigin="anonymous" alt="Logo Desarrollador" />
+          <div style="width: 1.5px; height: 30px; background: #CBD5E1;"></div>
+          <img src="${projLogo}" style="height: 38px; max-width: 130px; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" alt="Logo Proyecto" />
+          <div style="margin-left: 6px;">
+            <div class="report-title" style="font-size: 16px; font-weight: 800; color: #1F3652; margin: 0;">${title}</div>
+            <div style="font-size: 11.5px; color: #64748B; font-weight: 600; margin-top: 2px;">${projectName}</div>
           </div>
         </div>
         <div class="meta">
-          <div>Fecha de emisión: ${todayStr}</div>
-          <div>Reporte oficial generado desde la plataforma Devio</div>
+          <div><strong style="color: #1F3652;">Fecha de emisión:</strong> ${todayStr}</div>
+          <div>Reporte oficial • Plataforma Devio</div>
         </div>
       </div>
 

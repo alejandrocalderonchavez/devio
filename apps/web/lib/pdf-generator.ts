@@ -47,7 +47,7 @@ export async function loadPDFLibraries(): Promise<boolean> {
 }
 
 // -----------------------------------------------------------------------------
-// 1. RECIBO DE PAGO PDF
+// 1. RECIBO DE PAGO PDF & PREVIEW
 // -----------------------------------------------------------------------------
 export interface ReceiptPDFData {
   folio: string;
@@ -65,10 +65,12 @@ export interface ReceiptPDFData {
   developerName?: string;
 }
 
-export async function generateReceiptPDF(data: ReceiptPDFData): Promise<{ success: boolean; base64?: string }> {
-  if (typeof window === "undefined") return { success: false };
-  await loadPDFLibraries();
+const DEFAULT_DEV_LOGO =
+  "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+const DEFAULT_PROJ_LOGO =
+  "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
 
+export function getReceiptHTML(data: ReceiptPDFData): string {
   const fechaEmision =
     data.emissionDate ||
     new Date().toLocaleDateString("es-MX", {
@@ -88,9 +90,20 @@ export async function generateReceiptPDF(data: ReceiptPDFData): Promise<{ succes
   const hasInterest = (data.interestAmount || 0) > 0;
   const capital = data.capitalAmount ?? (data.totalAmount - (data.interestAmount || 0));
 
-  const html = `
+  const devLogo =
+    data.developerLogoUrl && (data.developerLogoUrl.startsWith("http") || data.developerLogoUrl.startsWith("data:"))
+      ? data.developerLogoUrl
+      : DEFAULT_DEV_LOGO;
+
+  const projLogo =
+    data.projectLogoUrl && (data.projectLogoUrl.startsWith("http") || data.projectLogoUrl.startsWith("data:"))
+      ? data.projectLogoUrl
+      : DEFAULT_PROJ_LOGO;
+
+  return `
     <div id="rp-pdf-container" style="
       width: 760px;
+      max-width: 100%;
       background: #ffffff;
       margin: 0 auto;
       padding: 36px 40px;
@@ -99,40 +112,34 @@ export async function generateReceiptPDF(data: ReceiptPDFData): Promise<{ succes
       color: #111827;
       position: relative;
     ">
-      <!-- HEADER -->
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1F3652; padding-bottom: 18px; margin-bottom: 24px;">
-        <div style="width: 58%;">
-          <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 16px; height: 48px;">
-            ${
-              data.developerLogoUrl
-                ? `<img src="${data.developerLogoUrl}" style="height: 100%; max-width: 140px; object-fit: contain;" crossorigin="anonymous" />`
-                : `<div style="font-size: 16px; font-weight: 800; color: #1F3652;">${data.developerName || "DEVIO"}</div>`
-            }
-            <div style="width: 1px; height: 32px; background: #e5e7eb;"></div>
-            ${
-              data.projectLogoUrl
-                ? `<img src="${data.projectLogoUrl}" style="height: 100%; max-width: 140px; object-fit: contain;" crossorigin="anonymous" />`
-                : `<div style="font-size: 14px; font-weight: 700; color: #6b7280;">${data.projectName}</div>`
-            }
-          </div>
-          <h1 style="font-size: 24px; font-weight: 800; color: #111827; margin: 0; text-transform: uppercase; letter-spacing: 0.5px;">
-            Recibo de Pago
-          </h1>
-          <p style="font-size: 13px; color: #1F3652; margin: 4px 0 0 0; font-weight: 600;">
-            ${data.projectName} / Unidad ${data.unitNumber}
-          </p>
+      <!-- HEADER CON LOGOS REALES -->
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1F3652; padding-bottom: 18px; margin-bottom: 22px;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <img src="${devLogo}" style="height: 42px; max-width: 140px; object-fit: contain;" crossorigin="anonymous" alt="${data.developerName || "Desarrolladora"}" />
+          <div style="width: 1.5px; height: 32px; background: #CBD5E1;"></div>
+          <img src="${projLogo}" style="height: 42px; max-width: 140px; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" alt="${data.projectName}" />
         </div>
 
-        <div style="width: 40%; text-align: right; font-size: 12.5px; line-height: 1.8; color: #4b5563;">
+        <div style="text-align: right; font-size: 12px; line-height: 1.6; color: #4b5563;">
           <div><strong style="color: #1F3652;">Folio:</strong> #${data.folio}</div>
           <div><strong style="color: #1F3652;">Fecha Emisión:</strong> ${fechaEmision}</div>
           <div><strong style="color: #1F3652;">Método:</strong> ${data.paymentMethod}</div>
         </div>
       </div>
 
+      <!-- TÍTULO DE RECIBO -->
+      <div style="margin-bottom: 20px;">
+        <h1 style="font-size: 24px; font-weight: 800; color: #111827; margin: 0; text-transform: uppercase; letter-spacing: 0.5px;">
+          Recibo de Pago Oficial
+        </h1>
+        <p style="font-size: 13.5px; color: #1F3652; margin: 4px 0 0 0; font-weight: 600;">
+          ${data.projectName} • Unidad ${data.unitNumber}
+        </p>
+      </div>
+
       <!-- BANNER ÉXITO -->
       <div style="background: #f0fdf4; border: 1px solid #86efac; border-left: 4px solid #16a34a; border-radius: 7px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
-        <div style="width: 28px; height: 28px; background: #16a34a; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: white; font-weight: bold;">
+        <div style="width: 28px; height: 28px; background: #16a34a; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: white; font-weight: bold; font-size: 14px;">
           ✓
         </div>
         <div>
@@ -210,11 +217,118 @@ export async function generateReceiptPDF(data: ReceiptPDFData): Promise<{ succes
 
       <!-- FOOTER -->
       <div style="margin-top: 20px; padding-top: 12px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; color: #9ca3af;">
-        <span>Generado vía <strong style="color: #1F3652; opacity: 0.6;">Devio Platform</strong></span>
+        <span>Generado vía <strong style="color: #1F3652; opacity: 0.7;">Devio Platform</strong></span>
         <span>deviomx.com</span>
       </div>
     </div>
   `;
+}
+
+export function openReceiptInNewTab(data: ReceiptPDFData) {
+  if (typeof window === "undefined") return;
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return;
+
+  const html = getReceiptHTML(data);
+  const fullDocument = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8" />
+      <title>Recibo de Pago - Unidad ${data.unitNumber} (${data.folio})</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+      <style>
+        @page {
+          size: A4 portrait;
+          margin: 12mm;
+        }
+        body {
+          margin: 0;
+          padding: 30px 16px;
+          background-color: #F1F5F9;
+          font-family: 'Inter', system-ui, -apple-system, sans-serif;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .top-toolbar {
+          width: 760px;
+          max-width: 100%;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+        .action-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          border-radius: 9999px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          border: none;
+          transition: all 0.2s;
+        }
+        .btn-print {
+          background-color: #1F3652;
+          color: #ffffff;
+        }
+        .btn-print:hover {
+          background-color: #152538;
+        }
+        .document-wrapper {
+          width: 760px;
+          max-width: 100%;
+          background: #ffffff;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        @media print {
+          body {
+            background: #ffffff;
+            padding: 0;
+          }
+          .top-toolbar {
+            display: none !important;
+          }
+          .document-wrapper {
+            box-shadow: none;
+            border-radius: 0;
+            width: 100%;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="top-toolbar">
+        <span style="font-size: 13px; color: #64748B; font-weight: 600;">Vista Previa de Recibo Oficial</span>
+        <div style="display: flex; gap: 8px;">
+          <button class="action-btn btn-print" onclick="window.print()">
+            🖨️ Imprimir / Guardar en PDF
+          </button>
+        </div>
+      </div>
+      <div class="document-wrapper">
+        ${html}
+      </div>
+    </body>
+    </html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(fullDocument);
+  printWindow.document.close();
+}
+
+export async function generateReceiptPDF(data: ReceiptPDFData): Promise<{ success: boolean; base64?: string }> {
+  if (typeof window === "undefined") return { success: false };
+  await loadPDFLibraries();
+
+  const html = getReceiptHTML(data);
 
   // Render ghost node
   const ghost = document.createElement("div");
@@ -313,6 +427,16 @@ export async function generateQuotePDF(data: QuotePDFData): Promise<{ success: b
 
   const totalAdditionals = (data.additionals || []).reduce((acc, a) => acc + (a.price || 0), 0);
 
+  const devLogo =
+    data.developerLogoUrl && (data.developerLogoUrl.startsWith("http") || data.developerLogoUrl.startsWith("data:"))
+      ? data.developerLogoUrl
+      : DEFAULT_DEV_LOGO;
+
+  const projLogo =
+    data.projectLogoUrl && (data.projectLogoUrl.startsWith("http") || data.projectLogoUrl.startsWith("data:"))
+      ? data.projectLogoUrl
+      : DEFAULT_PROJ_LOGO;
+
   const html = `
     <div id="cot-pdf-container" style="
       width: 760px;
@@ -331,14 +455,10 @@ export async function generateQuotePDF(data: QuotePDFData): Promise<{ success: b
       <!-- TOP COLOR BAND -->
       <div style="height: 4px; background: ${brand}; flex-shrink: 0;"></div>
 
-      <!-- HEADER -->
+      <!-- HEADER CON LOGOS REALES -->
       <div style="display: flex; align-items: stretch; border-bottom: 1px solid #e5e7eb; min-height: 68px; flex-shrink: 0;">
         <div style="width: 140px; flex-shrink: 0; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 12px; gap: 4px;">
-          ${
-            data.projectLogoUrl
-              ? `<img src="${data.projectLogoUrl}" style="max-width: 110px; max-height: 44px; object-fit: contain;" crossorigin="anonymous" />`
-              : `<div style="font-size: 13px; font-weight: 800; color: ${brand};">${data.projectName}</div>`
-          }
+          <img src="${projLogo}" style="max-width: 110px; max-height: 44px; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" alt="${data.projectName}" />
           <div style="font-size: 7.5px; font-weight: 700; color: #9ca3af; text-align: center;">${data.projectName}</div>
         </div>
 
@@ -357,13 +477,9 @@ export async function generateQuotePDF(data: QuotePDFData): Promise<{ success: b
           </div>
         </div>
 
-        <div style="width: 140px; flex-shrink: 0; border-left: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; padding: 10px 12px;">
+        <div style="width: 140px; flex-shrink: 0; border-left: 1px solid #e5e7eb; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 12px;">
           <div style="font-size: 7px; color: #9ca3af; margin-bottom: 2px;">Desarrolladora</div>
-          ${
-            data.developerLogoUrl
-              ? `<img src="${data.developerLogoUrl}" style="max-width: 110px; max-height: 36px; object-fit: contain;" crossorigin="anonymous" />`
-              : `<div style="font-size: 11px; font-weight: 700; color: #374151;">${data.developerName || "Desarrollador"}</div>`
-          }
+          <img src="${devLogo}" style="max-width: 110px; max-height: 38px; object-fit: contain;" crossorigin="anonymous" alt="${data.developerName || "Desarrollador"}" />
         </div>
       </div>
 

@@ -48,7 +48,7 @@ import AppLayout from "../../../../../components/layout/app-layout";
 import { useProject } from "../../../../../context/project-context";
 import { INITIAL_CLIENTS, ClientProfile, ClientOwnedUnit, QuoteRecord } from "../../../../../data/projects-data";
 import { exportTableToExcel, exportTableToPDF } from "../../../../../lib/export-utils";
-import { generateQuotePDF, generateReceiptPDF } from "../../../../../lib/pdf-generator";
+import { generateQuotePDF, generateReceiptPDF, openReceiptInNewTab } from "../../../../../lib/pdf-generator";
 import { sendAndLogNotification } from "../../../../../lib/notifications";
 import { InfoTooltip } from "../../../../../components/ui/tooltip";
 import CurrencyInput from "../../../../../components/ui/currency-input";
@@ -79,6 +79,8 @@ interface PaymentReceipt {
   unit: string;
   reciboFolio: string;
   comprobanteUrl?: string;
+  voucherName?: string;
+  reference?: string;
   scheduledAmount?: number;
   scheduledDate?: string;
   notes?: string;
@@ -2522,12 +2524,23 @@ export default function ClientDetailPage() {
                           <button
                             type="button"
                             onClick={() => {
+                              const devLogoUrl =
+                                (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+                                "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+                              const projLogoUrl =
+                                (project?.image && project.image.startsWith("http"))
+                                  ? project.image
+                                  : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+
                               generateQuotePDF({
                                 quoteFolio: q.folio,
                                 unitNumber: q.unit,
                                 unitType: q.unitType,
                                 superficieM2: q.superficieM2,
                                 projectName: project.name,
+                                developerLogoUrl: devLogoUrl,
+                                projectLogoUrl: projLogoUrl,
+                                developerName: "Desarrolladora Inmobiliaria",
                                 listPrice: q.listPrice || q.totalQuoteAmount,
                                 discountPct: q.discountPct,
                                 discountAmount: q.discountAmount,
@@ -4061,7 +4074,7 @@ export default function ClientDetailPage() {
         )}
 
         {/* ============================================================== */}
-        {/* MODAL 3: RECIBO OFICIAL DE PAGO                                */}
+        {/* MODAL 3: RECIBO OFICIAL DE PAGO (PREVIEW & ABRIR)             */}
         {/* ============================================================== */}
         {selectedReceiptForView && (
           <div
@@ -4085,99 +4098,170 @@ export default function ClientDetailPage() {
                 backgroundColor: "#FFFFFF",
                 borderRadius: "1.25rem",
                 width: "100%",
-                maxWidth: "600px",
+                maxWidth: "620px",
+                maxHeight: "92vh",
+                overflowY: "auto",
                 boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
                 padding: "2rem",
               }}
             >
+              {/* Encabezado con Logos y Folio */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
                 <div>
                   <h3 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
                     Recibo Oficial de Pago
                   </h3>
-                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>Folio: {selectedReceiptForView.reciboFolio}</span>
+                  <span style={{ fontSize: "0.8rem", color: "#64748B" }}>Folio: {selectedReceiptForView.reciboFolio || `REC-${Date.now().toString().slice(-6)}`}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedReceiptForView(null)}
-                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer" }}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              <div style={{ border: "1px solid #E2E8F0", borderRadius: "0.85rem", padding: "1.25rem", backgroundColor: "#F8FAFC", marginBottom: "1.5rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.6rem" }}>
-                  <span style={{ fontSize: "0.82rem", color: "#64748B" }}>Proyecto:</span>
-                  <strong style={{ fontSize: "0.85rem", color: "#1F3652" }}>{project.name}</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.6rem" }}>
-                  <span style={{ fontSize: "0.82rem", color: "#64748B" }}>Cliente:</span>
-                  <strong style={{ fontSize: "0.85rem", color: "#1F3652" }}>{rawClient.name}</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.6rem" }}>
-                  <span style={{ fontSize: "0.82rem", color: "#64748B" }}>Unidad:</span>
-                  <strong style={{ fontSize: "0.85rem", color: "#1F3652" }}>{selectedReceiptForView.unit}</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.6rem" }}>
-                  <span style={{ fontSize: "0.82rem", color: "#64748B" }}>Fecha de Pago:</span>
-                  <strong style={{ fontSize: "0.85rem", color: "#1F3652" }}>{selectedReceiptForView.fechaPago}</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.6rem" }}>
-                  <span style={{ fontSize: "0.82rem", color: "#64748B" }}>Método:</span>
-                  <strong style={{ fontSize: "0.85rem", color: "#1F3652" }}>{selectedReceiptForView.metodoPago}</strong>
+              {/* Vista Previa Documental (PDF Preview Card) */}
+              <div style={{ border: "1px solid #E2E8F0", borderRadius: "1rem", padding: "1.5rem", backgroundColor: "#FFFFFF", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)", marginBottom: "1.5rem" }}>
+                {/* Header de Logos del Documento */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "1rem", borderBottom: "2px solid #1F3652", marginBottom: "1.2rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <img
+                      src={
+                        (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+                        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg"
+                      }
+                      style={{ height: "36px", maxWidth: "120px", objectFit: "contain" }}
+                      alt="Logo Desarrollador"
+                    />
+                    <div style={{ width: "1px", height: "26px", backgroundColor: "#CBD5E1" }}></div>
+                    <img
+                      src={
+                        (project?.image && project.image.startsWith("http"))
+                          ? project.image
+                          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg"
+                      }
+                      style={{ height: "36px", maxWidth: "120px", objectFit: "contain", borderRadius: "4px" }}
+                      alt="Logo Proyecto"
+                    />
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ display: "inline-block", fontSize: "0.75rem", fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "3px 9px", borderRadius: "99px" }}>
+                      ✓ Pago Aplicado
+                    </span>
+                  </div>
                 </div>
 
+                {/* Resumen del Monto */}
+                <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "0.75rem", padding: "1rem 1.25rem", borderTop: "3px solid #1F3652", marginBottom: "1rem" }}>
+                  <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748B", fontWeight: 700, marginBottom: "2px" }}>
+                    Monto Total Recibido
+                  </div>
+                  <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#1F3652" }}>
+                    {formatMoney(selectedReceiptForView.monto)}
+                  </div>
+                </div>
+
+                {/* Desglose Capital / Moratorio si aplica */}
                 {selectedReceiptForView.moratoryAmount && selectedReceiptForView.moratoryAmount > 0 ? (
-                  <>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.45rem", backgroundColor: "#F1F5F9", padding: "0.45rem 0.65rem", borderRadius: "0.45rem" }}>
-                      <span style={{ fontSize: "0.8rem", color: "#1F3652", fontWeight: 600 }}>Abono a Capital:</span>
-                      <strong style={{ fontSize: "0.85rem", color: "#1F3652" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "1rem" }}>
+                    <div style={{ backgroundColor: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: "0.6rem", padding: "0.6rem 0.85rem" }}>
+                      <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 600, display: "block" }}>Abono a Capital:</span>
+                      <strong style={{ fontSize: "0.95rem", color: "#1F3652" }}>
                         {formatMoney(selectedReceiptForView.monto - selectedReceiptForView.moratoryAmount)}
                       </strong>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.6rem", backgroundColor: "#FFFBEB", padding: "0.45rem 0.65rem", borderRadius: "0.45rem", border: "1px solid #FDE68A" }}>
-                      <span style={{ fontSize: "0.8rem", color: "#92400E", fontWeight: 700 }}>Interés Moratorio Cobrado:</span>
-                      <strong style={{ fontSize: "0.85rem", color: "#D97706" }}>
+                    <div style={{ backgroundColor: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "0.6rem", padding: "0.6rem 0.85rem" }}>
+                      <span style={{ fontSize: "0.72rem", color: "#92400E", fontWeight: 700, display: "block" }}>Interés Moratorio:</span>
+                      <strong style={{ fontSize: "0.95rem", color: "#D97706" }}>
                         + {formatMoney(selectedReceiptForView.moratoryAmount)}
                       </strong>
                     </div>
-                  </>
+                  </div>
                 ) : null}
 
-                <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "0.6rem", borderTop: "1px solid #E2E8F0" }}>
-                  <span style={{ fontSize: "0.95rem", fontWeight: 700, color: "#1F3652" }}>Total Recibido:</span>
-                  <strong style={{ fontSize: "1.1rem", color: "#00C48C" }}>{formatMoney(selectedReceiptForView.monto)}</strong>
+                {/* Datos de la transacción */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", fontSize: "0.82rem" }}>
+                  <div>
+                    <span style={{ color: "#64748B", display: "block", fontSize: "0.75rem" }}>Proyecto / Unidad:</span>
+                    <strong style={{ color: "#1F3652" }}>{project.name} • {selectedReceiptForView.unit}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748B", display: "block", fontSize: "0.75rem" }}>Cliente / Pagador:</span>
+                    <strong style={{ color: "#1F3652" }}>{rawClient.name}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748B", display: "block", fontSize: "0.75rem" }}>Fecha de Emisión / Pago:</span>
+                    <strong style={{ color: "#1F3652" }}>{selectedReceiptForView.fechaPago}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748B", display: "block", fontSize: "0.75rem" }}>Método de Pago:</span>
+                    <strong style={{ color: "#1F3652" }}>{selectedReceiptForView.metodoPago || "Transferencia SPEI"}</strong>
+                  </div>
                 </div>
               </div>
 
+              {/* Botones de Acción: Abrir en Nueva Ventana y Descargar PDF */}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
                 <button
                   type="button"
                   onClick={() => {
-                    window.print();
+                    const devLogoUrl =
+                      (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+                      "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+                    const projLogoUrl =
+                      (project?.image && project.image.startsWith("http"))
+                        ? project.image
+                        : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+
+                    openReceiptInNewTab({
+                      folio: selectedReceiptForView.reciboFolio || `REC-${Date.now().toString().slice(-6)}`,
+                      projectName: project?.name || "Proyecto Inmobiliario",
+                      unitNumber: selectedReceiptForView.unit,
+                      clientName: rawClient.name,
+                      paymentMethod: selectedReceiptForView.metodoPago || "Transferencia SPEI",
+                      totalAmount: selectedReceiptForView.monto,
+                      capitalAmount: selectedReceiptForView.moratoryAmount
+                        ? selectedReceiptForView.monto - selectedReceiptForView.moratoryAmount
+                        : selectedReceiptForView.monto,
+                      interestAmount: selectedReceiptForView.moratoryAmount || 0,
+                      emissionDate: selectedReceiptForView.fechaPago,
+                      developerLogoUrl: devLogoUrl,
+                      projectLogoUrl: projLogoUrl,
+                      developerName: "Desarrolladora Inmobiliaria",
+                    });
                   }}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "0.4rem",
-                    padding: "0.6rem 1.25rem",
+                    gap: "0.45rem",
+                    padding: "0.65rem 1.25rem",
                     borderRadius: "9999px",
-                    border: "1px solid #CBD5E1",
+                    border: "1.5px solid #CBD5E1",
                     backgroundColor: "#FFFFFF",
                     color: "#1F3652",
                     fontSize: "0.82rem",
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: "pointer",
+                    transition: "all 0.15s ease",
                   }}
                 >
-                  <Printer size={15} /> Imprimir Recibo
+                  <ExternalLink size={15} /> Abrir
                 </button>
                 <button
                   type="button"
                   onClick={async () => {
                     try {
                       showToast("Generando Recibo...", "Preparando documento oficial para descarga.", "info");
+                      const devLogoUrl =
+                        (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+                        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+                      const projLogoUrl =
+                        (project?.image && project.image.startsWith("http"))
+                          ? project.image
+                          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+
                       await generateReceiptPDF({
                         folio: selectedReceiptForView.reciboFolio || `REC-${Date.now().toString().slice(-6)}`,
                         projectName: project?.name || "Proyecto Inmobiliario",
@@ -4190,6 +4274,8 @@ export default function ClientDetailPage() {
                           : selectedReceiptForView.monto,
                         interestAmount: selectedReceiptForView.moratoryAmount || 0,
                         emissionDate: selectedReceiptForView.fechaPago,
+                        developerLogoUrl: devLogoUrl,
+                        projectLogoUrl: projLogoUrl,
                         developerName: "Desarrolladora Inmobiliaria",
                       });
                       showToast("Descarga Lista", "Se descargó el recibo en formato PDF.", "success");
@@ -4202,14 +4288,14 @@ export default function ClientDetailPage() {
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "0.4rem",
-                    padding: "0.6rem 1.5rem",
+                    gap: "0.45rem",
+                    padding: "0.65rem 1.5rem",
                     borderRadius: "9999px",
                     border: "none",
                     backgroundColor: "#1B3047",
                     color: "#FFFFFF",
                     fontSize: "0.82rem",
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: "pointer",
                   }}
                 >
@@ -4221,7 +4307,7 @@ export default function ClientDetailPage() {
         )}
 
         {/* ============================================================== */}
-        {/* MODAL 4: COMPROBANTE BANCARIO SPEI                             */}
+        {/* MODAL 4: COMPROBANTE BANCARIO SPEI (SUBIR O ABRIR)             */}
         {/* ============================================================== */}
         {selectedVoucherForView && (
           <div
@@ -4245,7 +4331,9 @@ export default function ClientDetailPage() {
                 backgroundColor: "#FFFFFF",
                 borderRadius: "1.25rem",
                 width: "100%",
-                maxWidth: "640px",
+                maxWidth: "620px",
+                maxHeight: "92vh",
+                overflowY: "auto",
                 boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
                 padding: "2rem",
               }}
@@ -4260,58 +4348,230 @@ export default function ClientDetailPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedVoucherForView(null)}
-                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer" }}
+                  style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              <div
-                style={{
-                  border: "2px dashed #CBD5E1",
-                  borderRadius: "0.85rem",
-                  padding: "3.5rem 2rem",
-                  textAlign: "center",
-                  backgroundColor: "#F8FAFC",
-                  marginBottom: "1.5rem",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "0.75rem",
-                }}
-              >
-                <FileText size={42} color="#2F80ED" />
-                <strong style={{ fontSize: "1rem", color: "#1F3652" }}>
-                  comprobante_spei_santander_folio_089.pdf
-                </strong>
-                <span style={{ fontSize: "0.82rem", color: "#64748B" }}>
-                  Monto transferido: {formatMoney(selectedVoucherForView.monto)} • Cuenta Clabe: *******4928
-                </span>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    showToast("Descarga Completa", "Comprobante bancario descargado.");
-                    setSelectedVoucherForView(null);
-                  }}
+              {/* Si hay comprobante adjunto, mostrar tarjeta limpia sin dummys */}
+              {selectedVoucherForView.voucherName ? (
+                <div
                   style={{
-                    display: "inline-flex",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: "1rem",
+                    padding: "2rem 1.5rem",
+                    textAlign: "center",
+                    backgroundColor: "#F8FAFC",
+                    marginBottom: "1.5rem",
+                    display: "flex",
+                    flexDirection: "column",
                     alignItems: "center",
-                    gap: "0.4rem",
-                    padding: "0.6rem 1.5rem",
-                    borderRadius: "9999px",
-                    border: "none",
-                    backgroundColor: "#1B3047",
-                    color: "#FFFFFF",
-                    fontSize: "0.82rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
+                    gap: "0.75rem",
                   }}
                 >
-                  <Download size={15} /> Descargar Comprobante
-                </button>
+                  <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <FileText size={26} color="#2F80ED" />
+                  </div>
+                  <strong style={{ fontSize: "0.95rem", color: "#1F3652", wordBreak: "break-all" }}>
+                    {selectedVoucherForView.voucherName}
+                  </strong>
+                  <span style={{ fontSize: "0.82rem", color: "#64748B" }}>
+                    Monto transferido: <strong>{formatMoney(selectedVoucherForView.monto)}</strong>
+                    {selectedVoucherForView.reference ? ` • Ref: ${selectedVoucherForView.reference}` : ""}
+                  </span>
+                </div>
+              ) : (
+                /* Si está vacío, mostrar zona para subir el comprobante */
+                <div
+                  onClick={() => {
+                    const input = document.getElementById("voucher-file-input-client");
+                    if (input) input.click();
+                  }}
+                  style={{
+                    border: "2px dashed #CBD5E1",
+                    borderRadius: "1rem",
+                    padding: "2.5rem 1.5rem",
+                    textAlign: "center",
+                    backgroundColor: "#F8FAFC",
+                    marginBottom: "1.5rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F1F5F9")}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                >
+                  <input
+                    id="voucher-file-input-client"
+                    type="file"
+                    accept=".pdf,image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file && selectedVoucherForView) {
+                        updateSalePayment(projectId, selectedVoucherForView.unit, selectedVoucherForView.id, {
+                          voucherName: file.name,
+                        });
+                        setSelectedVoucherForView({
+                          ...selectedVoucherForView,
+                          voucherName: file.name,
+                        });
+                        showToast("Comprobante Guardado", `Se adjuntó "${file.name}" a este pago.`, "success");
+                      }
+                    }}
+                  />
+                  <div style={{ width: "48px", height: "48px", borderRadius: "50%", backgroundColor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <UploadCloud size={24} color="#2F80ED" />
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: "0.95rem", color: "#1F3652", display: "block" }}>
+                      Sin comprobante adjunto
+                    </strong>
+                    <span style={{ fontSize: "0.8rem", color: "#64748B", display: "block", marginTop: "2px" }}>
+                      Haz clic para seleccionar o arrastra el archivo (PDF o Imagen)
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Botones de Acción */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <input
+                    id="voucher-replace-file-input"
+                    type="file"
+                    accept=".pdf,image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file && selectedVoucherForView) {
+                        updateSalePayment(projectId, selectedVoucherForView.unit, selectedVoucherForView.id, {
+                          voucherName: file.name,
+                        });
+                        setSelectedVoucherForView({
+                          ...selectedVoucherForView,
+                          voucherName: file.name,
+                        });
+                        showToast("Comprobante Actualizado", `Se actualizó "${file.name}".`, "success");
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById("voucher-replace-file-input");
+                      if (input) input.click();
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      padding: "0.55rem 1rem",
+                      borderRadius: "9999px",
+                      border: "1px solid #CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      color: "#64748B",
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <UploadCloud size={14} /> {selectedVoucherForView.voucherName ? "Cambiar Archivo" : "Subir Archivo"}
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", gap: "0.75rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const devLogoUrl =
+                        (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+                        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+                      const projLogoUrl =
+                        (project?.image && project.image.startsWith("http"))
+                          ? project.image
+                          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+
+                      openReceiptInNewTab({
+                        folio: selectedVoucherForView.id || `REC-${Date.now().toString().slice(-6)}`,
+                        projectName: project?.name || "Proyecto Inmobiliario",
+                        unitNumber: selectedVoucherForView.unit,
+                        clientName: rawClient.name,
+                        paymentMethod: selectedVoucherForView.metodoPago || "Transferencia SPEI",
+                        totalAmount: selectedVoucherForView.monto,
+                        capitalAmount: selectedVoucherForView.monto,
+                        interestAmount: 0,
+                        emissionDate: selectedVoucherForView.fechaPago,
+                        developerLogoUrl: devLogoUrl,
+                        projectLogoUrl: projLogoUrl,
+                        developerName: "Desarrolladora Inmobiliaria",
+                      });
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.45rem",
+                      padding: "0.65rem 1.25rem",
+                      borderRadius: "9999px",
+                      border: "1.5px solid #CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      color: "#1F3652",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <ExternalLink size={15} /> Abrir
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const devLogoUrl =
+                        (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+                        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+                      const projLogoUrl =
+                        (project?.image && project.image.startsWith("http"))
+                          ? project.image
+                          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+
+                      await generateReceiptPDF({
+                        folio: selectedVoucherForView.id || `REC-${Date.now().toString().slice(-5)}`,
+                        projectName: project?.name || "Proyecto",
+                        unitNumber: selectedVoucherForView.unit,
+                        clientName: rawClient.name,
+                        paymentMethod: selectedVoucherForView.metodoPago || "Transferencia SPEI",
+                        totalAmount: selectedVoucherForView.monto,
+                        capitalAmount: selectedVoucherForView.monto,
+                        interestAmount: 0,
+                        emissionDate: selectedVoucherForView.fechaPago,
+                        developerLogoUrl: devLogoUrl,
+                        projectLogoUrl: projLogoUrl,
+                        developerName: "Desarrolladora",
+                      });
+                      showToast("Descarga Completa", "Comprobante oficial descargado exitosamente.");
+                      setSelectedVoucherForView(null);
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.45rem",
+                      padding: "0.65rem 1.5rem",
+                      borderRadius: "9999px",
+                      border: "none",
+                      backgroundColor: "#1B3047",
+                      color: "#FFFFFF",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Download size={15} /> Descargar PDF
+                  </button>
+                </div>
               </div>
             </div>
           </div>

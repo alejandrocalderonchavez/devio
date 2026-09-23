@@ -1955,6 +1955,15 @@ export default function QuoteUnitWizardModal({
                 <button
                   type="button"
                   onClick={async () => {
+                    const curProj = projects.find((p) => p.id === projectId);
+                    const devLogo =
+                      (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+                      "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+                    const projLogo =
+                      (curProj?.image && curProj.image.startsWith("http"))
+                        ? curProj.image
+                        : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+
                     await generateQuotePDF({
                       quoteFolio: quoteFolio,
                       projectName: projectName || "Proyecto",
@@ -1981,9 +1990,12 @@ export default function QuoteUnitWizardModal({
                         rfc: primaryClient.rfc,
                       },
                       advisor: {
-                        name: "Asesor Comercial",
+                        name: userName || "Asesor Comercial",
                         role: "Asesor de Ventas",
+                        email: userEmail || "ventas@devio.mx",
                       },
+                      developerLogoUrl: devLogo,
+                      projectLogoUrl: projLogo,
                       brandColor: "#1F3652",
                     });
                   }}

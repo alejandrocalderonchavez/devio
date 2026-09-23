@@ -418,6 +418,14 @@ export default function ProjectSalesPage() {
   // Download Quote PDF with high DPI engine
   const handleDownloadQuotePDF = (quote: QuoteRecord) => {
     if (!project) return;
+    const devLogoUrl =
+      (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+      "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+    const projLogoUrl =
+      (project?.image && project.image.startsWith("http"))
+        ? project.image
+        : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+
     generateQuotePDF({
       quoteFolio: quote.folio,
       unitNumber: quote.unit,
@@ -425,6 +433,9 @@ export default function ProjectSalesPage() {
       superficieM2: quote.superficieM2 || 0,
       deliveryDate: quote.deliveryDate || "Mayo 2028",
       projectName: project.name,
+      developerLogoUrl: devLogoUrl,
+      projectLogoUrl: projLogoUrl,
+      developerName: "Desarrolladora Inmobiliaria",
       listPrice: quote.listPrice || quote.totalQuoteAmount,
       discountPct: quote.discountPct,
       discountAmount: quote.discountAmount,

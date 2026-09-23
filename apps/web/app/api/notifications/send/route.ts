@@ -41,11 +41,35 @@ export async function POST(request: Request) {
       return fallback;
     };
 
+    const defaultPortalLink = "https://devio.lat/login";
+    const rawReceiptUrl =
+      templateModel.url_recibo ||
+      templateModel.link_recibo ||
+      templateModel.recibo_url ||
+      templateModel.url ||
+      templateModel.link ||
+      templateModel.pdf_url ||
+      templateModel.link_documento ||
+      templateModel.portal_link ||
+      templateModel.login_link ||
+      defaultPortalLink;
+
+    const finalReceiptUrl = sanitizeImageUrl(rawReceiptUrl, defaultPortalLink);
+
     // Construct final model with robust fallback variables for Postmark templates
     const finalTemplateModel = {
       año: new Date().getFullYear().toString(),
       desarrolladora: templateModel.desarrolladora || "Desarrolladora Inmobiliaria",
       proyecto: templateModel.proyecto || "Proyecto Residencial",
+      url_recibo: finalReceiptUrl,
+      link_recibo: finalReceiptUrl,
+      recibo_url: finalReceiptUrl,
+      url: finalReceiptUrl,
+      link: finalReceiptUrl,
+      pdf_url: finalReceiptUrl,
+      link_documento: finalReceiptUrl,
+      portal_link: templateModel.login_link || defaultPortalLink,
+      login_link: templateModel.login_link || defaultPortalLink,
       ...templateModel,
       // Ensure image fields are valid public URLs and never empty strings (prevents broken <img> in emails)
       logo_proyecto: sanitizeImageUrl(templateModel.logo_proyecto, defaultProjectLogo),

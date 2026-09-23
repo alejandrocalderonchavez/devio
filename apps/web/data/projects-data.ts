@@ -243,6 +243,7 @@ export interface SalePaymentReceipt {
   reference?: string;
   notes?: string;
   voucherUrl?: string;
+  voucherName?: string;
   scheduledAmount?: number;
   scheduledDate?: string;
   sendReceiptEmail?: boolean;
