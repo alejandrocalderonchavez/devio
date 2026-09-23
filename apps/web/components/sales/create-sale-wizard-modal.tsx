@@ -94,7 +94,7 @@ export default function CreateSaleWizardModal({
 
   // Primary Client
   const [primaryClient, setPrimaryClient] = useState<CoOwner>({
-    id: "primary-1",
+    id: "",
     name: "",
     email: "",
     phone: "",
@@ -427,7 +427,9 @@ export default function CreateSaleWizardModal({
 
       // Pre-fill Primary Client
       setPrimaryClient({
-        id: "primary-1",
+        id: initialQuote.clientEmail
+          ? `cli-${initialQuote.clientEmail.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
+          : `cli-${Date.now()}`,
         name: initialQuote.clientName || "",
         email: initialQuote.clientEmail || "",
         phone: initialQuote.clientPhone || "",
@@ -1056,7 +1058,25 @@ export default function CreateSaleWizardModal({
     setTimeout(() => {
       setIsSubmitting(false);
       const targetProjId = selectedProjectId || currentProject?.id || projects[0]?.id || "p-1";
-      const clientTargetId = primaryClient.id || "primary-1";
+      const clientTargetId = (primaryClient.id && primaryClient.id !== "primary-1")
+        ? primaryClient.id
+        : primaryClient.email
+        ? `cli-${primaryClient.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
+        : `client-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+      const finalCoOwners = allOwnersCombined.map((owner, idx) => {
+        const resolvedOwnerId = (owner.id && owner.id !== "primary-1")
+          ? owner.id
+          : (owner.isPrimary || idx === 0)
+          ? clientTargetId
+          : owner.email
+          ? `cli-${owner.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
+          : `co-${Date.now()}-${idx}`;
+        return {
+          ...owner,
+          id: resolvedOwnerId,
+        };
+      });
 
       // Register / persist new users in devio_system_users
       if (typeof window !== "undefined") {
@@ -1067,7 +1087,7 @@ export default function CreateSaleWizardModal({
             usersList = JSON.parse(stored);
           }
 
-          allOwnersCombined.forEach((owner) => {
+          finalCoOwners.forEach((owner) => {
             if (!owner.email) return;
             const existingIdx = usersList.findIndex((u) => u.email?.toLowerCase() === owner.email.toLowerCase());
             if (existingIdx === -1) {
@@ -1115,7 +1135,7 @@ export default function CreateSaleWizardModal({
           rfc: primaryClient.rfc,
         },
         isCoOwnership,
-        coOwners: allOwnersCombined,
+        coOwners: finalCoOwners,
         project: {
           id: targetProjId,
           name: currentProject?.name || "Proyecto",

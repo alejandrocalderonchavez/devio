@@ -83,7 +83,7 @@ export default function QuoteUnitWizardModal({
   const [isCoOwnership, setIsCoOwnership] = useState<boolean>(false);
 
   const [primaryClient, setPrimaryClient] = useState<CoOwner>({
-    id: "primary-1",
+    id: "",
     name: "",
     email: "",
     phone: "",

@@ -57,7 +57,13 @@ export default function ProjectClientsPage() {
       if (!soldUnitsMap.has(sale.unit)) return;
 
       const emailKey = (sale.clientEmail && sale.clientEmail.trim().toLowerCase()) || sale.clientName.toLowerCase().trim();
-      const targetClientId = sale.clientId || sale.clientEmail || sale.clientName;
+      const targetClientId = (sale.clientId && sale.clientId !== "primary-1")
+        ? sale.clientId
+        : sale.clientEmail
+        ? `cli-${sale.clientEmail.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
+        : sale.clientName
+        ? `cli-${sale.clientName.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
+        : `cli-${Date.now()}`;
       const uObj = soldUnitsMap.get(sale.unit);
 
       if (!clientMap.has(emailKey)) {

@@ -228,7 +228,20 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       try {
         const parsed = JSON.parse(storedProjects);
         if (Array.isArray(parsed)) {
-          setProjects(parsed);
+          const sanitized = parsed.map((p: ProjectItem) => {
+            if (!p.sales || p.sales.length === 0) return p;
+            const updatedSales = p.sales.map((s: SaleRecord, idx: number) => {
+              if (s.clientId === "primary-1" || !s.clientId) {
+                const uniqueId = s.clientEmail
+                  ? `cli-${s.clientEmail.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
+                  : `cli-${s.clientName ? s.clientName.toLowerCase().replace(/[^a-z0-9]/g, "-") : `sale-${idx}`}`;
+                return { ...s, clientId: uniqueId };
+              }
+              return s;
+            });
+            return { ...p, sales: updatedSales };
+          });
+          setProjects(sanitized);
         }
       } catch (e) {
         setProjects([]);
@@ -792,10 +805,17 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       }
     ] : [];
 
+    const rawClientId = salePayload.client?.id;
+    const resolvedClientId = (rawClientId && rawClientId !== "primary-1")
+      ? rawClientId
+      : salePayload.client?.email
+      ? `cli-${salePayload.client.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
+      : `cli-${Date.now()}`;
+
     const newSaleRecord: SaleRecord = {
       id: salePayload.id || `sale-${Date.now()}`,
       folio: saleFolio,
-      clientId: salePayload.client?.id || `cli-${Date.now()}`,
+      clientId: resolvedClientId,
       clientName: primaryName,
       clientEmail: salePayload.client?.email || "",
       clientPhone: salePayload.client?.phone || "",

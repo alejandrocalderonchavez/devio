@@ -184,30 +184,64 @@ export default function ClientDetailPage() {
     });
 
     // 1. Try finding in project.sales (active only and sold/apartada unit)
-    const matchingSales = (project.sales || []).filter(
-      (s) =>
-        s.status !== "CANCELADA" &&
-        soldUnitsMap.has(s.unit) &&
-        (s.clientId === clientId ||
-          s.clientEmail?.toLowerCase() === clientId.toLowerCase() ||
-          s.id === clientId ||
-          s.clientName?.toLowerCase() === clientId.toLowerCase() ||
-          s.coOwners?.some(
-            (co) =>
-              co.id === clientId ||
-              co.email?.toLowerCase() === clientId.toLowerCase() ||
-              co.name.toLowerCase() === clientId.toLowerCase()
-          ))
-    );
+    const candidateSales = (project.sales || []).filter((s) => {
+      if (s.status === "CANCELADA" || !soldUnitsMap.has(s.unit)) return false;
 
-    if (matchingSales.length > 0) {
-      const firstSale = matchingSales[0]!;
-      const coOwnerMatch = firstSale.coOwners?.find((co) => co.id === clientId || co.email?.toLowerCase() === clientId.toLowerCase() || co.name.toLowerCase() === clientId.toLowerCase());
-      
+      const emailSlug = s.clientEmail ? `cli-${s.clientEmail.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : "";
+      const nameSlug = s.clientName ? `cli-${s.clientName.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : "";
+
+      const matchesId = Boolean(s.clientId && s.clientId !== "primary-1" && s.clientId === clientId);
+      const matchesEmail = Boolean(s.clientEmail && s.clientEmail.toLowerCase() === clientId.toLowerCase());
+      const matchesEmailSlug = Boolean(emailSlug && emailSlug === clientId);
+      const matchesSaleId = s.id === clientId;
+      const matchesName = Boolean(s.clientName && s.clientName.toLowerCase() === clientId.toLowerCase());
+      const matchesNameSlug = Boolean(nameSlug && nameSlug === clientId);
+
+      const matchesCoOwner = s.coOwners?.some((co) => {
+        const coEmailSlug = co.email ? `cli-${co.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : "";
+        return (
+          (co.id && co.id !== "primary-1" && co.id === clientId) ||
+          (co.email && co.email.toLowerCase() === clientId.toLowerCase()) ||
+          (coEmailSlug && coEmailSlug === clientId) ||
+          co.name.toLowerCase() === clientId.toLowerCase()
+        );
+      });
+
+      const matchesLegacyPrimary = clientId === "primary-1" && s.clientId === "primary-1";
+
+      return matchesId || matchesEmail || matchesEmailSlug || matchesSaleId || matchesName || matchesNameSlug || matchesCoOwner || matchesLegacyPrimary;
+    });
+
+    if (candidateSales.length > 0) {
+      const firstSale = candidateSales[0]!;
+      const coOwnerMatch = firstSale.coOwners?.find((co) => {
+        const coEmailSlug = co.email ? `cli-${co.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : "";
+        return (
+          (co.id && co.id !== "primary-1" && co.id === clientId) ||
+          (co.email && co.email.toLowerCase() === clientId.toLowerCase()) ||
+          (coEmailSlug && coEmailSlug === clientId) ||
+          co.name.toLowerCase() === clientId.toLowerCase()
+        );
+      });
+
       const clientName = coOwnerMatch?.name || firstSale.clientName;
       const clientEmail = coOwnerMatch?.email || firstSale.clientEmail;
       const clientPhone = coOwnerMatch?.phone || firstSale.clientPhone;
       const clientRfc = coOwnerMatch?.rfc || firstSale.clientRfc || "-";
+
+      // Filter strictly to sales belonging to THIS client (by matching email or name)
+      const matchingSales = candidateSales.filter((s) => {
+        if (clientEmail && clientEmail !== "-" && s.clientEmail) {
+          if (s.clientEmail.toLowerCase() === clientEmail.toLowerCase()) return true;
+        }
+        if (clientName && s.clientName) {
+          if (s.clientName.toLowerCase() === clientName.toLowerCase()) return true;
+        }
+        if (s.coOwners?.some((co) => (clientEmail && clientEmail !== "-" && co.email?.toLowerCase() === clientEmail.toLowerCase()) || (clientName && co.name.toLowerCase() === clientName.toLowerCase()))) {
+          return true;
+        }
+        return false;
+      });
 
       const ownedUnits: ClientOwnedUnit[] = matchingSales.map((s) => {
         const uObj = soldUnitsMap.get(s.unit);
@@ -241,7 +275,7 @@ export default function ClientDetailPage() {
     }
 
     // 2. Try finding in project.unitsInventory
-    const matchingUnits = project.unitsInventory.filter((u) => {
+    const candidateUnits = project.unitsInventory.filter((u) => {
       if (u.status !== "VENDIDA" && u.status !== "APARTADA") return false;
       if (u.coOwners?.some((co) => co.id === clientId || co.email?.toLowerCase() === clientId.toLowerCase() || co.name.toLowerCase() === clientId.toLowerCase())) {
         return true;
@@ -249,13 +283,24 @@ export default function ClientDetailPage() {
       return u.client.toLowerCase() === clientId.toLowerCase() || u.unit.toLowerCase() === clientId.toLowerCase();
     });
 
-    if (matchingUnits.length > 0) {
-      const firstUnit = matchingUnits[0]!;
+    if (candidateUnits.length > 0) {
+      const firstUnit = candidateUnits[0]!;
       const coMatch = firstUnit.coOwners?.find((co) => co.id === clientId || co.email?.toLowerCase() === clientId.toLowerCase() || co.name.toLowerCase() === clientId.toLowerCase());
       const clientName = coMatch?.name || (firstUnit.client !== "-" ? firstUnit.client : "Cliente Propietario");
       const clientEmail = coMatch?.email || "-";
       const clientPhone = coMatch?.phone || "-";
       const clientRfc = coMatch?.rfc || "-";
+
+      const matchingUnits = candidateUnits.filter((u) => {
+        if (clientEmail && clientEmail !== "-" && (u as any).clientEmail) {
+          if ((u as any).clientEmail.toLowerCase() === clientEmail.toLowerCase()) return true;
+        }
+        if (clientName && u.client && u.client.toLowerCase() === clientName.toLowerCase()) return true;
+        if (u.coOwners?.some((co) => (clientEmail && clientEmail !== "-" && co.email?.toLowerCase() === clientEmail.toLowerCase()) || (clientName && co.name.toLowerCase() === clientName.toLowerCase()))) {
+          return true;
+        }
+        return false;
+      });
 
       const ownedUnits: ClientOwnedUnit[] = matchingUnits.map((u) => {
         const coOwner = u.coOwners?.find((co) => co.name.toLowerCase() === clientName.toLowerCase());
