@@ -44,30 +44,42 @@ export default function ProjectClientsPage() {
     
     const soldUnitsMap = new Map<string, UnitItem>();
     (project.unitsInventory || []).forEach((u) => {
-      if (u.status === "VENDIDA") {
+      if (u.status === "VENDIDA" || u.status === "APARTADA") {
         soldUnitsMap.set(u.unit, u);
       }
     });
 
     const clientMap = new Map<string, ClientProfile>();
+    const knownUnits = new Set<string>();
+    const nameToKeyMap = new Map<string, string>(); // normalized name -> clientMap key
 
     // 1. Process from real active sales records first
     (project.sales || []).forEach((sale) => {
       if (sale.status === "CANCELADA") return;
-      if (!soldUnitsMap.has(sale.unit)) return;
 
-      const emailKey = (sale.clientEmail && sale.clientEmail.trim().toLowerCase()) || sale.clientName.toLowerCase().trim();
+      const normName = (sale.clientName || "").trim().toLowerCase();
+      const normEmail = (sale.clientEmail || "").trim().toLowerCase();
+      const primaryKey = normEmail && normEmail !== "-" ? normEmail : normName;
+
+      if (!primaryKey) return;
+
       const targetClientId = (sale.clientId && sale.clientId !== "primary-1")
         ? sale.clientId
-        : sale.clientEmail
-        ? `cli-${sale.clientEmail.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
-        : sale.clientName
-        ? `cli-${sale.clientName.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
+        : normEmail && normEmail !== "-"
+        ? `cli-${normEmail.replace(/[^a-z0-9]/g, "-")}`
+        : normName
+        ? `cli-${normName.replace(/[^a-z0-9]/g, "-")}`
         : `cli-${Date.now()}`;
-      const uObj = soldUnitsMap.get(sale.unit);
 
-      if (!clientMap.has(emailKey)) {
-        clientMap.set(emailKey, {
+      const uObj = soldUnitsMap.get(sale.unit);
+      knownUnits.add(sale.unit);
+
+      let existingKey = clientMap.has(primaryKey) 
+        ? primaryKey 
+        : (normName && nameToKeyMap.has(normName) ? nameToKeyMap.get(normName)! : null);
+
+      if (!existingKey || !clientMap.has(existingKey)) {
+        clientMap.set(primaryKey, {
           id: targetClientId,
           name: sale.clientName || "Cliente",
           email: sale.clientEmail || "-",
@@ -80,7 +92,7 @@ export default function ProjectClientsPage() {
             {
               unit: sale.unit,
               type: uObj?.type || "Departamento",
-              price: sale.totalPrice,
+              price: sale.totalPrice || uObj?.price || 0,
               ownershipPct: sale.coOwners && sale.coOwners.length > 0 ? (sale.coOwners[0]?.ownershipPct || 100) : 100,
               isPrimary: true,
               saleFolio: sale.folio,
@@ -88,8 +100,20 @@ export default function ProjectClientsPage() {
             },
           ],
         });
+        if (normName) nameToKeyMap.set(normName, primaryKey);
+        if (normEmail && normEmail !== "-") nameToKeyMap.set(normEmail, primaryKey);
       } else {
-        const existing = clientMap.get(emailKey)!;
+        const existing = clientMap.get(existingKey)!;
+        // update contact info if previous was '-'
+        if (existing.email === "-" && sale.clientEmail && sale.clientEmail !== "-") {
+          existing.email = sale.clientEmail;
+        }
+        if (existing.phone === "-" && sale.clientPhone && sale.clientPhone !== "-") {
+          existing.phone = sale.clientPhone;
+        }
+        if (existing.rfc === "-" && sale.clientRfc && sale.clientRfc !== "-") {
+          existing.rfc = sale.clientRfc;
+        }
         if (!existing.ownedUnits.some((u) => u.unit === sale.unit)) {
           existing.unitsCount += 1;
           existing.totalPaid += sale.paidAmount || 0;
@@ -97,7 +121,7 @@ export default function ProjectClientsPage() {
           existing.ownedUnits.push({
             unit: sale.unit,
             type: uObj?.type || "Departamento",
-            price: sale.totalPrice,
+            price: sale.totalPrice || uObj?.price || 0,
             ownershipPct: sale.coOwners && sale.coOwners.length > 0 ? (sale.coOwners[0]?.ownershipPct || 100) : 100,
             isPrimary: true,
             saleFolio: sale.folio,
@@ -107,65 +131,58 @@ export default function ProjectClientsPage() {
       }
     });
 
-    // 2. Process remaining from unitsInventory (only sold units not already in map)
+    // 2. Only check unsold / unassociated units from unitsInventory if NOT already in knownUnits
     soldUnitsMap.forEach((u) => {
-        if (u.status === "VENDIDA" && u.client && u.client !== "-") {
-          const matchingAddons = (project.additionals || []).filter(a => a.assignedToUnit === u.unit);
-          if (u.coOwners && u.coOwners.length > 0) {
-            u.coOwners.forEach((co: CoOwner) => {
-              const emailKey = (co.email && co.email.trim().toLowerCase()) || co.name.toLowerCase().trim();
-              if (!clientMap.has(emailKey)) {
-                clientMap.set(emailKey, {
-                  id: co.id || co.email || co.name,
-                  name: co.name || "Cliente",
-                  email: co.email || "-",
-                  phone: co.phone || "-",
-                  rfc: co.rfc || "-",
-                  totalPaid: Math.round(u.price * (co.ownershipPct / 100) * 0.2),
-                  totalPending: Math.round(u.price * (co.ownershipPct / 100) * 0.8),
-                  unitsCount: 1,
-                  ownedUnits: [
-                    {
-                      unit: u.unit,
-                      type: u.type,
-                      price: u.price,
-                      ownershipPct: co.ownershipPct,
-                      isPrimary: co.isPrimary,
-                      saleFolio: u.saleFolio,
-                      additionals: matchingAddons,
-                    },
-                  ],
-                });
-              }
-            });
-          } else {
-            const emailKey = u.client.toLowerCase().trim();
-            if (!clientMap.has(emailKey)) {
-              clientMap.set(emailKey, {
-                id: u.client,
-                name: u.client,
-                email: "-",
-                phone: "-",
-                rfc: "-",
-                totalPaid: Math.round(u.price * 0.2),
-                totalPending: Math.round(u.price * 0.8),
-                unitsCount: 1,
-                ownedUnits: [
-                  {
-                    unit: u.unit,
-                    type: u.type,
-                    price: u.price,
-                    ownershipPct: 100,
-                    isPrimary: true,
-                    saleFolio: u.saleFolio,
-                    additionals: matchingAddons,
-                  },
-                ],
-              });
-            }
-          }
+      if (knownUnits.has(u.unit)) return; // Already linked to a sale above!
+      if (!u.client || u.client === "-" || u.client.toLowerCase() === "disponible") return;
+
+      const normName = u.client.trim().toLowerCase();
+      const existingKey = nameToKeyMap.get(normName);
+
+      const matchingAddons = (project.additionals || []).filter(a => a.assignedToUnit === u.unit);
+
+      if (existingKey && clientMap.has(existingKey)) {
+        const existing = clientMap.get(existingKey)!;
+        if (!existing.ownedUnits.some(ou => ou.unit === u.unit)) {
+          existing.unitsCount += 1;
+          existing.totalPaid += u.salePaidAmount || 0;
+          existing.totalPending += u.salePendingAmount || u.price || 0;
+          existing.ownedUnits.push({
+            unit: u.unit,
+            type: u.type,
+            price: u.price,
+            ownershipPct: 100,
+            isPrimary: true,
+            saleFolio: u.saleFolio,
+            additionals: matchingAddons,
+          });
         }
-      });
+      } else {
+        const targetClientId = `cli-${normName.replace(/[^a-z0-9]/g, "-")}`;
+        clientMap.set(normName, {
+          id: targetClientId,
+          name: u.client,
+          email: (u as any).clientEmail || "-",
+          phone: (u as any).clientPhone || "-",
+          rfc: (u as any).clientRfc || "-",
+          totalPaid: u.salePaidAmount || 0,
+          totalPending: u.salePendingAmount || u.price || 0,
+          unitsCount: 1,
+          ownedUnits: [
+            {
+              unit: u.unit,
+              type: u.type,
+              price: u.price,
+              ownershipPct: 100,
+              isPrimary: true,
+              saleFolio: u.saleFolio,
+              additionals: matchingAddons,
+            },
+          ],
+        });
+        nameToKeyMap.set(normName, normName);
+      }
+    });
 
     return Array.from(clientMap.values());
   }, [project]);

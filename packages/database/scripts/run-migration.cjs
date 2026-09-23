@@ -353,7 +353,7 @@ async function runMigration() {
     const bedrooms = parseIntSafe(item['Número de recámaras.']) || null;
     const bathrooms = parseDecimal(item['Número de baños.']) || null;
     const parkingSpaces = parseIntSafe(item['Cajones de estacionamiento.']) || 0;
-    const basePrice = parseDecimal(item['Precio']) || 1500000.0;
+    const basePrice = parseDecimal(item['Precio'], 0.0);
     const renderUrls = item['image'] ? [sanitizeUrl(item['image'])].filter(Boolean) : [];
 
     let unit = await prisma.unit.findFirst({
