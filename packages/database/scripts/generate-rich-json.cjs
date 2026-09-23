@@ -64,7 +64,7 @@ async function generateRichJson() {
           : null;
 
         const clientName = matchingSale && matchingSale.primaryClient
-          ? (matchingSale.primaryClient.legalName || matchingSale.primaryClient.contactName || 'Cliente Propietario')
+          ? (matchingSale.primaryClient.fullName || matchingSale.primaryClient.firstName || 'Cliente Propietario')
           : '-';
 
         const clientEmail = matchingSale && matchingSale.primaryClient?.email ? matchingSale.primaryClient.email : '-';
@@ -99,7 +99,7 @@ async function generateRichJson() {
 
       const salesList = activeSales.map((s) => {
         const u = p.units.find((unit) => unit.id === s.unitId);
-        const clientName = s.primaryClient?.legalName || s.primaryClient?.contactName || 'Cliente';
+        const clientName = s.primaryClient?.fullName || s.primaryClient?.firstName || 'Cliente';
         const clientEmail = s.primaryClient?.email || '-';
         const clientPhone = s.primaryClient?.phone || '-';
         const clientRfc = s.primaryClient?.taxId || '-';
