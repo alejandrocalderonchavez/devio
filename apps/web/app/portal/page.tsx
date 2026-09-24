@@ -33,6 +33,7 @@ import {
   Loader2,
   ShieldCheck,
   Eye,
+  Trash2,
 } from "lucide-react";
 import { openReceiptInNewTab, openStatementInNewTab } from "../../lib/pdf-generator";
 
@@ -153,6 +154,15 @@ interface ClientProperty {
   customAttributes: Array<{ label: string; value: string }>;
 }
 
+interface ClientNotification {
+  id: string;
+  title: string;
+  body: string;
+  time: string;
+  type: "warning" | "success" | "info";
+  read: boolean;
+}
+
 export default function ClientPortalWeb() {
   const router = useRouter();
 
@@ -181,12 +191,8 @@ export default function ClientPortalWeb() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
 
-  // Notifications State
-  const [notifications] = useState([
-    { id: "notif-1", title: "Estado de Cuenta Actualizado", body: "Tu calendario de pagos y amortización se encuentra sincronizado con el sistema.", time: "Hoy", read: false },
-    { id: "notif-2", title: "Avance de Obra en Desarrollo", body: "Nuevas fotografías y porcentajes por especialidad han sido cargados.", time: "Ayer", read: false },
-    { id: "notif-3", title: "Portal de Clientes Devio", body: "Bienvenido a tu plataforma privada de consulta, recibos oficiales y seguimiento de obra.", time: "Reciente", read: true },
-  ]);
+  // Notifications State (Dynamic)
+  const [notifications, setNotifications] = useState<ClientNotification[]>([]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -248,6 +254,100 @@ export default function ClientPortalWeb() {
 
     loadClientData();
   }, [router]);
+
+  // Load & build dynamic notifications from real client data
+  useEffect(() => {
+    if (!userEmail) return;
+    const dismissedKey = `devio_dismissed_notifs_${userEmail}`;
+    let dismissedIds: string[] = [];
+    try {
+      const stored = localStorage.getItem(dismissedKey);
+      if (stored) dismissedIds = JSON.parse(stored);
+    } catch (e) {}
+
+    const generated: ClientNotification[] = [];
+
+    properties.forEach((p) => {
+      // 1. Notificación de cuota pendiente o morosidad
+      if (p.overdueAmount > 0) {
+        generated.push({
+          id: `notif-overdue-${p.id}`,
+          title: `Saldo Vencido • Unidad ${p.unitNumber}`,
+          body: `Presentas un saldo vencido por ${formatMoney(p.overdueAmount)} en ${p.projectName}. Te sugerimos regularizar tu pago a la brevedad.`,
+          time: "Atención",
+          type: "warning",
+          read: false,
+        });
+      } else if (p.nextPaymentAmount > 0 && p.nextPaymentDueDate) {
+        const isPast = p.nextPaymentDaysRemaining < 0;
+        generated.push({
+          id: `notif-next-${p.id}-${p.nextPaymentDueDate}`,
+          title: `${isPast ? "Cuota Vencida" : "Próximo Vencimiento"} • Unidad ${p.unitNumber}`,
+          body: `Tu cuota de ${formatMoney(p.nextPaymentAmount)} (${p.nextPaymentConcept || "Mensualidad"}) vence el ${formatDateDisplay(p.nextPaymentDueDate)} (${isPast ? `${Math.abs(p.nextPaymentDaysRemaining)} días vencido` : `${p.nextPaymentDaysRemaining} días restantes`}).`,
+          time: isPast ? "Vencido" : "Programado",
+          type: isPast ? "warning" : "info",
+          read: false,
+        });
+      }
+
+      // 2. Notificación de último pago aplicado
+      if (p.paymentsList && p.paymentsList.length > 0 && p.paymentsList[0]) {
+        const latest = p.paymentsList[0];
+        generated.push({
+          id: `notif-pay-${p.id}-${latest.id || latest.fechaPago}`,
+          title: `Pago Acreditado • Unidad ${p.unitNumber}`,
+          body: `Tu abono de ${formatMoney(latest.monto)} vía ${latest.metodoPago || "Transferencia SPEI"} (${formatDateDisplay(latest.fechaPago)}) fue registrado y aplicado a tu saldo.`,
+          time: formatDateDisplay(latest.fechaPago),
+          type: "success",
+          read: true,
+        });
+      }
+
+      // 3. Notificación de avance de obra
+      if (p.constructionPct > 0) {
+        generated.push({
+          id: `notif-prog-${p.id}-${p.constructionPct}`,
+          title: `Avance de Obra • ${p.projectName}`,
+          body: `El proyecto registra un avance general del ${p.constructionPct}% con bitácora fotográfica actualizada.`,
+          time: "Obra",
+          type: "info",
+          read: true,
+        });
+      }
+    });
+
+    const active = generated.filter((n) => !dismissedIds.includes(n.id));
+    setNotifications(active);
+  }, [properties, userEmail]);
+
+  const handleDeleteNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    if (userEmail && typeof window !== "undefined") {
+      try {
+        const dismissedKey = `devio_dismissed_notifs_${userEmail}`;
+        const stored = localStorage.getItem(dismissedKey);
+        const list: string[] = stored ? JSON.parse(stored) : [];
+        if (!list.includes(id)) list.push(id);
+        localStorage.setItem(dismissedKey, JSON.stringify(list));
+      } catch (e) {}
+    }
+  };
+
+  const handleClearAllNotifications = () => {
+    const allIds = notifications.map((n) => n.id);
+    setNotifications([]);
+    if (userEmail && typeof window !== "undefined") {
+      try {
+        const dismissedKey = `devio_dismissed_notifs_${userEmail}`;
+        const stored = localStorage.getItem(dismissedKey);
+        const list: string[] = stored ? JSON.parse(stored) : [];
+        allIds.forEach((id) => {
+          if (!list.includes(id)) list.push(id);
+        });
+        localStorage.setItem(dismissedKey, JSON.stringify(list));
+      } catch (e) {}
+    }
+  };
 
   const selectedProp: ClientProperty | null = useMemo(() => {
     if (properties.length === 0) return null;
@@ -1647,27 +1747,140 @@ export default function ClientPortalWeb() {
         {/* MODAL NOTIFICACIONES PUSH */}
         {showNotifications && (
           <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15,23,42,0.6)", display: "flex", justifyContent: "center", alignItems: "flex-end", zIndex: 9999 }}>
-            <div style={{ width: "100%", maxWidth: "480px", backgroundColor: "#FFFFFF", borderTopLeftRadius: "1.5rem", borderTopRightRadius: "1.5rem", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <strong style={{ fontSize: "1.15rem", color: "#1F3652" }}>Avisos y Notificaciones</strong>
-                <button onClick={() => setShowNotifications(false)} style={{ background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
+            <div style={{ width: "100%", maxWidth: "500px", backgroundColor: "#FFFFFF", borderTopLeftRadius: "1.5rem", borderTopRightRadius: "1.5rem", padding: "1.4rem 1.4rem 1.75rem", display: "flex", flexDirection: "column", gap: "1rem", maxHeight: "85vh" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #F1F5F9", paddingBottom: "0.85rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <strong style={{ fontSize: "1.1rem", color: "#1F3652" }}>Avisos y Notificaciones</strong>
+                  {notifications.length > 0 && (
+                    <span style={{ backgroundColor: "#EFF6FF", color: "#1D4ED8", fontSize: "0.7rem", fontWeight: 800, padding: "2px 8px", borderRadius: "10px" }}>
+                      {notifications.length}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  {notifications.length > 0 && (
+                    <button
+                      onClick={handleClearAllNotifications}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#DC2626",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        padding: "4px 8px",
+                        borderRadius: "6px",
+                      }}
+                      title="Borrar todas las notificaciones"
+                    >
+                      <Trash2 size={13} /> Limpiar todas
+                    </button>
+                  )}
+                  <button onClick={() => setShowNotifications(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748B" }}>
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxHeight: "320px", overflowY: "auto" }}>
-                {notifications.map((n) => (
-                  <div key={n.id} style={{ padding: "0.85rem", backgroundColor: "#F8FAFC", borderRadius: "0.75rem", border: "1px solid #E2E8F0" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", fontWeight: 800 }}>
-                      <span style={{ color: "#1F3652" }}>{n.title}</span>
-                      <span style={{ color: "#94A3B8", fontSize: "0.7rem" }}>{n.time}</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxHeight: "380px", overflowY: "auto", paddingRight: "2px" }}>
+                {notifications.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "2.5rem 1rem", backgroundColor: "#F8FAFC", borderRadius: "1rem", border: "1px dashed #CBD5E1" }}>
+                    <div style={{ width: "42px", height: "42px", borderRadius: "50%", backgroundColor: "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 0.75rem", color: "#94A3B8" }}>
+                      <Bell size={20} />
                     </div>
-                    <p style={{ fontSize: "0.75rem", color: "#475569", marginTop: "5px" }}>{n.body}</p>
+                    <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#1F3652", marginBottom: "4px" }}>
+                      No tienes avisos pendientes
+                    </div>
+                    <p style={{ fontSize: "0.75rem", color: "#64748B", margin: 0 }}>
+                      Tus pagos, estado de cuenta y avances están sincronizados al día.
+                    </p>
                   </div>
-                ))}
+                ) : (
+                  notifications.map((n) => {
+                    const isWarning = n.type === "warning";
+                    const isSuccess = n.type === "success";
+                    return (
+                      <div
+                        key={n.id}
+                        style={{
+                          padding: "0.9rem",
+                          backgroundColor: isWarning ? "#FEF2F2" : isSuccess ? "#F0FDF4" : "#F8FAFC",
+                          borderRadius: "0.85rem",
+                          border: `1px solid ${isWarning ? "#FECACA" : isSuccess ? "#BBF7D0" : "#E2E8F0"}`,
+                          display: "flex",
+                          gap: "0.75rem",
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "50%",
+                            backgroundColor: isWarning ? "#FEE2E2" : isSuccess ? "#DCFCE7" : "#EFF6FF",
+                            color: isWarning ? "#DC2626" : isSuccess ? "#16A34A" : "#2563EB",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                            marginTop: "2px",
+                          }}
+                        >
+                          {isWarning ? <AlertTriangle size={16} /> : isSuccess ? <CheckCircle2 size={16} /> : <Bell size={16} />}
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+                            <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#1F3652" }}>{n.title}</span>
+                            <span
+                              style={{
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                color: isWarning ? "#DC2626" : isSuccess ? "#16A34A" : "#64748B",
+                                backgroundColor: isWarning ? "#FFF1F2" : isSuccess ? "#F0FDF4" : "#F1F5F9",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {n.time}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: "0.76rem", color: "#475569", marginTop: "4px", lineHeight: "1.35", marginBottom: 0 }}>
+                            {n.body}
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => handleDeleteNotification(n.id)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#94A3B8",
+                            cursor: "pointer",
+                            padding: "4px",
+                            borderRadius: "4px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            marginLeft: "2px",
+                          }}
+                          title="Eliminar notificación"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
               </div>
 
               <button
                 onClick={() => setShowNotifications(false)}
-                style={{ width: "100%", padding: "0.75rem", backgroundColor: "#F1F5F9", color: "#1F3652", borderRadius: "0.6rem", border: "none", fontWeight: 800, fontSize: "0.8rem", cursor: "pointer" }}
+                style={{ width: "100%", padding: "0.75rem", backgroundColor: "#1F3652", color: "#FFFFFF", borderRadius: "0.75rem", border: "none", fontWeight: 800, fontSize: "0.82rem", cursor: "pointer" }}
               >
                 Cerrar
               </button>
