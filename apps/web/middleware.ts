@@ -18,6 +18,11 @@ export function middleware(request: NextRequest) {
 
   const authToken = request.cookies.get("devio_auth_token")?.value;
   const userRole = request.cookies.get("devio_user_role")?.value;
+  const isValidAuthToken = Boolean(
+    authToken &&
+    authToken.length > 10 &&
+    !authToken.includes("devio_session_local_")
+  );
   const isClientUser = userRole === "Cliente" || authToken?.startsWith("devio_token_cli_");
 
   // Si el usuario es un Cliente e intenta acceder a rutas del backoffice (dashboard, projects, superadmin, settings, postventa)
@@ -25,10 +30,14 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/portal", request.url));
   }
 
-  if (!isPublicRoute && !authToken) {
+  // Si intenta acceder a una ruta interna protegida sin token de autenticación válido
+  if (!isPublicRoute && !isValidAuthToken) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(loginUrl);
+    const response = NextResponse.redirect(loginUrl);
+    response.cookies.delete("devio_auth_token");
+    response.cookies.delete("devio_user_role");
+    return response;
   }
 
   if ((pathname === "/login" || pathname === "/register") && authToken) {

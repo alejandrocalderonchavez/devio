@@ -70,6 +70,28 @@ export default function AppLayout({
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
+      // Validar que exista una sesión de usuario activa
+      const rawUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
+      if (!rawUser) {
+        document.cookie = "devio_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        document.cookie = "devio_user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        window.location.href = `/login?redirect=${encodeURIComponent(pathname)}`;
+        return;
+      }
+
+      try {
+        const parsedUser = JSON.parse(rawUser);
+        if (!parsedUser || !parsedUser.email) {
+          document.cookie = "devio_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          document.cookie = "devio_user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          window.location.href = `/login?redirect=${encodeURIComponent(pathname)}`;
+          return;
+        }
+      } catch (e) {
+        window.location.href = "/login";
+        return;
+      }
+
       const raw = localStorage.getItem("devio_impersonation") || sessionStorage.getItem("devio_impersonation");
       if (raw) {
         try {
