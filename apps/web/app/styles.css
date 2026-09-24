@@ -310,3 +310,50 @@ h1, h2, h3, h4, h5, h6 {
   animation: devioShakeAndPulse 0.4s ease-in-out;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
+
+/* -----------------------------------------------------------------------------
+   CLIENT PORTAL RESPONSIVE STYLES
+----------------------------------------------------------------------------- */
+.portal-layout-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.portal-specs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.portal-specialties-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.portal-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 1024px) {
+  .portal-layout-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .portal-specs-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .portal-specialties-grid {
+    grid-template-columns: 1fr;
+  }
+  .portal-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+

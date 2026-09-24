@@ -219,7 +219,6 @@ const ALL_PROPERTIES: ClientProperty[] = [
     images: [
       "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1000&auto=format&fit=crop&q=80",
       "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&auto=format&fit=crop&q=80",
     ],
     specialtiesProgress: [
       { id: "esp-1", name: "1. Cimentación", percentage: 43 },
@@ -239,12 +238,10 @@ const ALL_PROPERTIES: ClientProperty[] = [
     documents: [
       { id: "doc-1", title: "Contrato Compraventa Castellana 1C.pdf", category: "CONTRATO", fileSize: "2.4 MB", uploadDate: "17 Ago 2026" },
       { id: "doc-2", title: "Planos Arquitectónicos y Distribución.pdf", category: "PLANO", fileSize: "4.8 MB", uploadDate: "18 Ago 2026" },
-      { id: "doc-3", title: "Reglamento de Régimen de Condominio.pdf", category: "REGLAMENTO", fileSize: "1.1 MB", uploadDate: "20 Ago 2026" },
     ],
     payments: [
       { id: "pay-1", cuotaNumber: 1, concept: "Enganche Inicial (20%)", amount: 1200000, interestAmount: 0, scheduledDate: "Ago 17, 26", status: "PAGADO", paidDate: "17 Ago 2026", receiptNumber: "REC-2026-0817-01", paymentMethod: "SPEI Bancomer" },
       { id: "pay-2", cuotaNumber: 2, concept: "Mensualidad 1 de 18", amount: 250000, interestAmount: 0, scheduledDate: "Sep 17, 26", status: "ATRASADO" },
-      { id: "pay-3", cuotaNumber: 3, concept: "Mensualidad 2 de 18", amount: 250000, interestAmount: 0, scheduledDate: "Oct 17, 26", status: "PENDIENTE" },
     ],
     customAttributes: [
       { label: "Orientación", value: "Sur - Poniente" },
@@ -384,21 +381,47 @@ export default function ClientPortalWeb() {
   }, [selectedProp.documents, docSearch, selectedDocCategory]);
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-800 antialiased flex flex-col items-center">
-      {/* Top Banner with Account Switcher for testing */}
-      <div className="w-full bg-slate-950/80 border-b border-slate-800/60 px-4 py-2 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-50 backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="font-medium text-slate-200">Devio Portal Cliente</span>
-          <span className="text-slate-500">•</span>
-          <span className="text-slate-400">Ambiente Staging Multidesarrollador</span>
+    <div style={{ minHeight: "100vh", backgroundColor: "#0F172A", display: "flex", flexDirection: "column", alignItems: "center", width: "100%", boxSizing: "border-box" }}>
+      
+      {/* Top Test Banner */}
+      <div style={{
+        width: "100%",
+        backgroundColor: "#020617",
+        borderBottom: "1px solid #1E293B",
+        padding: "0.5rem 1rem",
+        fontSize: "0.75rem",
+        color: "#94A3B8",
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "0.75rem",
+        position: "sticky",
+        top: 0,
+        zIndex: 50
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ width: "8px", height: "8px", borderRadius: "9999px", backgroundColor: "#10B981" }} />
+          <span style={{ fontWeight: 600, color: "#E2E8F0" }}>Devio Portal Cliente</span>
+          <span style={{ color: "#475569" }}>•</span>
+          <span>Ambiente Staging Multidesarrollador</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-slate-400">Probar como:</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ color: "#94A3B8" }}>Probar cuenta:</span>
           <select
             value={selectedUserKey}
             onChange={(e) => setSelectedUserKey(e.target.value)}
-            className="bg-slate-800 text-white rounded-lg px-2.5 py-1 text-xs border border-slate-700 outline-none font-medium focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            style={{
+              backgroundColor: "#1E293B",
+              color: "#FFFFFF",
+              borderRadius: "0.5rem",
+              padding: "0.25rem 0.6rem",
+              fontSize: "0.75rem",
+              border: "1px solid #334155",
+              outline: "none",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
           >
             <option value="jaime">Jaime Pozos (Desarrollos Campero - Mainstreet 5.1)</option>
             <option value="inigo">Iñigo Heredia (Grupo VEQ - Castellana 1C)</option>
@@ -408,198 +431,300 @@ export default function ClientPortalWeb() {
       </div>
 
       {/* Main Responsive Wrapper */}
-      <div className="w-full max-w-7xl px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col gap-6">
+      <div style={{ width: "100%", maxWidth: "1240px", padding: "1.25rem 1rem", display: "flex", flexDirection: "column", gap: "1.5rem", boxSizing: "border-box" }}>
         
-        {/* Apple Style Floating Header */}
-        <header className="w-full bg-gradient-to-r from-[#1B3047] via-[#1F3652] to-[#254266] rounded-3xl p-4 sm:p-6 shadow-xl border border-white/10 text-white flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center justify-between md:justify-start gap-4">
-            <div className="flex items-center gap-3">
-              <img
-                src="/brand/logo-horizontal-light.png"
-                alt="Devio"
-                className="h-8 sm:h-9 w-auto object-contain"
-              />
-              <span className="hidden sm:inline-block text-xs bg-white/15 px-2.5 py-1 rounded-full text-white/90 font-medium">
-                Portal de Propietarios
-              </span>
-            </div>
-            
-            {/* Mobile Actions: Notifications & Profile */}
-            <div className="flex items-center gap-2 md:hidden">
-              <button
-                onClick={() => setShowNotifications(true)}
-                className="relative p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-                title="Notificaciones"
-              >
-                <Bell size={18} className="text-white" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center border border-[#1F3652]">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => { setActiveTab("profile"); setScreen("main"); }}
-                className="p-1 rounded-full border border-white/30"
-              >
-                <img src={currentUser.avatarUrl} alt="Avatar" className="w-7 h-7 rounded-full object-cover" />
-              </button>
-            </div>
+        {/* Apple Style Header Card */}
+        <header style={{
+          width: "100%",
+          background: "linear-gradient(135deg, #1B3047 0%, #1F3652 50%, #2A486C 100%)",
+          borderRadius: "1.5rem",
+          padding: "1.25rem 1.5rem",
+          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.3)",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          color: "#FFFFFF",
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "1rem",
+          boxSizing: "border-box"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <img
+              src="/brand/logo-horizontal-light.png"
+              alt="Devio"
+              style={{ height: "32px", width: "auto", objectFit: "contain", display: "block" }}
+            />
+            <span style={{
+              fontSize: "0.7rem",
+              backgroundColor: "rgba(255, 255, 255, 0.15)",
+              padding: "0.25rem 0.6rem",
+              borderRadius: "9999px",
+              fontWeight: 600,
+              letterSpacing: "0.02em"
+            }}>
+              Portal de Propietarios
+            </span>
           </div>
 
-          {/* Center Greeting & Property Quick Switcher */}
-          <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
-            <div className="text-left md:text-right">
-              <p className="text-xs text-slate-300 font-medium">Bienvenido de vuelta,</p>
-              <p className="text-lg sm:text-xl font-extrabold tracking-tight text-white">{userName}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div style={{ textAlign: "right" }}>
+              <p style={{ fontSize: "0.75rem", color: "rgba(255, 255, 255, 0.7)", margin: 0 }}>Hola,</p>
+              <p style={{ fontSize: "1.1rem", fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>{userName}</p>
             </div>
 
-            {/* Desktop Action Buttons */}
-            <div className="hidden md:flex items-center gap-3">
-              <button
-                onClick={() => setShowNotifications(true)}
-                className="relative p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 transition-all text-white flex items-center gap-2 text-xs font-semibold"
-              >
-                <Bell size={16} />
-                <span>Avisos</span>
-                {unreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
+            <button
+              onClick={() => setShowNotifications(true)}
+              style={{
+                position: "relative",
+                padding: "0.6rem",
+                borderRadius: "0.75rem",
+                backgroundColor: "rgba(255, 255, 255, 0.12)",
+                border: "none",
+                cursor: "pointer",
+                color: "#FFFFFF",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+              title="Notificaciones"
+            >
+              <Bell size={18} />
+              {unreadCount > 0 && (
+                <span style={{
+                  position: "absolute",
+                  top: "-4px",
+                  right: "-4px",
+                  backgroundColor: "#EF4444",
+                  color: "#FFFFFF",
+                  fontSize: "0.6rem",
+                  fontWeight: 800,
+                  width: "16px",
+                  height: "16px",
+                  borderRadius: "9999px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "2px solid #1F3652"
+                }}>
+                  {unreadCount}
+                </span>
+              )}
+            </button>
 
-              <button
-                onClick={() => { setActiveTab(activeTab === "profile" ? "properties" : "profile"); setScreen("main"); }}
-                className={`flex items-center gap-2 px-3 py-2 rounded-2xl text-xs font-semibold transition-all ${
-                  activeTab === "profile" ? "bg-white text-[#1F3652]" : "bg-white/10 hover:bg-white/20 text-white"
-                }`}
-              >
-                <img src={currentUser.avatarUrl} alt="Avatar" className="w-5 h-5 rounded-full object-cover" />
-                <span>{activeTab === "profile" ? "Ver Propiedades" : "Mi Perfil"}</span>
-              </button>
+            <button
+              onClick={() => { setActiveTab(activeTab === "profile" ? "properties" : "profile"); setScreen("main"); }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.45rem 0.85rem",
+                borderRadius: "0.75rem",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                border: "none",
+                cursor: "pointer",
+                backgroundColor: activeTab === "profile" ? "#FFFFFF" : "rgba(255, 255, 255, 0.12)",
+                color: activeTab === "profile" ? "#1F3652" : "#FFFFFF"
+              }}
+            >
+              <img src={currentUser.avatarUrl} alt="Avatar" style={{ width: "20px", height: "20px", borderRadius: "9999px", objectFit: "cover" }} />
+              <span>{activeTab === "profile" ? "Ver Propiedades" : "Mi Perfil"}</span>
+            </button>
 
-              <button
-                onClick={handleLogout}
-                className="p-2.5 rounded-2xl bg-white/5 hover:bg-red-500/20 text-slate-300 hover:text-red-300 transition-all"
-                title="Cerrar Sesión"
-              >
-                <LogOut size={16} />
-              </button>
-            </div>
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: "0.6rem",
+                borderRadius: "0.75rem",
+                backgroundColor: "rgba(255, 255, 255, 0.08)",
+                border: "none",
+                cursor: "pointer",
+                color: "#CBD5E1"
+              }}
+              title="Cerrar Sesión"
+            >
+              <LogOut size={16} />
+            </button>
           </div>
         </header>
 
-        {/* Content Tabs (Propiedades vs Perfil) */}
+        {/* Content Layout */}
         {activeTab === "properties" ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="portal-layout-grid">
             
-            {/* Left Column / Sidebar (Property Selector & Next Payment Banner) */}
-            <div className="lg:col-span-4 flex flex-col gap-5">
+            {/* Left Sidebar */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
               
-              {/* Next Payment Card (Apple Wallet Style) */}
-              <div className="bg-gradient-to-br from-[#1E293B] via-[#0F172A] to-[#1E293B] rounded-3xl p-5 border border-slate-700/60 shadow-lg text-white">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[11px] font-bold tracking-wider uppercase text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20">
+              {/* Next Payment Wallet Card */}
+              <div style={{
+                background: "linear-gradient(145deg, #1E293B 0%, #0F172A 100%)",
+                borderRadius: "1.25rem",
+                padding: "1.25rem",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                color: "#FFFFFF",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
+                  <span style={{
+                    fontSize: "0.65rem",
+                    fontWeight: 800,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    color: "#FBBF24",
+                    backgroundColor: "rgba(251, 191, 36, 0.12)",
+                    padding: "0.2rem 0.5rem",
+                    borderRadius: "9999px",
+                    border: "1px solid rgba(251, 191, 36, 0.25)"
+                  }}>
                     Tu Próximo Pago
                   </span>
-                  <span className="text-xs text-slate-400 flex items-center gap-1">
-                    <Clock size={13} /> {selectedProp.nextPaymentDaysRemaining} días restantes
+                  <span style={{ fontSize: "0.75rem", color: "#94A3B8", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                    <Clock size={12} /> {selectedProp.nextPaymentDaysRemaining} días restantes
                   </span>
                 </div>
-                <p className="text-2xl sm:text-3xl font-black tracking-tight text-white mb-1">
+
+                <p style={{ fontSize: "1.75rem", fontWeight: 900, color: "#FFFFFF", margin: "0 0 0.25rem 0" }}>
                   {formatMoney(selectedProp.nextPaymentAmount)}
                 </p>
-                <p className="text-xs text-slate-400 mb-4">
-                  Vence el <span className="font-semibold text-slate-200">{selectedProp.nextPaymentDueDate}</span> • {selectedProp.projectName} ({selectedProp.unitNumber})
+                <p style={{ fontSize: "0.75rem", color: "#94A3B8", margin: "0 0 1rem 0" }}>
+                  Vence el <strong style={{ color: "#E2E8F0" }}>{selectedProp.nextPaymentDueDate}</strong> • {selectedProp.projectName} ({selectedProp.unitNumber})
                 </p>
-                
+
                 {selectedProp.overdueAmount ? (
-                  <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-xl p-2.5 flex items-center justify-between text-xs">
-                    <span className="text-red-400 font-medium flex items-center gap-1.5">
+                  <div style={{
+                    backgroundColor: "rgba(239, 68, 68, 0.12)",
+                    border: "1px solid rgba(239, 68, 68, 0.25)",
+                    borderRadius: "0.75rem",
+                    padding: "0.6rem 0.75rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    fontSize: "0.75rem",
+                    marginBottom: "1rem"
+                  }}>
+                    <span style={{ color: "#F87171", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.35rem" }}>
                       <AlertCircle size={14} /> Saldo vencido
                     </span>
-                    <span className="text-red-400 font-bold">{formatMoney(selectedProp.overdueAmount)}</span>
+                    <span style={{ color: "#F87171", fontWeight: 800 }}>{formatMoney(selectedProp.overdueAmount)}</span>
                   </div>
                 ) : null}
 
                 <button
                   onClick={() => { setScreen("statement"); setStatementSubTab("payments"); }}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98]"
+                  style={{
+                    width: "100%",
+                    background: "linear-gradient(90deg, #10B981 0%, #059669 100%)",
+                    color: "#FFFFFF",
+                    fontWeight: 700,
+                    fontSize: "0.75rem",
+                    padding: "0.75rem 1rem",
+                    borderRadius: "0.75rem",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.5rem",
+                    boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)"
+                  }}
                 >
                   <CreditCard size={15} />
                   <span>Ver Estado de Cuenta y Pagos</span>
                 </button>
               </div>
 
-              {/* Multi-Property Selector List */}
-              <div className="bg-white/95 rounded-3xl p-5 border border-slate-200/80 shadow-sm flex flex-col gap-3">
-                <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              {/* Property Selector List */}
+              <div style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "1.25rem",
+                padding: "1.25rem",
+                border: "1px solid #E2E8F0",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.75rem"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.25rem" }}>
+                  <h3 style={{ fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#94A3B8", margin: 0 }}>
                     Tus Propiedades ({ALL_PROPERTIES.length})
                   </h3>
-                  <span className="text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                    Multidesarrolladora
+                  <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#1F3652", backgroundColor: "#EFF6FF", padding: "0.15rem 0.45rem", borderRadius: "9999px" }}>
+                    Multidesarrollo
                   </span>
                 </div>
 
-                <div className="flex flex-col gap-3">
-                  {ALL_PROPERTIES.map((prop) => {
-                    const isSelected = prop.id === selectedProp.id;
-                    return (
-                      <div
-                        key={prop.id}
-                        onClick={() => { setSelectedPropId(prop.id); setSelectedImageIdx(0); }}
-                        className={`group relative p-3.5 rounded-2xl cursor-pointer transition-all border flex items-center gap-3.5 ${
-                          isSelected
-                            ? "bg-[#1F3652] text-white border-[#1F3652] shadow-md"
-                            : "bg-slate-50 hover:bg-slate-100/80 text-slate-800 border-slate-200/60"
-                        }`}
-                      >
-                        <img
-                          src={prop.images[0]}
-                          alt={prop.projectName}
-                          className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className={`text-[10px] font-bold uppercase truncate ${isSelected ? "text-slate-300" : "text-slate-500"}`}>
-                              {prop.developerName}
-                            </span>
-                            <span className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded ${
-                              isSelected ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
-                            }`}>
-                              {prop.unitNumber}
-                            </span>
-                          </div>
-                          <p className={`text-sm font-bold truncate ${isSelected ? "text-white" : "text-slate-900"}`}>
-                            {prop.projectName}
-                          </p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="flex-1 h-1.5 rounded-full bg-black/10 overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${isSelected ? "bg-emerald-400" : "bg-emerald-500"}`}
-                                style={{ width: `${prop.constructionPct}%` }}
-                              />
-                            </div>
-                            <span className={`text-[10px] font-bold ${isSelected ? "text-emerald-300" : "text-emerald-600"}`}>
-                              {prop.constructionPct}%
-                            </span>
-                          </div>
+                {ALL_PROPERTIES.map((prop) => {
+                  const isSelected = prop.id === selectedProp.id;
+                  return (
+                    <div
+                      key={prop.id}
+                      onClick={() => { setSelectedPropId(prop.id); setSelectedImageIdx(0); }}
+                      style={{
+                        padding: "0.75rem",
+                        borderRadius: "1rem",
+                        cursor: "pointer",
+                        border: isSelected ? "2px solid #1F3652" : "1px solid #E2E8F0",
+                        backgroundColor: isSelected ? "#1F3652" : "#F8FAFC",
+                        color: isSelected ? "#FFFFFF" : "#1E293B",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.75rem",
+                        transition: "all 0.15s ease"
+                      }}
+                    >
+                      <img
+                        src={prop.images[0]}
+                        alt={prop.projectName}
+                        style={{ width: "48px", height: "48px", borderRadius: "0.6rem", objectFit: "cover", flexShrink: 0 }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.25rem" }}>
+                          <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", color: isSelected ? "#CBD5E1" : "#64748B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {prop.developerName}
+                          </span>
+                          <span style={{
+                            fontSize: "0.7rem",
+                            fontWeight: 800,
+                            padding: "0.1rem 0.35rem",
+                            borderRadius: "0.25rem",
+                            backgroundColor: isSelected ? "rgba(255,255,255,0.2)" : "#E2E8F0",
+                            color: isSelected ? "#FFFFFF" : "#334155"
+                          }}>
+                            {prop.unitNumber}
+                          </span>
                         </div>
-                        <ChevronRight size={16} className={`flex-shrink-0 ${isSelected ? "text-white" : "text-slate-400"}`} />
+                        <p style={{ fontSize: "0.85rem", fontWeight: 800, margin: "0.15rem 0", color: isSelected ? "#FFFFFF" : "#0F172A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {prop.projectName}
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem" }}>
+                          <div style={{ flex: 1, height: "5px", borderRadius: "9999px", backgroundColor: isSelected ? "rgba(255,255,255,0.2)" : "#E2E8F0", overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${prop.constructionPct}%`, backgroundColor: "#10B981", borderRadius: "9999px" }} />
+                          </div>
+                          <span style={{ fontSize: "0.65rem", fontWeight: 800, color: isSelected ? "#6EE7B7" : "#059669" }}>
+                            {prop.constructionPct}%
+                          </span>
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
+                      <ChevronRight size={16} color={isSelected ? "#FFFFFF" : "#94A3B8"} />
+                    </div>
+                  );
+                })}
               </div>
 
-              {/* Quick Sub-Navigation Menu */}
-              <div className="bg-white/95 rounded-3xl p-3 border border-slate-200/80 shadow-sm flex flex-col gap-1">
+              {/* Sub-Navigation */}
+              <div style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "1.25rem",
+                padding: "0.75rem",
+                border: "1px solid #E2E8F0",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.25rem"
+              }}>
                 {[
                   { id: "detail", label: "Detalle de Propiedad", icon: Building },
-                  { id: "statement", label: "Estado de Cuenta & Recibos", icon: CreditCard },
-                  { id: "construction", label: "Avances de Obra", icon: Wrench },
+                  { id: "statement", label: "Estado de Cuenta & Pagos", icon: CreditCard },
+                  { id: "construction", label: "Avance de Obra", icon: Wrench },
                   { id: "documents", label: "Documentos Oficiales", icon: FileText },
                 ].map((item) => {
                   const isActive = screen === item.id;
@@ -608,17 +733,26 @@ export default function ClientPortalWeb() {
                     <button
                       key={item.id}
                       onClick={() => setScreen(item.id as any)}
-                      className={`flex items-center justify-between p-3 rounded-2xl text-xs font-bold transition-all ${
-                        isActive
-                          ? "bg-[#1F3652] text-white shadow-sm"
-                          : "text-slate-700 hover:bg-slate-100"
-                      }`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "0.75rem 1rem",
+                        borderRadius: "0.85rem",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        border: "none",
+                        cursor: "pointer",
+                        backgroundColor: isActive ? "#1F3652" : "transparent",
+                        color: isActive ? "#FFFFFF" : "#475569",
+                        textAlign: "left"
+                      }}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <Icon size={16} className={isActive ? "text-white" : "text-slate-500"} />
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                        <Icon size={16} color={isActive ? "#FFFFFF" : "#64748B"} />
                         <span>{item.label}</span>
                       </div>
-                      <ChevronRight size={14} className={isActive ? "text-white/60" : "text-slate-400"} />
+                      <ChevronRight size={14} color={isActive ? "rgba(255,255,255,0.6)" : "#CBD5E1"} />
                     </button>
                   );
                 })}
@@ -626,37 +760,76 @@ export default function ClientPortalWeb() {
 
             </div>
 
-            {/* Right Column (Dynamic Main Workspace) */}
-            <div className="lg:col-span-8 flex flex-col gap-6">
-
-              {/* SCREEN 1: DETALLE DE PROPIEDAD */}
-              {screen === "detail" || screen === "main" ? (
-                <div className="flex flex-col gap-6">
-                  
-                  {/* Hero Gallery Card with Apple Style Carousel */}
-                  <div className="bg-white rounded-3xl overflow-hidden border border-slate-200/80 shadow-sm">
-                    <div className="relative aspect-[16/9] sm:aspect-[21/9] w-full bg-slate-900 overflow-hidden">
+            {/* Right Main Content */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+              
+              {/* SCREEN: DETALLE */}
+              {(screen === "detail" || screen === "main") && (
+                <>
+                  {/* Photo Gallery Hero */}
+                  <div style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "1.5rem",
+                    overflow: "hidden",
+                    border: "1px solid #E2E8F0",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.04)"
+                  }}>
+                    <div style={{
+                      position: "relative",
+                      width: "100%",
+                      height: "340px",
+                      backgroundColor: "#0F172A",
+                      overflow: "hidden"
+                    }}>
                       <img
                         src={selectedProp.images[selectedImageIdx] || selectedProp.images[0]}
-                        alt="Propiedad"
-                        className="w-full h-full object-cover transition-all duration-300"
+                        alt={selectedProp.projectName}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       />
-                      
-                      {/* Gradient overlay & badges */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-between p-4 sm:p-6">
-                        <div className="flex items-center justify-between">
-                          <span className="bg-white/90 backdrop-blur-md text-[#1F3652] font-black text-xs px-3 py-1.5 rounded-full shadow">
+                      <div style={{
+                        position: "absolute",
+                        inset: 0,
+                        background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 60%, transparent 100%)",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        padding: "1.25rem",
+                        boxSizing: "border-box"
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{
+                            backgroundColor: "rgba(255,255,255,0.95)",
+                            color: "#1F3652",
+                            fontWeight: 900,
+                            fontSize: "0.75rem",
+                            padding: "0.35rem 0.75rem",
+                            borderRadius: "9999px"
+                          }}>
                             Unidad {selectedProp.unitNumber} • {selectedProp.unitType}
                           </span>
-                          <span className="bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-full shadow flex items-center gap-1">
-                            <CheckCircle2 size={13} /> {selectedProp.constructionPct}% Avance
+                          <span style={{
+                            backgroundColor: "#10B981",
+                            color: "#FFFFFF",
+                            fontWeight: 800,
+                            fontSize: "0.75rem",
+                            padding: "0.35rem 0.75rem",
+                            borderRadius: "9999px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.35rem"
+                          }}>
+                            <CheckCircle2 size={14} /> {selectedProp.constructionPct}% Avance
                           </span>
                         </div>
-                        
+
                         <div>
-                          <p className="text-xs font-bold text-amber-300 uppercase tracking-wider">{selectedProp.developerName}</p>
-                          <h2 className="text-xl sm:text-2xl font-black text-white">{selectedProp.projectName}</h2>
-                          <p className="text-xs text-slate-200 flex items-center gap-1 mt-1">
+                          <p style={{ fontSize: "0.75rem", fontWeight: 800, color: "#FBBF24", textTransform: "uppercase", margin: 0 }}>
+                            {selectedProp.developerName}
+                          </p>
+                          <h2 style={{ fontSize: "1.5rem", fontWeight: 900, color: "#FFFFFF", margin: "0.2rem 0" }}>
+                            {selectedProp.projectName}
+                          </h2>
+                          <p style={{ fontSize: "0.75rem", color: "#E2E8F0", margin: 0, display: "flex", alignItems: "center", gap: "0.35rem" }}>
                             <MapPin size={13} /> {selectedProp.projectAddress}
                           </p>
                         </div>
@@ -665,49 +838,65 @@ export default function ClientPortalWeb() {
 
                     {/* Thumbnail Switcher */}
                     {selectedProp.images.length > 1 && (
-                      <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center gap-2 overflow-x-auto">
+                      <div style={{ padding: "0.75rem 1rem", backgroundColor: "#F8FAFC", borderTop: "1px solid #E2E8F0", display: "flex", gap: "0.5rem", overflowX: "auto" }}>
                         {selectedProp.images.map((img, idx) => (
                           <button
                             key={idx}
                             onClick={() => setSelectedImageIdx(idx)}
-                            className={`relative w-16 h-12 rounded-xl overflow-hidden flex-shrink-0 border-2 transition-all ${
-                              selectedImageIdx === idx ? "border-[#1F3652] ring-2 ring-indigo-300" : "border-transparent opacity-60 hover:opacity-100"
-                            }`}
+                            style={{
+                              width: "60px",
+                              height: "44px",
+                              borderRadius: "0.5rem",
+                              overflow: "hidden",
+                              border: selectedImageIdx === idx ? "2px solid #1F3652" : "2px solid transparent",
+                              opacity: selectedImageIdx === idx ? 1 : 0.6,
+                              cursor: "pointer",
+                              padding: 0,
+                              flexShrink: 0
+                            }}
                           >
-                            <img src={img} alt="Thumb" className="w-full h-full object-cover" />
+                            <img src={img} alt="Thumb" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
 
-                  {/* Financial Quick Glance & Specs */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-                      <p className="text-[11px] font-bold text-slate-400 uppercase">Precio Total</p>
-                      <p className="text-base sm:text-lg font-black text-slate-900 mt-0.5">{formatMoney(selectedProp.totalPrice)}</p>
+                  {/* Financial Stats Grid */}
+                  <div className="portal-stats-grid">
+                    <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
+                      <p style={{ fontSize: "0.65rem", fontWeight: 800, color: "#94A3B8", textTransform: "uppercase", margin: 0 }}>Precio Total</p>
+                      <p style={{ fontSize: "1.1rem", fontWeight: 900, color: "#0F172A", margin: "0.25rem 0 0 0" }}>{formatMoney(selectedProp.totalPrice)}</p>
                     </div>
-                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-                      <p className="text-[11px] font-bold text-emerald-600 uppercase">Total Pagado</p>
-                      <p className="text-base sm:text-lg font-black text-emerald-600 mt-0.5">{formatMoney(selectedProp.paidAmount)}</p>
+                    <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
+                      <p style={{ fontSize: "0.65rem", fontWeight: 800, color: "#059669", textTransform: "uppercase", margin: 0 }}>Total Pagado</p>
+                      <p style={{ fontSize: "1.1rem", fontWeight: 900, color: "#059669", margin: "0.25rem 0 0 0" }}>{formatMoney(selectedProp.paidAmount)}</p>
                     </div>
-                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-                      <p className="text-[11px] font-bold text-amber-600 uppercase">Saldo Pendiente</p>
-                      <p className="text-base sm:text-lg font-black text-amber-600 mt-0.5">{formatMoney(selectedProp.pendingAmount)}</p>
+                    <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
+                      <p style={{ fontSize: "0.65rem", fontWeight: 800, color: "#D97706", textTransform: "uppercase", margin: 0 }}>Saldo Pendiente</p>
+                      <p style={{ fontSize: "1.1rem", fontWeight: 900, color: "#D97706", margin: "0.25rem 0 0 0" }}>{formatMoney(selectedProp.pendingAmount)}</p>
                     </div>
-                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-                      <p className="text-[11px] font-bold text-indigo-600 uppercase">Entrega Estimada</p>
-                      <p className="text-base sm:text-lg font-black text-indigo-900 mt-0.5">{selectedProp.estimatedDeliveryDate}</p>
+                    <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
+                      <p style={{ fontSize: "0.65rem", fontWeight: 800, color: "#1F3652", textTransform: "uppercase", margin: 0 }}>Entrega Estimada</p>
+                      <p style={{ fontSize: "1rem", fontWeight: 900, color: "#1F3652", margin: "0.25rem 0 0 0" }}>{selectedProp.estimatedDeliveryDate}</p>
                     </div>
                   </div>
 
-                  {/* Specs & Attributes Card */}
-                  <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm flex flex-col gap-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-extrabold text-slate-900">Especificaciones de la Unidad</h3>
+                  {/* Specs & Custom Attributes */}
+                  <div style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "1.25rem",
+                    padding: "1.25rem",
+                    border: "1px solid #E2E8F0",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "1rem"
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <h3 style={{ fontSize: "1rem", fontWeight: 900, color: "#0F172A", margin: 0 }}>Especificaciones de la Unidad</h3>
                       <button
                         onClick={() => setUnitInfoExpanded(!unitInfoExpanded)}
-                        className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1"
+                        style={{ background: "none", border: "none", color: "#64748B", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.25rem" }}
                       >
                         {unitInfoExpanded ? "Ocultar" : "Mostrar"}
                         {unitInfoExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -715,68 +904,90 @@ export default function ClientPortalWeb() {
                     </div>
 
                     {unitInfoExpanded && (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-                        <div className="bg-slate-50 p-3.5 rounded-2xl">
-                          <p className="text-xs text-slate-500">Superficie Total</p>
-                          <p className="text-sm font-bold text-slate-800 mt-0.5">{selectedProp.areaM2} m²</p>
+                      <div className="portal-specs-grid">
+                        <div style={{ backgroundColor: "#F8FAFC", padding: "0.85rem", borderRadius: "0.85rem", border: "1px solid #F1F5F9" }}>
+                          <p style={{ fontSize: "0.7rem", color: "#64748B", margin: 0 }}>Superficie</p>
+                          <p style={{ fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", margin: "0.2rem 0 0 0" }}>{selectedProp.areaM2} m²</p>
                         </div>
-                        <div className="bg-slate-50 p-3.5 rounded-2xl">
-                          <p className="text-xs text-slate-500">Recámaras</p>
-                          <p className="text-sm font-bold text-slate-800 mt-0.5">{selectedProp.bedrooms} Rec.</p>
+                        <div style={{ backgroundColor: "#F8FAFC", padding: "0.85rem", borderRadius: "0.85rem", border: "1px solid #F1F5F9" }}>
+                          <p style={{ fontSize: "0.7rem", color: "#64748B", margin: 0 }}>Recámaras</p>
+                          <p style={{ fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", margin: "0.2rem 0 0 0" }}>{selectedProp.bedrooms} Rec.</p>
                         </div>
-                        <div className="bg-slate-50 p-3.5 rounded-2xl">
-                          <p className="text-xs text-slate-500">Baños</p>
-                          <p className="text-sm font-bold text-slate-800 mt-0.5">{selectedProp.bathrooms} Baños</p>
+                        <div style={{ backgroundColor: "#F8FAFC", padding: "0.85rem", borderRadius: "0.85rem", border: "1px solid #F1F5F9" }}>
+                          <p style={{ fontSize: "0.7rem", color: "#64748B", margin: 0 }}>Baños</p>
+                          <p style={{ fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", margin: "0.2rem 0 0 0" }}>{selectedProp.bathrooms} Baños</p>
                         </div>
-                        <div className="bg-slate-50 p-3.5 rounded-2xl">
-                          <p className="text-xs text-slate-500">Nivel / Piso</p>
-                          <p className="text-sm font-bold text-slate-800 mt-0.5">Piso {selectedProp.floorLevel || 1}</p>
+                        <div style={{ backgroundColor: "#F8FAFC", padding: "0.85rem", borderRadius: "0.85rem", border: "1px solid #F1F5F9" }}>
+                          <p style={{ fontSize: "0.7rem", color: "#64748B", margin: 0 }}>Nivel / Piso</p>
+                          <p style={{ fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", margin: "0.2rem 0 0 0" }}>Piso {selectedProp.floorLevel || 1}</p>
                         </div>
-                        <div className="bg-slate-50 p-3.5 rounded-2xl">
-                          <p className="text-xs text-slate-500">Estacionamiento</p>
-                          <p className="text-sm font-bold text-slate-800 mt-0.5">{selectedProp.parkingSpots || 1} Cajón</p>
+                        <div style={{ backgroundColor: "#F8FAFC", padding: "0.85rem", borderRadius: "0.85rem", border: "1px solid #F1F5F9" }}>
+                          <p style={{ fontSize: "0.7rem", color: "#64748B", margin: 0 }}>Estacionamiento</p>
+                          <p style={{ fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", margin: "0.2rem 0 0 0" }}>{selectedProp.parkingSpots || 1} Cajón</p>
                         </div>
-                        <div className="bg-slate-50 p-3.5 rounded-2xl">
-                          <p className="text-xs text-slate-500">Mantenimiento Sugerido</p>
-                          <p className="text-sm font-bold text-slate-800 mt-0.5">{formatMoney(selectedProp.maintenanceFeeMonthly || 0)} /mes</p>
+                        <div style={{ backgroundColor: "#F8FAFC", padding: "0.85rem", borderRadius: "0.85rem", border: "1px solid #F1F5F9" }}>
+                          <p style={{ fontSize: "0.7rem", color: "#64748B", margin: 0 }}>Mantenimiento Sugerido</p>
+                          <p style={{ fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", margin: "0.2rem 0 0 0" }}>{formatMoney(selectedProp.maintenanceFeeMonthly || 0)}/mes</p>
                         </div>
-
-                        {selectedProp.customAttributes.map((attr, i) => (
-                          <div key={i} className="bg-slate-50 p-3.5 rounded-2xl col-span-2 sm:col-span-1">
-                            <p className="text-xs text-slate-500">{attr.label}</p>
-                            <p className="text-sm font-bold text-slate-800 mt-0.5">{attr.value}</p>
+                        {selectedProp.customAttributes.map((attr, idx) => (
+                          <div key={idx} style={{ backgroundColor: "#F8FAFC", padding: "0.85rem", borderRadius: "0.85rem", border: "1px solid #F1F5F9" }}>
+                            <p style={{ fontSize: "0.7rem", color: "#64748B", margin: 0 }}>{attr.label}</p>
+                            <p style={{ fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", margin: "0.2rem 0 0 0" }}>{attr.value}</p>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
+                </>
+              )}
 
-                </div>
-              ) : null}
-
-              {/* SCREEN 2: ESTADO DE CUENTA & RESUMEN FINANCIERO */}
+              {/* SCREEN: ESTADO DE CUENTA */}
               {screen === "statement" && (
-                <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm flex flex-col gap-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1.5rem",
+                  padding: "1.5rem",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1.5rem"
+                }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
                     <div>
-                      <h2 className="text-xl font-black text-slate-900">Estado de Cuenta & Pagos</h2>
-                      <p className="text-xs text-slate-500">{selectedProp.projectName} • Unidad {selectedProp.unitNumber}</p>
+                      <h2 style={{ fontSize: "1.25rem", fontWeight: 900, color: "#0F172A", margin: 0 }}>Estado de Cuenta & Pagos</h2>
+                      <p style={{ fontSize: "0.75rem", color: "#64748B", margin: "0.2rem 0 0 0" }}>
+                        {selectedProp.projectName} • Unidad {selectedProp.unitNumber}
+                      </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
                       <button
                         onClick={() => setStatementSubTab("statement")}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                          statementSubTab === "statement" ? "bg-[#1F3652] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        }`}
+                        style={{
+                          padding: "0.5rem 0.85rem",
+                          borderRadius: "0.6rem",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          border: "none",
+                          cursor: "pointer",
+                          backgroundColor: statementSubTab === "statement" ? "#1F3652" : "#F1F5F9",
+                          color: statementSubTab === "statement" ? "#FFFFFF" : "#475569"
+                        }}
                       >
                         Resumen General
                       </button>
                       <button
                         onClick={() => setStatementSubTab("payments")}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                          statementSubTab === "payments" ? "bg-[#1F3652] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        }`}
+                        style={{
+                          padding: "0.5rem 0.85rem",
+                          borderRadius: "0.6rem",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          border: "none",
+                          cursor: "pointer",
+                          backgroundColor: statementSubTab === "payments" ? "#1F3652" : "#F1F5F9",
+                          color: statementSubTab === "payments" ? "#FFFFFF" : "#475569"
+                        }}
                       >
                         Desglose de Cuotas ({selectedProp.payments.length})
                       </button>
@@ -784,81 +995,88 @@ export default function ClientPortalWeb() {
                   </div>
 
                   {statementSubTab === "statement" ? (
-                    <div className="flex flex-col gap-5">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
-                          <p className="text-xs font-bold text-slate-500">Monto Contratado</p>
-                          <p className="text-xl font-black text-slate-900 mt-1">{formatMoney(selectedProp.totalPrice)}</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                      <div className="portal-specs-grid">
+                        <div style={{ backgroundColor: "#F8FAFC", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
+                          <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748B", margin: 0 }}>Monto Contratado</p>
+                          <p style={{ fontSize: "1.25rem", fontWeight: 900, color: "#0F172A", margin: "0.25rem 0 0 0" }}>{formatMoney(selectedProp.totalPrice)}</p>
                         </div>
-                        <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200/60">
-                          <p className="text-xs font-bold text-emerald-700">Monto Liquidado</p>
-                          <p className="text-xl font-black text-emerald-700 mt-1">{formatMoney(selectedProp.paidAmount)}</p>
+                        <div style={{ backgroundColor: "#ECFDF5", padding: "1rem", borderRadius: "1rem", border: "1px solid #A7F3D0" }}>
+                          <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "#065F46", margin: 0 }}>Monto Liquidado</p>
+                          <p style={{ fontSize: "1.25rem", fontWeight: 900, color: "#047857", margin: "0.25rem 0 0 0" }}>{formatMoney(selectedProp.paidAmount)}</p>
                         </div>
-                        <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200/60">
-                          <p className="text-xs font-bold text-amber-700">Saldo por Liquidar</p>
-                          <p className="text-xl font-black text-amber-700 mt-1">{formatMoney(selectedProp.pendingAmount)}</p>
+                        <div style={{ backgroundColor: "#FFFBEB", padding: "1rem", borderRadius: "1rem", border: "1px solid #FDE68A" }}>
+                          <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "#92400E", margin: 0 }}>Saldo por Liquidar</p>
+                          <p style={{ fontSize: "1.25rem", fontWeight: 900, color: "#B45309", margin: "0.25rem 0 0 0" }}>{formatMoney(selectedProp.pendingAmount)}</p>
                         </div>
                       </div>
 
-                      {/* Progress Bar */}
-                      <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/60 flex flex-col gap-2">
-                        <div className="flex items-center justify-between text-xs font-bold">
-                          <span className="text-slate-600">Progreso de Pago Total</span>
-                          <span className="text-emerald-600">
-                            {Math.round((selectedProp.paidAmount / selectedProp.totalPrice) * 100)}%
-                          </span>
+                      <div style={{ backgroundColor: "#F8FAFC", padding: "1.25rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>
+                          <span style={{ color: "#475569" }}>Progreso de Pago Total</span>
+                          <span style={{ color: "#059669" }}>{Math.round((selectedProp.paidAmount / selectedProp.totalPrice) * 100)}%</span>
                         </div>
-                        <div className="h-3 w-full bg-slate-200 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-emerald-500 rounded-full"
-                            style={{ width: `${(selectedProp.paidAmount / selectedProp.totalPrice) * 100}%` }}
-                          />
+                        <div style={{ width: "100%", height: "10px", backgroundColor: "#E2E8F0", borderRadius: "9999px", overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${(selectedProp.paidAmount / selectedProp.totalPrice) * 100}%`, backgroundColor: "#10B981", borderRadius: "9999px" }} />
                         </div>
                       </div>
                     </div>
                   ) : (
-                    /* Installments Table */
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.75rem" }}>
                         <thead>
-                          <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider">
-                            <th className="py-3 px-3">#</th>
-                            <th className="py-3 px-3">Concepto</th>
-                            <th className="py-3 px-3">Monto</th>
-                            <th className="py-3 px-3">Fecha Prog.</th>
-                            <th className="py-3 px-3">Estado</th>
-                            <th className="py-3 px-3 text-right">Recibo Oficial</th>
+                          <tr style={{ borderBottom: "1px solid #E2E8F0", textAlign: "left", color: "#94A3B8", fontWeight: 800, textTransform: "uppercase" }}>
+                            <th style={{ padding: "0.75rem" }}>#</th>
+                            <th style={{ padding: "0.75rem" }}>Concepto</th>
+                            <th style={{ padding: "0.75rem" }}>Monto</th>
+                            <th style={{ padding: "0.75rem" }}>Fecha Prog.</th>
+                            <th style={{ padding: "0.75rem" }}>Estado</th>
+                            <th style={{ padding: "0.75rem", textAlign: "right" }}>Recibo Oficial</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                        <tbody>
                           {selectedProp.payments.map((p) => (
-                            <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                              <td className="py-3 px-3 font-bold text-slate-900">{p.cuotaNumber}</td>
-                              <td className="py-3 px-3 font-semibold text-slate-900">{p.concept}</td>
-                              <td className="py-3 px-3 font-bold text-slate-900">{formatMoney(p.amount)}</td>
-                              <td className="py-3 px-3 text-slate-500">{p.scheduledDate}</td>
-                              <td className="py-3 px-3">
-                                <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  p.status === "PAGADO"
-                                    ? "bg-emerald-100 text-emerald-800"
-                                    : p.status === "ATRASADO"
-                                    ? "bg-red-100 text-red-800"
-                                    : "bg-amber-100 text-amber-800"
-                                }`}>
+                            <tr key={p.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                              <td style={{ padding: "0.75rem", fontWeight: 800 }}>{p.cuotaNumber}</td>
+                              <td style={{ padding: "0.75rem", fontWeight: 700, color: "#1E293B" }}>{p.concept}</td>
+                              <td style={{ padding: "0.75rem", fontWeight: 800, color: "#0F172A" }}>{formatMoney(p.amount)}</td>
+                              <td style={{ padding: "0.75rem", color: "#64748B" }}>{p.scheduledDate}</td>
+                              <td style={{ padding: "0.75rem" }}>
+                                <span style={{
+                                  display: "inline-block",
+                                  padding: "0.2rem 0.5rem",
+                                  borderRadius: "9999px",
+                                  fontSize: "0.65rem",
+                                  fontWeight: 800,
+                                  backgroundColor: p.status === "PAGADO" ? "#D1FAE5" : (p.status === "ATRASADO" ? "#FEE2E2" : "#FEF3C7"),
+                                  color: p.status === "PAGADO" ? "#065F46" : (p.status === "ATRASADO" ? "#991B1B" : "#92400E")
+                                }}>
                                   {p.status}
                                 </span>
                               </td>
-                              <td className="py-3 px-3 text-right">
+                              <td style={{ padding: "0.75rem", textAlign: "right" }}>
                                 {p.status === "PAGADO" ? (
                                   <button
                                     onClick={() => setShowReceiptPayment(p)}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-colors"
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.35rem",
+                                      padding: "0.3rem 0.6rem",
+                                      borderRadius: "0.5rem",
+                                      backgroundColor: "#EEF2FF",
+                                      color: "#4338CA",
+                                      border: "none",
+                                      fontWeight: 700,
+                                      fontSize: "0.7rem",
+                                      cursor: "pointer"
+                                    }}
                                   >
                                     <FileCheck size={13} />
                                     <span>Ver Recibo</span>
                                   </button>
                                 ) : (
-                                  <span className="text-slate-400 text-xs">—</span>
+                                  <span style={{ color: "#94A3B8" }}>—</span>
                                 )}
                               </td>
                             </tr>
@@ -870,49 +1088,57 @@ export default function ClientPortalWeb() {
                 </div>
               )}
 
-              {/* SCREEN 3: AVANCES DE OBRA */}
+              {/* SCREEN: OBRA */}
               {screen === "construction" && (
-                <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm flex flex-col gap-6">
-                  <div className="flex items-center justify-between">
+                <div style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1.5rem",
+                  padding: "1.5rem",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1.5rem"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
-                      <h2 className="text-xl font-black text-slate-900">Avance de Obra en Tiempo Real</h2>
-                      <p className="text-xs text-slate-500">Última actualización: {selectedProp.lastProgressUpdateDate}</p>
+                      <h2 style={{ fontSize: "1.25rem", fontWeight: 900, color: "#0F172A", margin: 0 }}>Avance de Obra</h2>
+                      <p style={{ fontSize: "0.75rem", color: "#64748B", margin: "0.2rem 0 0 0" }}>Reporte verificado al {selectedProp.lastProgressUpdateDate}</p>
                     </div>
-                    <span className="text-lg font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-xl">
+                    <span style={{ backgroundColor: "#D1FAE5", color: "#065F46", fontWeight: 900, fontSize: "0.9rem", padding: "0.4rem 0.85rem", borderRadius: "0.75rem" }}>
                       {selectedProp.constructionPct}% General
                     </span>
                   </div>
 
-                  {/* Specialties Progress Bars */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="portal-specialties-grid">
                     {selectedProp.specialtiesProgress.map((esp) => (
-                      <div key={esp.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 flex flex-col gap-2">
-                        <div className="flex items-center justify-between text-xs font-bold">
-                          <span className="text-slate-800">{esp.name}</span>
-                          <span className="text-emerald-600">{esp.percentage}%</span>
+                      <div key={esp.id} style={{ backgroundColor: "#F8FAFC", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>
+                          <span style={{ color: "#1E293B" }}>{esp.name}</span>
+                          <span style={{ color: "#059669" }}>{esp.percentage}%</span>
                         </div>
-                        <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${esp.percentage}%` }} />
+                        <div style={{ width: "100%", height: "8px", backgroundColor: "#E2E8F0", borderRadius: "9999px", overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${esp.percentage}%`, backgroundColor: "#10B981", borderRadius: "9999px" }} />
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  {/* Milestones History */}
-                  <div className="flex flex-col gap-4 mt-2">
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Historial de Reportes Fotográficos</h3>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                    <h3 style={{ fontSize: "0.8rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748B", margin: 0 }}>
+                      Historial Fotográfico
+                    </h3>
                     {selectedProp.constructionMilestones.map((m) => (
-                      <div key={m.id} className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-200/80 flex flex-col sm:flex-row">
-                        <img src={m.photo} alt={m.title} className="w-full sm:w-48 h-40 object-cover" />
-                        <div className="p-4 flex flex-col justify-between flex-1">
+                      <div key={m.id} style={{ backgroundColor: "#F8FAFC", borderRadius: "1rem", overflow: "hidden", border: "1px solid #E2E8F0", display: "flex", flexWrap: "wrap" }}>
+                        <img src={m.photo} alt={m.title} style={{ width: "200px", height: "140px", objectFit: "cover" }} />
+                        <div style={{ padding: "1rem", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                           <div>
-                            <div className="flex items-center justify-between">
-                              <h4 className="font-bold text-slate-900 text-sm">{m.title}</h4>
-                              <span className="text-xs text-slate-400 font-medium">{m.date}</span>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <h4 style={{ fontSize: "0.9rem", fontWeight: 800, color: "#0F172A", margin: 0 }}>{m.title}</h4>
+                              <span style={{ fontSize: "0.7rem", color: "#94A3B8" }}>{m.date}</span>
                             </div>
-                            <p className="text-xs text-slate-600 mt-2 leading-relaxed">{m.description}</p>
+                            <p style={{ fontSize: "0.75rem", color: "#475569", margin: "0.5rem 0 0 0", lineHeight: 1.5 }}>{m.description}</p>
                           </div>
-                          <span className="text-[11px] font-semibold text-emerald-600 mt-3">Verificado por Supervisión de Obra</span>
+                          <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "#059669", marginTop: "0.5rem" }}>Supervisión Devio Aprobada</span>
                         </div>
                       </div>
                     ))}
@@ -920,34 +1146,56 @@ export default function ClientPortalWeb() {
                 </div>
               )}
 
-              {/* SCREEN 4: DOCUMENTOS OFICIALES */}
+              {/* SCREEN: DOCUMENTOS */}
               {screen === "documents" && (
-                <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm flex flex-col gap-5">
+                <div style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1.5rem",
+                  padding: "1.5rem",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1.25rem"
+                }}>
                   <div>
-                    <h2 className="text-xl font-black text-slate-900">Documentos de la Propiedad</h2>
-                    <p className="text-xs text-slate-500">Contratos, planos y reglamentos autorizados por el desarrollador</p>
+                    <h2 style={{ fontSize: "1.25rem", fontWeight: 900, color: "#0F172A", margin: 0 }}>Documentos Oficiales</h2>
+                    <p style={{ fontSize: "0.75rem", color: "#64748B", margin: "0.2rem 0 0 0" }}>Contratos, planos y reglamentos autorizados</p>
                   </div>
 
-                  {/* Search and Filters */}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <div className="relative flex-1">
-                      <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                    <div style={{ position: "relative", flex: 1, minWidth: "220px" }}>
+                      <Search size={16} color="#94A3B8" style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)" }} />
                       <input
                         type="text"
-                        placeholder="Buscar por nombre de documento..."
+                        placeholder="Buscar documento..."
                         value={docSearch}
                         onChange={(e) => setDocSearch(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs font-medium focus:ring-1 focus:ring-indigo-500 outline-none"
+                        style={{
+                          width: "100%",
+                          padding: "0.6rem 0.75rem 0.6rem 2.2rem",
+                          borderRadius: "0.6rem",
+                          border: "1px solid #CBD5E1",
+                          fontSize: "0.75rem",
+                          outline: "none",
+                          boxSizing: "border-box"
+                        }}
                       />
                     </div>
-                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                    <div style={{ display: "flex", gap: "0.35rem" }}>
                       {["TODOS", "CONTRATO", "PLANO", "REGLAMENTO"].map((cat) => (
                         <button
                           key={cat}
                           onClick={() => setSelectedDocCategory(cat)}
-                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors whitespace-nowrap ${
-                            selectedDocCategory === cat ? "bg-[#1F3652] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                          }`}
+                          style={{
+                            padding: "0.5rem 0.75rem",
+                            borderRadius: "0.5rem",
+                            fontSize: "0.7rem",
+                            fontWeight: 700,
+                            border: "none",
+                            cursor: "pointer",
+                            backgroundColor: selectedDocCategory === cat ? "#1F3652" : "#F1F5F9",
+                            color: selectedDocCategory === cat ? "#FFFFFF" : "#64748B"
+                          }}
                         >
                           {cat}
                         </button>
@@ -955,39 +1203,53 @@ export default function ClientPortalWeb() {
                     </div>
                   </div>
 
-                  {/* Docs List */}
-                  <div className="flex flex-col gap-2.5">
-                    {filteredDocs.length > 0 ? (
-                      filteredDocs.map((doc) => (
-                        <div
-                          key={doc.id}
-                          className="p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/60 flex items-center justify-between gap-4 transition-all"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center flex-shrink-0">
-                              <FileText size={20} />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-slate-900 truncate">{doc.title}</p>
-                              <p className="text-[11px] text-slate-400 mt-0.5">
-                                {doc.fileSize} • Subido el {doc.uploadDate}
-                              </p>
-                            </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                    {filteredDocs.map((doc) => (
+                      <div
+                        key={doc.id}
+                        style={{
+                          padding: "0.85rem 1rem",
+                          borderRadius: "0.85rem",
+                          backgroundColor: "#F8FAFC",
+                          border: "1px solid #E2E8F0",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "1rem"
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
+                          <div style={{ width: "36px", height: "36px", borderRadius: "0.6rem", backgroundColor: "#EEF2FF", color: "#4338CA", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <FileText size={18} />
                           </div>
-                          <a
-                            href={doc.fileUrl || "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
-                          >
-                            <Download size={14} />
-                            <span className="hidden sm:inline">Descargar</span>
-                          </a>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ fontSize: "0.8rem", fontWeight: 800, color: "#0F172A", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.title}</p>
+                            <p style={{ fontSize: "0.65rem", color: "#94A3B8", margin: "0.15rem 0 0 0" }}>{doc.fileSize} • Subido el {doc.uploadDate}</p>
+                          </div>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-center py-8 text-xs text-slate-400">No se encontraron documentos en esta categoría.</p>
-                    )}
+                        <a
+                          href={doc.fileUrl || "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            padding: "0.4rem 0.75rem",
+                            borderRadius: "0.6rem",
+                            backgroundColor: "#FFFFFF",
+                            border: "1px solid #CBD5E1",
+                            color: "#334155",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            textDecoration: "none"
+                          }}
+                        >
+                          <Download size={14} />
+                          <span>Descargar</span>
+                        </a>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -995,44 +1257,76 @@ export default function ClientPortalWeb() {
             </div>
           </div>
         ) : (
-          /* TAB 2: PERFIL DE CLIENTE */
-          <div className="max-w-2xl mx-auto w-full bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm flex flex-col gap-6">
-            <div className="flex items-center gap-4">
-              <img src={currentUser.avatarUrl} alt="Avatar" className="w-16 h-16 rounded-full object-cover shadow" />
+          /* TAB: PERFIL */
+          <div style={{
+            maxWidth: "640px",
+            margin: "0 auto",
+            width: "100%",
+            backgroundColor: "#FFFFFF",
+            borderRadius: "1.5rem",
+            padding: "2rem",
+            border: "1px solid #E2E8F0",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1.5rem",
+            boxSizing: "border-box"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+              <img src={currentUser.avatarUrl} alt="Avatar" style={{ width: "64px", height: "64px", borderRadius: "9999px", objectFit: "cover" }} />
               <div>
-                <h2 className="text-xl font-black text-slate-900">{userName}</h2>
-                <p className="text-xs text-slate-500">{currentUser.email}</p>
-                <span className="inline-block mt-1 text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md">
+                <h2 style={{ fontSize: "1.25rem", fontWeight: 900, color: "#0F172A", margin: 0 }}>{userName}</h2>
+                <p style={{ fontSize: "0.75rem", color: "#64748B", margin: "0.2rem 0 0 0" }}>{currentUser.email}</p>
+                <span style={{ display: "inline-block", marginTop: "0.25rem", fontSize: "0.65rem", fontWeight: 800, backgroundColor: "#D1FAE5", color: "#065F46", padding: "0.15rem 0.5rem", borderRadius: "9999px" }}>
                   Propietario Verificado
                 </span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div className="p-3.5 bg-slate-50 rounded-2xl">
-                <p className="text-xs text-slate-400 font-medium">Teléfono</p>
-                <p className="text-sm font-bold text-slate-800 mt-0.5">{userPhone}</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+              <div style={{ padding: "0.85rem", backgroundColor: "#F8FAFC", borderRadius: "0.85rem" }}>
+                <p style={{ fontSize: "0.65rem", color: "#94A3B8", fontWeight: 700, margin: 0 }}>Teléfono</p>
+                <p style={{ fontSize: "0.85rem", fontWeight: 800, color: "#1E293B", margin: "0.2rem 0 0 0" }}>{userPhone}</p>
               </div>
-              <div className="p-3.5 bg-slate-50 rounded-2xl">
-                <p className="text-xs text-slate-400 font-medium">RFC Fiscal</p>
-                <p className="text-sm font-bold text-slate-800 mt-0.5">{userRfc}</p>
+              <div style={{ padding: "0.85rem", backgroundColor: "#F8FAFC", borderRadius: "0.85rem" }}>
+                <p style={{ fontSize: "0.65rem", color: "#94A3B8", fontWeight: 700, margin: 0 }}>RFC Fiscal</p>
+                <p style={{ fontSize: "0.85rem", fontWeight: 800, color: "#1E293B", margin: "0.2rem 0 0 0" }}>{userRfc}</p>
               </div>
-              <div className="p-3.5 bg-slate-50 rounded-2xl sm:col-span-2">
-                <p className="text-xs text-slate-400 font-medium">Domicilio Registrado</p>
-                <p className="text-sm font-bold text-slate-800 mt-0.5">{userAddress}</p>
+              <div style={{ gridColumn: "1 / -1", padding: "0.85rem", backgroundColor: "#F8FAFC", borderRadius: "0.85rem" }}>
+                <p style={{ fontSize: "0.65rem", color: "#94A3B8", fontWeight: 700, margin: 0 }}>Domicilio Registrado</p>
+                <p style={{ fontSize: "0.85rem", fontWeight: 800, color: "#1E293B", margin: "0.2rem 0 0 0" }}>{userAddress}</p>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center gap-3 pt-4 border-t border-slate-100">
+            <div style={{ display: "flex", gap: "0.75rem", paddingTop: "1rem", borderTop: "1px solid #F1F5F9" }}>
               <button
                 onClick={() => setShowEditProfile(true)}
-                className="w-full sm:w-auto flex-1 bg-[#1F3652] hover:bg-[#16273B] text-white font-bold text-xs py-3 px-4 rounded-xl transition-all"
+                style={{
+                  flex: 1,
+                  backgroundColor: "#1F3652",
+                  color: "#FFFFFF",
+                  fontWeight: 800,
+                  fontSize: "0.75rem",
+                  padding: "0.75rem",
+                  borderRadius: "0.75rem",
+                  border: "none",
+                  cursor: "pointer"
+                }}
               >
                 Editar Información
               </button>
               <button
                 onClick={() => setShowChangePassword(true)}
-                className="w-full sm:w-auto flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs py-3 px-4 rounded-xl transition-all"
+                style={{
+                  flex: 1,
+                  backgroundColor: "#F1F5F9",
+                  color: "#334155",
+                  fontWeight: 800,
+                  fontSize: "0.75rem",
+                  padding: "0.75rem",
+                  borderRadius: "0.75rem",
+                  border: "none",
+                  cursor: "pointer"
+                }}
               >
                 Cambiar Contraseña
               </button>
@@ -1042,47 +1336,67 @@ export default function ClientPortalWeb() {
 
       </div>
 
-      {/* MODAL: OFFICIAL DEVIO PAYMENT RECEIPT PDF */}
+      {/* MODAL: RECEIPT PDF */}
       {showReceiptPayment && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl flex flex-col gap-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-2">
-                <img src="/brand/logo-horizontal-main.png" alt="Devio" className="h-6 w-auto" />
-                <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
-                  RECIBO OFICIAL DIGITAL
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 999,
+          backgroundColor: "rgba(0,0,0,0.75)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1rem"
+        }}>
+          <div style={{
+            backgroundColor: "#FFFFFF",
+            borderRadius: "1.5rem",
+            maxWidth: "480px",
+            width: "100%",
+            padding: "1.75rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1.25rem",
+            boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F1F5F9", paddingBottom: "1rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <img src="/brand/logo-horizontal-main.png" alt="Devio" style={{ height: "22px", width: "auto" }} />
+                <span style={{ fontSize: "0.65rem", fontWeight: 800, backgroundColor: "#D1FAE5", color: "#065F46", padding: "0.15rem 0.45rem", borderRadius: "9999px" }}>
+                  RECIBO OFICIAL
                 </span>
               </div>
-              <button onClick={() => setShowReceiptPayment(null)} className="p-1 rounded-full hover:bg-slate-100">
-                <X size={18} />
+              <button onClick={() => setShowReceiptPayment(null)} style={{ background: "none", border: "none", cursor: "pointer", padding: "0.25rem" }}>
+                <X size={18} color="#64748B" />
               </button>
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 flex flex-col gap-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Folio:</span>
-                <span className="font-bold text-slate-900">{showReceiptPayment.receiptNumber}</span>
+            <div style={{ backgroundColor: "#F8FAFC", borderRadius: "1rem", padding: "1rem", border: "1px solid #E2E8F0", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem" }}>
+                <span style={{ color: "#64748B" }}>Folio:</span>
+                <span style={{ fontWeight: 800, color: "#0F172A" }}>{showReceiptPayment.receiptNumber}</span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Fecha de Pago:</span>
-                <span className="font-bold text-slate-900">{showReceiptPayment.paidDate || showReceiptPayment.scheduledDate}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem" }}>
+                <span style={{ color: "#64748B" }}>Fecha de Pago:</span>
+                <span style={{ fontWeight: 800, color: "#0F172A" }}>{showReceiptPayment.paidDate || showReceiptPayment.scheduledDate}</span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Método de Pago:</span>
-                <span className="font-bold text-slate-900">{showReceiptPayment.paymentMethod || "Transferencia SPEI"}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem" }}>
+                <span style={{ color: "#64748B" }}>Método:</span>
+                <span style={{ fontWeight: 800, color: "#0F172A" }}>{showReceiptPayment.paymentMethod || "SPEI"}</span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Concepto:</span>
-                <span className="font-bold text-slate-900">{showReceiptPayment.concept}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem" }}>
+                <span style={{ color: "#64748B" }}>Concepto:</span>
+                <span style={{ fontWeight: 800, color: "#0F172A" }}>{showReceiptPayment.concept}</span>
               </div>
-              <div className="flex justify-between text-base font-black pt-2 border-t border-slate-200 text-emerald-700">
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "1rem", fontWeight: 900, color: "#047857", borderTop: "1px solid #E2E8F0", paddingTop: "0.5rem", marginTop: "0.25rem" }}>
                 <span>Total Pagado:</span>
                 <span>{formatMoney(showReceiptPayment.amount)}</span>
               </div>
             </div>
 
-            <p className="text-[11px] text-slate-400 text-center leading-relaxed">
-              Este comprobante es generado automáticamente por la Plataforma Devio y cuenta con validez legal y fiscal ante {selectedProp.developerName}.
+            <p style={{ fontSize: "0.65rem", color: "#94A3B8", textAlign: "center", margin: 0 }}>
+              Comprobante digital emitido con certificación electrónica oficial de {selectedProp.developerName}.
             </p>
 
             <button
@@ -1090,7 +1404,21 @@ export default function ClientPortalWeb() {
                 alert("Descargando recibo oficial en PDF...");
                 setShowReceiptPayment(null);
               }}
-              className="w-full bg-[#1F3652] hover:bg-[#16273B] text-white font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow"
+              style={{
+                width: "100%",
+                backgroundColor: "#1F3652",
+                color: "#FFFFFF",
+                fontWeight: 800,
+                fontSize: "0.75rem",
+                padding: "0.75rem",
+                borderRadius: "0.75rem",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.5rem"
+              }}
             >
               <Download size={15} />
               <span>Descargar PDF Oficial</span>
@@ -1099,34 +1427,63 @@ export default function ClientPortalWeb() {
         </div>
       )}
 
-      {/* MODAL: NOTIFICACIONES PUSH */}
+      {/* MODAL: NOTIFICATIONS */}
       {showNotifications && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                <Bell size={18} className="text-[#1F3652]" /> Avisos y Notificaciones
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 999,
+          backgroundColor: "rgba(0,0,0,0.75)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1rem"
+        }}>
+          <div style={{
+            backgroundColor: "#FFFFFF",
+            borderRadius: "1.5rem",
+            maxWidth: "420px",
+            width: "100%",
+            padding: "1.5rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F1F5F9", paddingBottom: "0.75rem" }}>
+              <h3 style={{ fontSize: "0.95rem", fontWeight: 900, color: "#0F172A", margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Bell size={18} color="#1F3652" /> Avisos y Notificaciones
               </h3>
-              <button onClick={() => setShowNotifications(false)} className="p-1 rounded-full hover:bg-slate-100">
-                <X size={18} />
+              <button onClick={() => setShowNotifications(false)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                <X size={18} color="#64748B" />
               </button>
             </div>
 
-            <div className="flex flex-col gap-3 max-h-80 overflow-y-auto">
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxHeight: "300px", overflowY: "auto" }}>
               {notifications.map((n) => (
-                <div key={n.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/60 flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900">{n.title}</span>
-                    <span className="text-[10px] text-slate-400">{n.time}</span>
+                <div key={n.id} style={{ padding: "0.85rem", borderRadius: "0.85rem", backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.25rem" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#0F172A" }}>{n.title}</span>
+                    <span style={{ fontSize: "0.65rem", color: "#94A3B8" }}>{n.time}</span>
                   </div>
-                  <p className="text-xs text-slate-600">{n.body}</p>
+                  <p style={{ fontSize: "0.7rem", color: "#475569", margin: 0 }}>{n.body}</p>
                 </div>
               ))}
             </div>
 
             <button
               onClick={() => setShowNotifications(false)}
-              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs py-2.5 rounded-xl mt-2"
+              style={{
+                width: "100%",
+                backgroundColor: "#F1F5F9",
+                color: "#334155",
+                fontWeight: 700,
+                fontSize: "0.75rem",
+                padding: "0.65rem",
+                borderRadius: "0.75rem",
+                border: "none",
+                cursor: "pointer"
+              }}
             >
               Cerrar
             </button>
@@ -1136,58 +1493,77 @@ export default function ClientPortalWeb() {
 
       {/* MODAL: EDIT PROFILE */}
       {showEditProfile && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-extrabold text-slate-900 text-base">Editar Datos Personales</h3>
-              <button onClick={() => setShowEditProfile(false)} className="p-1 rounded-full hover:bg-slate-100">
-                <X size={18} />
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 999,
+          backgroundColor: "rgba(0,0,0,0.75)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1rem"
+        }}>
+          <div style={{
+            backgroundColor: "#FFFFFF",
+            borderRadius: "1.5rem",
+            maxWidth: "420px",
+            width: "100%",
+            padding: "1.5rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F1F5F9", paddingBottom: "0.75rem" }}>
+              <h3 style={{ fontSize: "1rem", fontWeight: 900, color: "#0F172A", margin: 0 }}>Editar Datos Personales</h3>
+              <button onClick={() => setShowEditProfile(false)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                <X size={18} color="#64748B" />
               </button>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               <div>
-                <label className="text-[11px] font-bold text-slate-500">Nombre Completo</label>
+                <label style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748B" }}>Nombre Completo</label>
                 <input
                   type="text"
                   value={userName}
                   onChange={(e) => setUserName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium mt-1 outline-none focus:ring-1 focus:ring-indigo-500"
+                  style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: "0.6rem", border: "1px solid #CBD5E1", fontSize: "0.75rem", marginTop: "0.25rem", boxSizing: "border-box" }}
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-slate-500">Teléfono</label>
+                <label style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748B" }}>Teléfono</label>
                 <input
                   type="text"
                   value={userPhone}
                   onChange={(e) => setUserPhone(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium mt-1 outline-none focus:ring-1 focus:ring-indigo-500"
+                  style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: "0.6rem", border: "1px solid #CBD5E1", fontSize: "0.75rem", marginTop: "0.25rem", boxSizing: "border-box" }}
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-slate-500">RFC</label>
+                <label style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748B" }}>RFC</label>
                 <input
                   type="text"
                   value={userRfc}
                   onChange={(e) => setUserRfc(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium mt-1 outline-none focus:ring-1 focus:ring-indigo-500"
+                  style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: "0.6rem", border: "1px solid #CBD5E1", fontSize: "0.75rem", marginTop: "0.25rem", boxSizing: "border-box" }}
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-slate-500">Domicilio</label>
+                <label style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748B" }}>Domicilio</label>
                 <input
                   type="text"
                   value={userAddress}
                   onChange={(e) => setUserAddress(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium mt-1 outline-none focus:ring-1 focus:ring-indigo-500"
+                  style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: "0.6rem", border: "1px solid #CBD5E1", fontSize: "0.75rem", marginTop: "0.25rem", boxSizing: "border-box" }}
                 />
               </div>
             </div>
 
-            <div className="flex items-center gap-2 mt-2">
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
               <button
                 onClick={() => setShowEditProfile(false)}
-                className="flex-1 bg-slate-100 text-slate-700 font-bold text-xs py-2.5 rounded-xl"
+                style={{ flex: 1, backgroundColor: "#F1F5F9", color: "#475569", fontWeight: 700, fontSize: "0.75rem", padding: "0.65rem", borderRadius: "0.75rem", border: "none", cursor: "pointer" }}
               >
                 Cancelar
               </button>
@@ -1196,66 +1572,85 @@ export default function ClientPortalWeb() {
                   alert("Datos guardados con éxito.");
                   setShowEditProfile(false);
                 }}
-                className="flex-1 bg-[#1F3652] text-white font-bold text-xs py-2.5 rounded-xl"
+                style={{ flex: 1, backgroundColor: "#1F3652", color: "#FFFFFF", fontWeight: 700, fontSize: "0.75rem", padding: "0.65rem", borderRadius: "0.75rem", border: "none", cursor: "pointer" }}
               >
-                Guardar Cambios
+                Guardar
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: CAMBIO DE CONTRASEÑA */}
+      {/* MODAL: CHANGE PASSWORD */}
       {showChangePassword && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-extrabold text-slate-900 text-base">Cambiar Contraseña</h3>
-              <button onClick={() => setShowChangePassword(false)} className="p-1 rounded-full hover:bg-slate-100">
-                <X size={18} />
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 999,
+          backgroundColor: "rgba(0,0,0,0.75)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1rem"
+        }}>
+          <div style={{
+            backgroundColor: "#FFFFFF",
+            borderRadius: "1.5rem",
+            maxWidth: "420px",
+            width: "100%",
+            padding: "1.5rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #F1F5F9", paddingBottom: "0.75rem" }}>
+              <h3 style={{ fontSize: "1rem", fontWeight: 900, color: "#0F172A", margin: 0 }}>Cambiar Contraseña</h3>
+              <button onClick={() => setShowChangePassword(false)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                <X size={18} color="#64748B" />
               </button>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               <div>
-                <label className="text-[11px] font-bold text-slate-500">Contraseña Actual</label>
+                <label style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748B" }}>Contraseña Actual</label>
                 <input
                   type="password"
                   placeholder="••••••••"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium mt-1 outline-none focus:ring-1 focus:ring-indigo-500"
+                  style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: "0.6rem", border: "1px solid #CBD5E1", fontSize: "0.75rem", marginTop: "0.25rem", boxSizing: "border-box" }}
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-slate-500">Nueva Contraseña</label>
+                <label style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748B" }}>Nueva Contraseña</label>
                 <input
                   type="password"
                   placeholder="••••••••"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium mt-1 outline-none focus:ring-1 focus:ring-indigo-500"
+                  style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: "0.6rem", border: "1px solid #CBD5E1", fontSize: "0.75rem", marginTop: "0.25rem", boxSizing: "border-box" }}
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-slate-500">Confirmar Nueva Contraseña</label>
+                <label style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748B" }}>Confirmar Nueva Contraseña</label>
                 <input
                   type="password"
                   placeholder="••••••••"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium mt-1 outline-none focus:ring-1 focus:ring-indigo-500"
+                  style={{ width: "100%", padding: "0.6rem 0.75rem", borderRadius: "0.6rem", border: "1px solid #CBD5E1", fontSize: "0.75rem", marginTop: "0.25rem", boxSizing: "border-box" }}
                 />
               </div>
             </div>
 
-            <div className="flex items-center gap-2 mt-2">
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
               <button
                 onClick={() => setShowChangePassword(false)}
-                className="flex-1 bg-slate-100 text-slate-700 font-bold text-xs py-2.5 rounded-xl"
+                style={{ flex: 1, backgroundColor: "#F1F5F9", color: "#475569", fontWeight: 700, fontSize: "0.75rem", padding: "0.65rem", borderRadius: "0.75rem", border: "none", cursor: "pointer" }}
               >
                 Cancelar
               </button>
               <button
                 onClick={() => {
-                  alert("Contraseña actualizada exitosamente.");
+                  alert("Contraseña actualizada con éxito.");
                   setShowChangePassword(false);
                 }}
-                className="flex-1 bg-[#1F3652] text-white font-bold text-xs py-2.5 rounded-xl"
+                style={{ flex: 1, backgroundColor: "#1F3652", color: "#FFFFFF", fontWeight: 700, fontSize: "0.75rem", padding: "0.65rem", borderRadius: "0.75rem", border: "none", cursor: "pointer" }}
               >
                 Actualizar
               </button>
