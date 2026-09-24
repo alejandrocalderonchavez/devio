@@ -51,10 +51,10 @@ export const LoginScreen: React.FC = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.inner}
       >
-        {/* Top Logo Section with Devio Sidebar Brand Logo */}
+        {/* Top Logo Section with Devio Crisp White Brand Logo */}
         <View style={styles.logoSection}>
           <Image
-            source={require("../../assets/13.png")}
+            source={require("../../assets/logo-white.png")}
             style={styles.officialBrandLogo}
           />
           <Text style={styles.brandSubtitle}>

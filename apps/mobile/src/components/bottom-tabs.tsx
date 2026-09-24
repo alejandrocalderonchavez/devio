@@ -25,8 +25,8 @@ export const BottomTabs: React.FC = () => {
     <View style={styles.floatingWrapper} pointerEvents="box-none">
       <View style={styles.glassContainer}>
         <BlurView
-          intensity={Platform.OS === "ios" ? 85 : 100}
-          tint={Platform.OS === "ios" ? "systemChromeMaterialLight" : "light"}
+          intensity={Platform.OS === "ios" ? 80 : 100}
+          tint={Platform.OS === "ios" ? "dark" : "dark"}
           style={styles.blurView}
         >
           {/* Tab 1: Mis Propiedades */}
@@ -36,20 +36,13 @@ export const BottomTabs: React.FC = () => {
               activeTab === "properties" && styles.tabItemActive,
             ]}
             onPress={() => handleTabPress("properties")}
-            activeOpacity={0.75}
+            activeOpacity={0.7}
           >
-            <View
-              style={[
-                styles.iconWrapper,
-                activeTab === "properties" && styles.iconWrapperActive,
-              ]}
-            >
-              <Home
-                size={20}
-                color={activeTab === "properties" ? "#FFFFFF" : "#64748B"}
-                strokeWidth={activeTab === "properties" ? 2.5 : 2}
-              />
-            </View>
+            <Home
+              size={22}
+              color={activeTab === "properties" ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)"}
+              strokeWidth={activeTab === "properties" ? 2.5 : 2}
+            />
             <Text
               style={[
                 styles.tabLabel,
@@ -67,20 +60,13 @@ export const BottomTabs: React.FC = () => {
               activeTab === "profile" && styles.tabItemActive,
             ]}
             onPress={() => handleTabPress("profile")}
-            activeOpacity={0.75}
+            activeOpacity={0.7}
           >
-            <View
-              style={[
-                styles.iconWrapper,
-                activeTab === "profile" && styles.iconWrapperActive,
-              ]}
-            >
-              <User
-                size={20}
-                color={activeTab === "profile" ? "#FFFFFF" : "#64748B"}
-                strokeWidth={activeTab === "profile" ? 2.5 : 2}
-              />
-            </View>
+            <User
+              size={22}
+              color={activeTab === "profile" ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)"}
+              strokeWidth={activeTab === "profile" ? 2.5 : 2}
+            />
             <Text
               style={[
                 styles.tabLabel,
@@ -104,66 +90,51 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: "center",
     paddingBottom: Platform.OS === "ios" ? 28 : 16,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     zIndex: 999,
   },
   glassContainer: {
     width: "100%",
-    maxWidth: 420,
-    borderRadius: 30,
+    maxWidth: 380,
+    borderRadius: 36,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.75)",
-    backgroundColor: Platform.OS === "ios" ? "rgba(255, 255, 255, 0.72)" : "#FFFFFF",
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    backgroundColor: Platform.OS === "ios" ? "rgba(22, 36, 56, 0.85)" : "#162438",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 12,
   },
   blurView: {
     flexDirection: "row",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     justifyContent: "space-around",
     alignItems: "center",
   },
   tabItem: {
     flex: 1,
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 22,
-    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    gap: 4,
   },
   tabItemActive: {
-    backgroundColor: "rgba(31, 54, 82, 0.06)",
-  },
-  iconWrapper: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "transparent",
-  },
-  iconWrapperActive: {
-    backgroundColor: "#1F3652",
-    shadowColor: "#1F3652",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
   },
   tabLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#64748B",
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(255, 255, 255, 0.55)",
+    letterSpacing: 0.2,
   },
   tabLabelActive: {
-    color: "#1F3652",
+    color: "#FFFFFF",
     fontWeight: "800",
   },
 });

@@ -194,3 +194,38 @@ El onboarding y la captura de inventario **DEBEN** adaptarse según la tipologí
 1. **Reemplazo con Iconografía Profesional:** Todo elemento visual, de estado, categoría o acción debe utilizar iconografía limpia y consistente (iconos SVG vectoriales / Lucide Icons) o badges tipográficos con los colores del Brandbook.
 2. **Razones:** Mantener la sobriedad, elegancia, consistencia visual corporativa y alineación con la identidad de marca de Devio (Lineamientos 2026).
 3. **Cero excepciones en UI:** No usar emojis en botones, títulos, tarjetas, selectores, modales, alertas, tablas ni notificaciones.
+
+---
+
+## 13. Lineamientos de UI/UX Apple Glass (Efecto Frosted Glass de Apple y Paridad Web/Mobile)
+
+Para garantizar una experiencia visual prémium, táctil y coherente en todo el ecosistema de Devio:
+
+### 13.1 Encabezado Superior de Bienvenida (Apple Glass Header)
+1. **Translucidez y Blur:**
+   - **Web (`apps/web`):** `backgroundColor: "rgba(31, 54, 82, 0.88)"`, `backdropFilter: "blur(20px) saturate(180%)"`, `borderBottom: "1px solid rgba(255, 255, 255, 0.12)"`, `boxShadow: "0 8px 32px rgba(15, 23, 42, 0.18)"`.
+   - **Mobile (`apps/mobile`):** `BlurView` con intensidad 80 y tint dark (`rgba(31, 54, 82, 0.94)`), con borde inferior `rgba(255, 255, 255, 0.15)`.
+2. **Logotipo Oficial:**
+   - Usar el logotipo en blanco nítido (`logo-white.png`) para asegurar contraste óptimo y legibilidad contra fondos oscuros y translúcidos.
+
+### 13.2 Dock de Navegación Inferior Flotante (Floating Glass Dock / Lippu Style)
+1. **Morfología Cápsula Flotante:**
+   - No utilizar barras de navegación rectangulares pegadas al borde.
+   - Usar una cápsula flotante centrada (`borderRadius: 32px`, `height: 64px`, `maxWidth: 420px`), separada del borde inferior (`bottom: 16px` o `bottom: 24px` con Safe Area Insets).
+2. **Material Glass:**
+   - Fondo translúcido `rgba(22, 36, 56, 0.85)` con blur de 25px (`expo-blur` en mobile / `backdrop-filter` en web).
+   - Borde sutil reflectante: `1px solid rgba(255, 255, 255, 0.15)`.
+   - Sombra profunda difuminada: `0 12px 36px rgba(0, 0, 0, 0.35)`.
+3. **Distribución de Íconos y Feedback:**
+   - Disposición vertical (ícono arriba dentro de una píldora translúcida activa, texto abajo).
+   - Feedback táctil (`expo-haptics`) al alternar pestañas en aplicaciones móviles.
+
+### 13.3 Controles Segmentados Nativos iOS (Segmented Controls)
+1. **Estructura:**
+   - Pista o contenedor con radio suave (`borderRadius: 12px`), fondo gris neutro `#E2E8F0` y padding de 4px.
+   - Píldora activa en blanco `#FFFFFF` con elevación suave (`shadowOpacity: 0.08`), texto en Azul Devio `#1F3652` (font weight 800).
+   - Elementos inactivos con texto neutral `#64748B`.
+
+### 13.4 Persistencia de Sesión
+- En la aplicación móvil (`apps/mobile`), la sesión debe persistirse de forma segura mediante `expo-secure-store` para mantener al usuario autenticado entre reinicios de la aplicación sin cerrar sesión inesperadamente.
+

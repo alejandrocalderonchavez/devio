@@ -475,10 +475,12 @@ export default function ClientPortalWeb() {
           boxSizing: "border-box",
         }}
       >
-        {/* HEADER */}
+        {/* HEADER - Apple Glass Frosted Header */}
         <div
           style={{
-            backgroundColor: "#1F3652",
+            backgroundColor: "rgba(31, 54, 82, 0.88)",
+            backdropFilter: "blur(20px) saturate(180%)",
+            WebkitBackdropFilter: "blur(20px) saturate(180%)",
             color: "#FFFFFF",
             paddingTop: "2rem",
             paddingBottom: "1.35rem",
@@ -486,17 +488,21 @@ export default function ClientPortalWeb() {
             paddingRight: "1.25rem",
             borderBottomLeftRadius: "1.5rem",
             borderBottomRightRadius: "1.5rem",
-            boxShadow: "0 4px 16px rgba(31,54,82,0.18)",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            borderTop: "none",
+            boxShadow: "0 8px 32px rgba(15, 23, 42, 0.18)",
             zIndex: 10,
+            position: "sticky",
+            top: 0,
           }}
         >
           {screen === "main" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <img
-                  src="/brand/logo-horizontal-light.png"
+                  src="/brand/logo-white.png"
                   alt="Devio"
-                  style={{ height: "28px", width: "auto", objectFit: "contain", display: "block" }}
+                  style={{ height: "26px", width: "auto", objectFit: "contain", display: "block" }}
                 />
 
                 <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
@@ -1239,48 +1245,62 @@ export default function ClientPortalWeb() {
                         </div>
                       </div>
 
-                      {/* 2 Main Subtabs: Estado de Cuenta | Pagos Realizados */}
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                      {/* 2 Main Subtabs: Estado de Cuenta | Pagos Realizados (iOS Segmented Control) */}
+                      <div
+                        style={{
+                          display: "flex",
+                          backgroundColor: "#E2E8F0",
+                          borderRadius: "12px",
+                          padding: "4px",
+                          gap: "4px",
+                        }}
+                      >
                         <button
                           type="button"
                           onClick={() => setStatementSubTab("statement")}
                           style={{
+                            flex: 1,
                             display: "inline-flex",
                             alignItems: "center",
+                            justifyContent: "center",
                             gap: "0.45rem",
-                            padding: "0.55rem 1.25rem",
-                            borderRadius: "9999px",
+                            padding: "0.6rem 1rem",
+                            borderRadius: "9px",
                             fontSize: "0.82rem",
-                            fontWeight: 700,
+                            fontWeight: statementSubTab === "statement" ? 800 : 600,
                             border: "none",
                             cursor: "pointer",
-                            backgroundColor: statementSubTab === "statement" ? "#1B3047" : "#FFFFFF",
-                            color: statementSubTab === "statement" ? "#FFFFFF" : "#64748B",
-                            boxShadow: statementSubTab === "statement" ? "0 2px 6px rgba(27, 48, 71, 0.2)" : "0 1px 3px rgba(0,0,0,0.04)",
+                            backgroundColor: statementSubTab === "statement" ? "#FFFFFF" : "transparent",
+                            color: statementSubTab === "statement" ? "#1F3652" : "#64748B",
+                            boxShadow: statementSubTab === "statement" ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+                            transition: "all 0.15s ease",
                           }}
                         >
-                          <Calendar size={15} /> Estado de Cuenta
+                          <Calendar size={15} color={statementSubTab === "statement" ? "#1F3652" : "#64748B"} /> Estado de Cuenta
                         </button>
 
                         <button
                           type="button"
                           onClick={() => setStatementSubTab("payments")}
                           style={{
+                            flex: 1,
                             display: "inline-flex",
                             alignItems: "center",
+                            justifyContent: "center",
                             gap: "0.45rem",
-                            padding: "0.55rem 1.25rem",
-                            borderRadius: "9999px",
+                            padding: "0.6rem 1rem",
+                            borderRadius: "9px",
                             fontSize: "0.82rem",
-                            fontWeight: 700,
+                            fontWeight: statementSubTab === "payments" ? 800 : 600,
                             border: "none",
                             cursor: "pointer",
-                            backgroundColor: statementSubTab === "payments" ? "#1B3047" : "#FFFFFF",
-                            color: statementSubTab === "payments" ? "#FFFFFF" : "#64748B",
-                            boxShadow: statementSubTab === "payments" ? "0 2px 6px rgba(27, 48, 71, 0.2)" : "0 1px 3px rgba(0,0,0,0.04)",
+                            backgroundColor: statementSubTab === "payments" ? "#FFFFFF" : "transparent",
+                            color: statementSubTab === "payments" ? "#1F3652" : "#64748B",
+                            boxShadow: statementSubTab === "payments" ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+                            transition: "all 0.15s ease",
                           }}
                         >
-                          <CreditCard size={15} /> Pagos Realizados ({selectedProp.paymentsList?.length || 0})
+                          <CreditCard size={15} color={statementSubTab === "payments" ? "#1F3652" : "#64748B"} /> Pagos Realizados ({selectedProp.paymentsList?.length || 0})
                         </button>
                       </div>
 
@@ -1837,23 +1857,27 @@ export default function ClientPortalWeb() {
 
         </div>
 
-        {/* BOTTOM FIXED TABS */}
+        {/* BOTTOM FIXED TABS - Apple Glass Floating Dock */}
         <div
           style={{
             position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: "65px",
-            backgroundColor: "#FFFFFF",
-            borderTop: "1px solid #E2E8F0",
+            bottom: "16px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "calc(100% - 32px)",
+            maxWidth: "420px",
+            height: "64px",
+            backgroundColor: "rgba(22, 36, 56, 0.85)",
+            backdropFilter: "blur(25px) saturate(180%)",
+            WebkitBackdropFilter: "blur(25px) saturate(180%)",
+            borderRadius: "32px",
+            border: "1px solid rgba(255, 255, 255, 0.15)",
             display: "flex",
             justifyContent: "space-around",
             alignItems: "center",
-            boxShadow: "0 -2px 12px rgba(0,0,0,0.06)",
+            padding: "0 12px",
+            boxShadow: "0 12px 36px rgba(0, 0, 0, 0.35)",
             zIndex: 30,
-            maxWidth: "880px",
-            margin: "0 auto",
           }}
         >
           <button
@@ -1865,23 +1889,25 @@ export default function ClientPortalWeb() {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
+              justifyContent: "center",
               gap: "3px",
               cursor: "pointer",
-              color: activeTab === "properties" ? "#1F3652" : "#94A3B8",
+              color: activeTab === "properties" ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)",
+              transition: "all 0.2s ease",
             }}
           >
             <div style={{
               width: "42px",
               height: "26px",
               borderRadius: "13px",
-              backgroundColor: activeTab === "properties" ? "#1F3652" : "transparent",
+              backgroundColor: activeTab === "properties" ? "rgba(255, 255, 255, 0.2)" : "transparent",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
             }}>
-              <Home size={18} color={activeTab === "properties" ? "#FFFFFF" : "#94A3B8"} />
+              <Home size={18} color={activeTab === "properties" ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)"} />
             </div>
-            <span style={{ fontSize: "0.7rem", fontWeight: 800 }}>Mis Propiedades</span>
+            <span style={{ fontSize: "0.68rem", fontWeight: activeTab === "properties" ? 800 : 600 }}>Mis Propiedades</span>
           </button>
 
           <button
@@ -1893,23 +1919,25 @@ export default function ClientPortalWeb() {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
+              justifyContent: "center",
               gap: "3px",
               cursor: "pointer",
-              color: activeTab === "profile" ? "#1F3652" : "#94A3B8",
+              color: activeTab === "profile" ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)",
+              transition: "all 0.2s ease",
             }}
           >
             <div style={{
               width: "42px",
               height: "26px",
               borderRadius: "13px",
-              backgroundColor: activeTab === "profile" ? "#1F3652" : "transparent",
+              backgroundColor: activeTab === "profile" ? "rgba(255, 255, 255, 0.2)" : "transparent",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
             }}>
-              <User size={18} color={activeTab === "profile" ? "#FFFFFF" : "#94A3B8"} />
+              <User size={18} color={activeTab === "profile" ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)"} />
             </div>
-            <span style={{ fontSize: "0.7rem", fontWeight: 800 }}>Mi Perfil</span>
+            <span style={{ fontSize: "0.68rem", fontWeight: activeTab === "profile" ? 800 : 600 }}>Mi Perfil</span>
           </button>
         </div>
 

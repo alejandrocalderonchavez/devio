@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, ReactNode } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createNavigationContainerRef } from "@react-navigation/native";
 import {
   ClientUser,
@@ -9,6 +8,7 @@ import {
   ClientPaymentReceiptItem,
 } from "../types/client";
 import { resolveClientPropertiesLocal } from "../data/real-data-resolver";
+import { appStorage } from "../utils/storage";
 
 export const navigationRef = createNavigationContainerRef<any>();
 
@@ -115,7 +115,7 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     async function restorePersistedSession() {
       try {
-        const stored = await AsyncStorage.getItem("@devio_client_session");
+        const stored = await appStorage.getItem("@devio_client_session");
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed && parsed.user && Array.isArray(parsed.properties) && parsed.properties.length > 0) {
@@ -127,7 +127,7 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
         }
       } catch (err) {
-        console.error("Failed to restore session from AsyncStorage:", err);
+        console.warn("Failed to restore session from appStorage:", err);
       } finally {
         setIsLoading(false);
       }
@@ -206,11 +206,11 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setUser((prev) => {
       if (!prev) return null;
       const updated = { ...prev, ...data };
-      AsyncStorage.getItem("@devio_client_session").then((stored) => {
+      appStorage.getItem("@devio_client_session").then((stored) => {
         if (stored) {
           const parsed = JSON.parse(stored);
           parsed.user = updated;
-          AsyncStorage.setItem("@devio_client_session", JSON.stringify(parsed)).catch(() => {});
+          appStorage.setItem("@devio_client_session", JSON.stringify(parsed)).catch(() => {});
         }
       }).catch(() => {});
       return updated;
@@ -435,7 +435,7 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       // Save persistent session for subsequent app launches
       try {
-        await AsyncStorage.setItem(
+        await appStorage.setItem(
           "@devio_client_session",
           JSON.stringify({
             user: activeUser,
@@ -444,7 +444,7 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           })
         );
       } catch (saveErr) {
-        console.warn("Failed to persist session to AsyncStorage:", saveErr);
+        console.warn("Failed to persist session to appStorage:", saveErr);
       }
 
       return { success: true };
@@ -456,7 +456,7 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const logout = () => {
-    AsyncStorage.removeItem("@devio_client_session").catch(() => {});
+    appStorage.removeItem("@devio_client_session").catch(() => {});
     setIsLoggedIn(false);
     setUser(null);
     setProperties([]);

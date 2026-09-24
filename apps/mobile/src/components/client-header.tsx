@@ -96,12 +96,12 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({
           <View style={styles.subscreenSpacer} />
         </View>
       ) : (
-        /* Main Screen Header with Devio Sidebar Logo */
+        /* Main Screen Header with Devio White Brand Logo & Apple Glass */
         <View style={styles.mainHeaderCol}>
           <View style={styles.topRow}>
-            {/* Devio Official Brand Logo (from /dashboard sidebar) */}
+            {/* Devio Official Brand Logo in Crisp White */}
             <Image
-              source={require("../../assets/13.png")}
+              source={require("../../assets/logo-white.png")}
               style={styles.officialLogo}
             />
 
@@ -159,16 +159,18 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({
 
 const styles = StyleSheet.create({
   headerContainer: {
-    backgroundColor: "#1F3652",
+    backgroundColor: "rgba(31, 54, 82, 0.94)",
     paddingTop: Platform.OS === "ios" ? 54 : 40,
     paddingBottom: 22,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
-    shadowColor: "#1F3652",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.15)",
+    shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.28,
-    shadowRadius: 14,
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
     elevation: 8,
     zIndex: 10,
   },

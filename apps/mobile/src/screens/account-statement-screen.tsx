@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import {
   Download,
   Calendar,
@@ -41,6 +42,13 @@ export const AccountStatementScreen: React.FC = () => {
       `Estado de cuenta oficial generado para la Unidad ${selectedProperty.unitNumber} (${selectedProperty.projectName}).`,
       [{ text: "Aceptar" }]
     );
+  };
+
+  const handleSelectTab = (tab: "statement" | "payments") => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {}
+    setActiveSubTab(tab);
   };
 
   const handleScheduleRowPress = (item: ClientPaymentScheduleItem) => {
@@ -125,19 +133,19 @@ export const AccountStatementScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* 2 Main Subtabs Selector */}
+        {/* 2 Main Subtabs Selector - iOS Segmented Control */}
         <View style={styles.subtabsRow}>
           <TouchableOpacity
             style={[
               styles.subtabBtn,
               activeSubTab === "statement" && styles.subtabBtnActive,
             ]}
-            onPress={() => setActiveSubTab("statement")}
+            onPress={() => handleSelectTab("statement")}
             activeOpacity={0.8}
           >
             <Calendar
               size={15}
-              color={activeSubTab === "statement" ? "#FFFFFF" : "#64748B"}
+              color={activeSubTab === "statement" ? "#1F3652" : "#64748B"}
             />
             <Text
               style={[
@@ -154,12 +162,12 @@ export const AccountStatementScreen: React.FC = () => {
               styles.subtabBtn,
               activeSubTab === "payments" && styles.subtabBtnActive,
             ]}
-            onPress={() => setActiveSubTab("payments")}
+            onPress={() => handleSelectTab("payments")}
             activeOpacity={0.8}
           >
             <CreditCard
               size={15}
-              color={activeSubTab === "payments" ? "#FFFFFF" : "#64748B"}
+              color={activeSubTab === "payments" ? "#1F3652" : "#64748B"}
             />
             <Text
               style={[
@@ -364,35 +372,37 @@ const styles = StyleSheet.create({
   },
   subtabsRow: {
     flexDirection: "row",
-    gap: 8,
+    backgroundColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
   },
   subtabBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
-    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 9999,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderRadius: 9,
+    backgroundColor: "transparent",
   },
   subtabBtnActive: {
-    backgroundColor: "#1B3047",
-    borderColor: "#1B3047",
-    shadowColor: "#1B3047",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   subtabBtnText: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
     color: "#64748B",
   },
   subtabBtnTextActive: {
-    color: "#FFFFFF",
+    color: "#1F3652",
+    fontWeight: "800",
   },
   tabContentWrap: {
     gap: 14,
