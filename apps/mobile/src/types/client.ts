@@ -26,15 +26,16 @@ export interface ConstructionMilestone {
   id: string;
   title: string;
   date: string;
-  photos: string[];
+  photo?: string;
+  photos?: string[];
   description?: string;
 }
 
 export interface ClientDocument {
   id: string;
   title: string;
-  category: "CONTRATO" | "PLANO" | "RECIBO" | "REGLAMENTO" | "GARANTIA" | "OTRO";
-  fileUrl: string;
+  category: string;
+  fileUrl?: string;
   fileSize: string;
   uploadDate: string;
 }
@@ -52,6 +53,20 @@ export interface ClientPaymentScheduleItem {
   paymentMethod?: string;
   receiptNumber?: string;
   receiptUrl?: string;
+  montoPagado?: number;
+  saldoPendiente?: number;
+}
+
+export interface ClientPaymentReceiptItem {
+  id: string;
+  folio?: string;
+  fechaPago: string;
+  monto: number;
+  metodoPago: string;
+  reciboFolio?: string;
+  comprobanteUrl?: string;
+  moratoryAmount?: number;
+  unit?: string;
 }
 
 export interface ClientProperty {
@@ -67,10 +82,11 @@ export interface ClientProperty {
   totalPrice: number;
   paidAmount: number;
   pendingAmount: number;
+  overdueAmount: number;
   nextPaymentAmount: number;
   nextPaymentDueDate: string;
   nextPaymentDaysRemaining: number;
-  overdueAmount?: number;
+  nextPaymentConcept?: string;
   constructionPct: number;
   lastProgressUpdateDate: string;
   estimatedDeliveryDate: string;
@@ -85,6 +101,8 @@ export interface ClientProperty {
   specialtiesProgress: SpecialtyProgress[];
   constructionMilestones: ConstructionMilestone[];
   documents: ClientDocument[];
+  schedule: ClientPaymentScheduleItem[];
+  paymentsList: ClientPaymentReceiptItem[];
   payments: ClientPaymentScheduleItem[];
   customAttributes?: Array<{ key: string; label: string; value: string }>;
 }
@@ -93,9 +111,11 @@ export interface PushNotificationItem {
   id: string;
   title: string;
   body: string;
-  timestamp: string;
+  time: string;
+  timestamp?: string;
   read: boolean;
-  category: "COBRANZA" | "OBRA" | "DOCUMENTO" | "SISTEMA";
+  type: "warning" | "success" | "info";
+  category?: "COBRANZA" | "OBRA" | "DOCUMENTO" | "SISTEMA";
   targetScreen?: "property-detail" | "construction" | "documents" | "account-statement";
   propertyId?: string;
 }

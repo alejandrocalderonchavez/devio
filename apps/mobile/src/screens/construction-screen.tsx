@@ -117,7 +117,7 @@ export const ConstructionScreen: React.FC = () => {
             {selectedProperty.constructionMilestones.map((ms) => (
               <View key={ms.id} style={styles.milestoneCard}>
                 <Image
-                  source={{ uri: ms.photos[0] || "https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=600" }}
+                  source={{ uri: (ms.photos && ms.photos[0]) || ms.photo || "https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=600" }}
                   style={styles.milestonePhoto}
                 />
                 <View style={styles.milestoneBody}>

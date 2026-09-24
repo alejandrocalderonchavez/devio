@@ -12,9 +12,10 @@ import { useClientApp } from "../context/client-context";
 import { ClientHeader } from "../components/client-header";
 
 export const PropertiesScreen: React.FC = () => {
-  const { properties, navigateTo, formatMoney } = useClientApp();
+  const { properties, navigateTo, formatMoney, formatDateDisplay } = useClientApp();
 
   const primaryProp = properties[0];
+  const isPast = primaryProp ? primaryProp.nextPaymentDaysRemaining < 0 : false;
 
   return (
     <View style={styles.container}>
@@ -25,17 +26,19 @@ export const PropertiesScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Next Payment Banner Card */}
-        {primaryProp && (
+        {primaryProp && primaryProp.nextPaymentAmount > 0 && (
           <TouchableOpacity
-            style={styles.nextPaymentCard}
+            style={[styles.nextPaymentCard, isPast && { borderColor: "#FECACA", backgroundColor: "#FFF5F5" }]}
             onPress={() => navigateTo("account-statement", primaryProp.id)}
             activeOpacity={0.85}
           >
             <View style={styles.nextPaymentHeader}>
-              <Text style={styles.nextPaymentLabel}>TU PRÓXIMO PAGO</Text>
+              <Text style={[styles.nextPaymentLabel, isPast && { color: "#DC2626" }]}>
+                {isPast ? "CUOTA VENCIDA" : "TU PRÓXIMO PAGO"}
+              </Text>
               <View style={styles.verDetalleRow}>
-                <Text style={styles.verDetalleText}>Ver detalle</Text>
-                <ArrowRight size={14} color="#D97706" />
+                <Text style={[styles.verDetalleText, isPast && { color: "#DC2626" }]}>Ver detalle</Text>
+                <ArrowRight size={14} color={isPast ? "#DC2626" : "#D97706"} />
               </View>
             </View>
 
@@ -44,7 +47,7 @@ export const PropertiesScreen: React.FC = () => {
                 {formatMoney(primaryProp.nextPaymentAmount)}
               </Text>
               <Text style={styles.nextPaymentDate}>
-                {primaryProp.nextPaymentDueDate.split(",")[0]}
+                {formatDateDisplay(primaryProp.nextPaymentDueDate)}
               </Text>
             </View>
 
@@ -53,13 +56,15 @@ export const PropertiesScreen: React.FC = () => {
               <View
                 style={[
                   styles.paymentProgressBarFill,
-                  { width: "35%" },
+                  { width: "100%", backgroundColor: isPast ? "#DC2626" : "#00C48C" },
                 ]}
               />
             </View>
 
-            <Text style={styles.nextPaymentCountdown}>
-              en {primaryProp.nextPaymentDaysRemaining} días
+            <Text style={[styles.nextPaymentCountdown, isPast && { color: "#DC2626" }]}>
+              {isPast
+                ? `${Math.abs(primaryProp.nextPaymentDaysRemaining)} días vencido`
+                : `en ${primaryProp.nextPaymentDaysRemaining} días`}
             </Text>
           </TouchableOpacity>
         )}

@@ -31,17 +31,20 @@ export const NotificationsModal: React.FC = () => {
     }
   };
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case "COBRANZA":
-        return <AlertCircle size={18} color="#D97706" />;
-      case "OBRA":
-        return <Clock size={18} color="#00C48C" />;
-      case "DOCUMENTO":
-        return <FileText size={18} color="#2F80ED" />;
-      default:
-        return <Bell size={18} color="#1F3652" />;
+  const getCategoryIcon = (category?: string, type?: string) => {
+    if (type === "warning" || category === "COBRANZA") {
+      return <AlertCircle size={18} color="#DC2626" />;
     }
+    if (type === "success") {
+      return <CheckCircle2 size={18} color="#00C48C" />;
+    }
+    if (category === "OBRA") {
+      return <Clock size={18} color="#00C48C" />;
+    }
+    if (category === "DOCUMENTO") {
+      return <FileText size={18} color="#2F80ED" />;
+    }
+    return <Bell size={18} color="#1F3652" />;
   };
 
   return (
@@ -109,11 +112,11 @@ export const NotificationsModal: React.FC = () => {
                   <View style={styles.cardHeader}>
                     <View style={styles.cardTitleGroup}>
                       <View style={styles.catIconWrap}>
-                        {getCategoryIcon(item.category)}
+                        {getCategoryIcon(item.category, item.type)}
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.cardTitle}>{item.title}</Text>
-                        <Text style={styles.cardTime}>{item.timestamp}</Text>
+                        <Text style={styles.cardTime}>{item.time || item.timestamp}</Text>
                       </View>
                     </View>
 

@@ -9,8 +9,9 @@ import {
   SafeAreaView,
   Alert,
 } from "react-native";
-import { X, CheckCircle2, FileText, Download, Printer, ShieldCheck } from "lucide-react-native";
+import { X, CheckCircle2, FileText, Download, ShieldCheck } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
+import { ClientPaymentReceiptItem, ClientPaymentScheduleItem } from "../types/client";
 
 export const ReceiptPdfModal: React.FC = () => {
   const {
@@ -19,14 +20,22 @@ export const ReceiptPdfModal: React.FC = () => {
     selectedProperty,
     user,
     formatMoney,
+    formatDateDisplay,
   } = useClientApp();
 
-  if (!selectedReceiptPayment) return null;
+  if (!selectedReceiptPayment || !selectedProperty) return null;
+
+  const paymentObj = selectedReceiptPayment as any;
+  const folio = paymentObj.reciboFolio || paymentObj.receiptNumber || paymentObj.folio || `REC-${selectedProperty.unitNumber}-001`;
+  const amount = paymentObj.monto !== undefined ? paymentObj.monto : (paymentObj.paidAmount || paymentObj.amount || 0);
+  const concept = paymentObj.concept || paymentObj.concepto || "Pago de Cuota";
+  const date = paymentObj.fechaPago || paymentObj.paidDate || paymentObj.scheduledDate || "-";
+  const method = paymentObj.metodoPago || paymentObj.paymentMethod || "Transferencia SPEI (BBVA)";
 
   const handleDownload = () => {
     Alert.alert(
       "Recibo Digital Descargado",
-      `Se ha generado el recibo oficial ${selectedReceiptPayment.receiptNumber || "REC-2026-0817-01"} en PDF.`,
+      `Se ha generado el recibo oficial ${folio} en PDF.`,
       [{ text: "Aceptar" }]
     );
   };
@@ -75,9 +84,7 @@ export const ReceiptPdfModal: React.FC = () => {
             <View style={styles.folioRow}>
               <View>
                 <Text style={styles.receiptMainTitle}>RECIBO DE PAGO</Text>
-                <Text style={styles.folioNumber}>
-                  Folio: {selectedReceiptPayment.receiptNumber || "REC-2026-0817-01"}
-                </Text>
+                <Text style={styles.folioNumber}>Folio: {folio}</Text>
               </View>
               <View style={styles.statusBadge}>
                 <CheckCircle2 size={14} color="#166534" />
@@ -89,9 +96,9 @@ export const ReceiptPdfModal: React.FC = () => {
             <View style={styles.infoBox}>
               <View style={styles.infoCol}>
                 <Text style={styles.infoLabel}>CLIENTE / TITULAR</Text>
-                <Text style={styles.infoVal}>{user?.name || "Iñigo Heredia Horner"}</Text>
-                <Text style={styles.infoSub}>{user?.email || "0242573@up.edu.mx"}</Text>
-                <Text style={styles.infoSub}>RFC: {user?.rfc || "HEHI9604128N2"}</Text>
+                <Text style={styles.infoVal}>{user?.name || "Cliente Devio"}</Text>
+                <Text style={styles.infoSub}>{user?.email || "cliente@ejemplo.com"}</Text>
+                <Text style={styles.infoSub}>RFC: {user?.rfc || "XAXX010101000"}</Text>
               </View>
               <View style={styles.infoCol}>
                 <Text style={styles.infoLabel}>UNIDAD ASIGNADA</Text>
@@ -105,10 +112,7 @@ export const ReceiptPdfModal: React.FC = () => {
             <View style={styles.amountBox}>
               <Text style={styles.amountLabel}>MONTO RECIBIDO Y APLICADO</Text>
               <Text style={styles.amountValue}>
-                {formatMoney(selectedReceiptPayment.paidAmount || selectedReceiptPayment.amount)} MXN
-              </Text>
-              <Text style={styles.amountWords}>
-                (UN MILLÓN DOSCIENTOS MIL PESOS 00/100 M.N.)
+                {formatMoney(amount)} MXN
               </Text>
             </View>
 
@@ -116,15 +120,15 @@ export const ReceiptPdfModal: React.FC = () => {
             <View style={styles.detailsTable}>
               <View style={styles.tableRow}>
                 <Text style={styles.tableColLabel}>Concepto:</Text>
-                <Text style={styles.tableColVal}>{selectedReceiptPayment.concept}</Text>
+                <Text style={styles.tableColVal}>{concept}</Text>
               </View>
               <View style={styles.tableRow}>
                 <Text style={styles.tableColLabel}>Fecha de Aplicación:</Text>
-                <Text style={styles.tableColVal}>{selectedReceiptPayment.paidDate || selectedReceiptPayment.scheduledDate}</Text>
+                <Text style={styles.tableColVal}>{formatDateDisplay(date)}</Text>
               </View>
               <View style={styles.tableRow}>
                 <Text style={styles.tableColLabel}>Método de Pago:</Text>
-                <Text style={styles.tableColVal}>{selectedReceiptPayment.paymentMethod || "Transferencia SPEI (BBVA)"}</Text>
+                <Text style={styles.tableColVal}>{method}</Text>
               </View>
               <View style={styles.tableRow}>
                 <Text style={styles.tableColLabel}>Cuenta Receptora:</Text>
@@ -326,12 +330,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: "#1F3652",
     marginVertical: 4,
-  },
-  amountWords: {
-    fontSize: 10,
-    color: "#475569",
-    fontWeight: "600",
-    textAlign: "center",
   },
   detailsTable: {
     gap: 8,

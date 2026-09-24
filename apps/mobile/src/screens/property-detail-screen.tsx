@@ -27,11 +27,13 @@ import { useClientApp } from "../context/client-context";
 import { ClientHeader } from "../components/client-header";
 
 export const PropertyDetailScreen: React.FC = () => {
-  const { selectedProperty, goBack, navigateTo, formatMoney } = useClientApp();
+  const { selectedProperty, goBack, navigateTo, formatMoney, formatDateDisplay } = useClientApp();
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isUnitInfoExpanded, setIsUnitInfoExpanded] = useState(true);
 
   if (!selectedProperty) return null;
+
+  const isPast = selectedProperty.nextPaymentDaysRemaining < 0;
 
   return (
     <View style={styles.container}>
@@ -85,15 +87,17 @@ export const PropertyDetailScreen: React.FC = () => {
           <View style={styles.paymentPillsRow}>
             {/* Próximo Pago */}
             <View style={styles.paymentPillColumn}>
-              <View style={styles.pillTag}>
-                <Calendar size={12} color="#92400E" />
-                <Text style={styles.pillTagText}>Tu próximo pago</Text>
+              <View style={[styles.pillTag, isPast && styles.pillTagOverdue]}>
+                <Calendar size={12} color={isPast ? "#DC2626" : "#92400E"} />
+                <Text style={[styles.pillTagText, isPast && { color: "#991B1B" }]}>
+                  {isPast ? "Cuota Vencida" : "Tu próximo pago"}
+                </Text>
               </View>
               <Text style={styles.pillAmount}>
                 {formatMoney(selectedProperty.nextPaymentAmount)}
               </Text>
               <Text style={styles.pillDueDate}>
-                Vence: <Text style={{ fontWeight: "700" }}>{selectedProperty.nextPaymentDueDate.split(",")[0]}</Text> | En {selectedProperty.nextPaymentDaysRemaining} días
+                Vence: <Text style={{ fontWeight: "700" }}>{formatDateDisplay(selectedProperty.nextPaymentDueDate)}</Text> | {isPast ? `${Math.abs(selectedProperty.nextPaymentDaysRemaining)} días vencido` : `En ${selectedProperty.nextPaymentDaysRemaining} días`}
               </Text>
             </View>
 

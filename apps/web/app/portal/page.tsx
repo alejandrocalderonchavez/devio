@@ -34,6 +34,10 @@ import {
   ShieldCheck,
   Eye,
   Trash2,
+  Lock,
+  Globe,
+  HelpCircle,
+  ChevronRight,
 } from "lucide-react";
 import { openReceiptInNewTab, openStatementInNewTab } from "../../lib/pdf-generator";
 
@@ -1569,99 +1573,264 @@ export default function ClientPortalWeb() {
             </>
           )}
 
-          {/* TAB 2: PERFIL */}
+          {/* TAB 2: PERFIL & AJUSTES */}
           {activeTab === "profile" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
-              
-              {/* Profile Card */}
-              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.5rem", border: "1px solid #E2E8F0", textAlign: "center" }}>
-                <img
-                  src={userAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=1F3652&color=fff&bold=true`}
-                  alt="Avatar"
-                  style={{ width: "80px", height: "80px", borderRadius: "50%", objectFit: "cover", margin: "0 auto 0.75rem auto", display: "block", border: "3px solid #E2E8F0" }}
-                />
-                <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1F3652" }}>{userName}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {/* Profile Top Card */}
+              <div
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1.25rem",
+                  padding: "1.5rem",
+                  border: "1px solid #E2E8F0",
+                  textAlign: "center",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
+                }}
+              >
+                <div
+                  style={{
+                    width: "84px",
+                    height: "84px",
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    margin: "0 auto 0.75rem",
+                    border: "3px solid #F1F5F9",
+                  }}
+                >
+                  <img
+                    src={userAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=1F3652&color=fff&bold=true`}
+                    alt="Avatar"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                </div>
+                <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#1F3652" }}>{userName}</div>
                 <div style={{ fontSize: "0.8rem", color: "#64748B", marginTop: "2px" }}>{userEmail}</div>
               </div>
 
-              {/* Personal Data Section */}
-              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.25rem", border: "1px solid #E2E8F0" }}>
-                <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.85rem" }}>
-                  Datos Personales y Fiscales
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", fontSize: "0.82rem" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#64748B" }}>Teléfono de Contacto:</span>
-                    <strong>{userPhone || "No registrado"}</strong>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#64748B" }}>RFC Registrado:</span>
-                    <strong>{userRfc || "XAXX010101000"}</strong>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#64748B" }}>Domicilio Fiscal:</span>
-                    <strong style={{ textAlign: "right", maxWidth: "260px" }}>{userAddress || "Guadalajara, Jal."}</strong>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.2rem" }}>
-                  <button
-                    onClick={() => setShowEditProfile(true)}
-                    style={{ flex: 1, padding: "0.65rem", backgroundColor: "#F1F5F9", color: "#1F3652", borderRadius: "0.6rem", border: "none", fontWeight: 800, fontSize: "0.8rem", cursor: "pointer" }}
-                  >
-                    Editar Datos
-                  </button>
-                  <button
-                    onClick={() => setShowChangePassword(true)}
-                    style={{ flex: 1, padding: "0.65rem", backgroundColor: "#F1F5F9", color: "#1F3652", borderRadius: "0.6rem", border: "none", fontWeight: 800, fontSize: "0.8rem", cursor: "pointer" }}
-                  >
-                    Cambiar Contraseña
-                  </button>
-                </div>
+              {/* Section: Ajustes */}
+              <div style={{ fontSize: "1.15rem", fontWeight: 900, color: "#1F3652", marginTop: "0.25rem", paddingLeft: "4px" }}>
+                Ajustes
               </div>
 
-              {/* WhatsApp Support & Privacy */}
-              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", overflow: "hidden", border: "1px solid #E2E8F0" }}>
+              {/* Menu Items List */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+                {/* 1. Información Personal */}
+                <button
+                  type="button"
+                  onClick={() => setShowEditProfile(true)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "1.1rem",
+                    padding: "1rem 1.15rem",
+                    border: "1px solid #E2E8F0",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    gap: "0.85rem",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      borderRadius: "50%",
+                      backgroundColor: "#EFF6FF",
+                      color: "#2563EB",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <User size={18} />
+                  </div>
+                  <span style={{ flex: 1, fontSize: "0.9rem", fontWeight: 700, color: "#1F3652" }}>
+                    Información personal
+                  </span>
+                  <ChevronRight size={18} color="#94A3B8" />
+                </button>
+
+                {/* 2. Cambiar Contraseña */}
+                <button
+                  type="button"
+                  onClick={() => setShowChangePassword(true)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "1.1rem",
+                    padding: "1rem 1.15rem",
+                    border: "1px solid #E2E8F0",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    gap: "0.85rem",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      borderRadius: "50%",
+                      backgroundColor: "#ECFDF5",
+                      color: "#059669",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Lock size={18} />
+                  </div>
+                  <span style={{ flex: 1, fontSize: "0.9rem", fontWeight: 700, color: "#1F3652" }}>
+                    Cambiar contraseña
+                  </span>
+                  <ChevronRight size={18} color="#94A3B8" />
+                </button>
+
+                {/* 3. Legal */}
+                <button
+                  type="button"
+                  onClick={() => alert("Aviso Legal y Privacidad: Devio protege tus datos personales y transacciones bajo los más estrictos estándares de seguridad y cifrado bancario.")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "1.1rem",
+                    padding: "1rem 1.15rem",
+                    border: "1px solid #E2E8F0",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    gap: "0.85rem",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      borderRadius: "50%",
+                      backgroundColor: "#EFF6FF",
+                      color: "#2563EB",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <ShieldCheck size={18} />
+                  </div>
+                  <span style={{ flex: 1, fontSize: "0.9rem", fontWeight: 700, color: "#1F3652" }}>
+                    Legal
+                  </span>
+                  <ChevronRight size={18} color="#94A3B8" />
+                </button>
+
+                {/* 4. Soporte y Ayuda */}
                 <a
                   href="https://wa.me/523318924490"
                   target="_blank"
                   rel="noreferrer"
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.25rem", borderBottom: "1px solid #F1F5F9", textDecoration: "none", color: "#1F3652", fontSize: "0.82rem", fontWeight: 700 }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "1.1rem",
+                    padding: "1rem 1.15rem",
+                    border: "1px solid #E2E8F0",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    gap: "0.85rem",
+                    textDecoration: "none",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                  }}
                 >
-                  <span>Soporte y Atención por WhatsApp</span>
-                  <ArrowRight size={16} color="#94A3B8" />
+                  <div
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      borderRadius: "50%",
+                      backgroundColor: "#EFF6FF",
+                      color: "#2563EB",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <HelpCircle size={18} />
+                  </div>
+                  <span style={{ flex: 1, fontSize: "0.9rem", fontWeight: 700, color: "#1F3652" }}>
+                    Soporte y Ayuda
+                  </span>
+                  <ChevronRight size={18} color="#94A3B8" />
                 </a>
 
-                <div
-                  onClick={() => alert("Aviso de Privacidad Oficial Devio disponible en soporte@devio.mx")}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.25rem", cursor: "pointer", color: "#1F3652", fontSize: "0.82rem", fontWeight: 700 }}
+                {/* 5. Idioma */}
+                <button
+                  type="button"
+                  onClick={() => alert("Idioma de la plataforma: Español (México)")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "1.1rem",
+                    padding: "1rem 1.15rem",
+                    border: "1px solid #E2E8F0",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    gap: "0.85rem",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                  }}
                 >
-                  <span>Aviso de Privacidad y Términos</span>
-                  <ArrowRight size={16} color="#94A3B8" />
-                </div>
+                  <div
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      borderRadius: "50%",
+                      backgroundColor: "#EFF6FF",
+                      color: "#2563EB",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Globe size={18} />
+                  </div>
+                  <span style={{ flex: 1, fontSize: "0.9rem", fontWeight: 700, color: "#1F3652" }}>
+                    Idioma
+                  </span>
+                  <ChevronRight size={18} color="#94A3B8" />
+                </button>
               </div>
 
               {/* Cerrar Sesión */}
               <button
+                type="button"
                 onClick={handleLogout}
                 style={{
                   width: "100%",
-                  padding: "0.85rem",
-                  backgroundColor: "#FEE2E2",
-                  color: "#DC2626",
-                  border: "none",
-                  borderRadius: "0.85rem",
-                  fontWeight: 800,
-                  fontSize: "0.85rem",
-                  cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1.1rem",
+                  padding: "1rem",
                   gap: "0.5rem",
+                  border: "1px solid #FEE2E2",
+                  color: "#EF4444",
+                  fontWeight: 800,
+                  fontSize: "0.9rem",
+                  cursor: "pointer",
+                  marginTop: "0.25rem",
+                  boxShadow: "0 1px 3px rgba(239,68,68,0.05)",
                 }}
               >
-                <LogOut size={18} /> Cerrar Sesión
+                <LogOut size={18} color="#EF4444" />
+                <span>Cerrar sesión</span>
               </button>
             </div>
           )}

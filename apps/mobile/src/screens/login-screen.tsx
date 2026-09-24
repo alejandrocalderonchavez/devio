@@ -10,21 +10,27 @@ import {
   Platform,
   Alert,
   Image,
+  ActivityIndicator,
 } from "react-native";
-import { Mail, Lock, ArrowRight, ShieldCheck, Sparkles } from "lucide-react-native";
+import { Mail, Lock, ArrowRight, ShieldCheck, Eye, EyeOff } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
 
 export const LoginScreen: React.FC = () => {
-  const { login } = useClientApp();
-  const [email, setEmail] = useState("0242573@up.edu.mx");
-  const [password, setPassword] = useState("password123");
+  const { login, isLoading } = useClientApp();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert("Campos requeridos", "Por favor ingresa tu correo y contraseña.");
       return;
     }
-    login(email.trim(), password.trim());
+
+    const res = await login(email.trim(), password.trim());
+    if (!res.success) {
+      Alert.alert("Error de Acceso", res.error || "No se pudo iniciar sesión.");
+    }
   };
 
   return (
@@ -48,7 +54,7 @@ export const LoginScreen: React.FC = () => {
         <View style={styles.card}>
           <Text style={styles.formTitle}>Iniciar Sesión</Text>
           <Text style={styles.formSubtitle}>
-            Accede a todas tus propiedades, avances de obra y estados de cuenta.
+            Accede a todas tus propiedades, estados de cuenta oficiales y seguimiento de obra en vivo.
           </Text>
 
           {/* Email */}
@@ -60,10 +66,11 @@ export const LoginScreen: React.FC = () => {
                 style={styles.textInput}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="cliente@ejemplo.com"
+                placeholder="ejemplo@correo.com"
                 placeholderTextColor="#94A3B8"
                 autoCapitalize="none"
                 keyboardType="email-address"
+                editable={!isLoading}
               />
             </View>
           </View>
@@ -79,35 +86,34 @@ export const LoginScreen: React.FC = () => {
                 onChangeText={setPassword}
                 placeholder="••••••••"
                 placeholderTextColor="#94A3B8"
-                secureTextEntry={true}
+                secureTextEntry={!showPassword}
+                editable={!isLoading}
               />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                {showPassword ? (
+                  <EyeOff size={18} color="#94A3B8" />
+                ) : (
+                  <Eye size={18} color="#94A3B8" />
+                )}
+              </TouchableOpacity>
             </View>
           </View>
 
           {/* Login Button */}
           <TouchableOpacity
-            style={styles.loginBtn}
+            style={[styles.loginBtn, isLoading && { opacity: 0.7 }]}
             onPress={handleLogin}
+            disabled={isLoading}
             activeOpacity={0.85}
           >
-            <Text style={styles.loginBtnText}>Ingresar al Portal</Text>
-            <ArrowRight size={18} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          {/* Demo Auto-fill Helper */}
-          <TouchableOpacity
-            style={styles.demoPill}
-            onPress={() => {
-              setEmail("0242573@up.edu.mx");
-              setPassword("password123");
-              login("0242573@up.edu.mx", "password123");
-            }}
-            activeOpacity={0.8}
-          >
-            <Sparkles size={14} color="#00C48C" />
-            <Text style={styles.demoPillText}>
-              Acceso Rápido Demo: Iñigo Heredia (Castellana 1C)
-            </Text>
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Text style={styles.loginBtnText}>Ingresar al Portal</Text>
+                <ArrowRight size={18} color="#FFFFFF" />
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -139,8 +145,8 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   officialBrandLogo: {
-    height: 42,
-    width: 170,
+    height: 44,
+    width: 180,
     resizeMode: "contain",
     marginBottom: 8,
   },
@@ -152,7 +158,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 28,
+    borderRadius: 24,
     padding: 24,
     gap: 16,
     shadowColor: "#000",
@@ -204,29 +210,12 @@ const styles = StyleSheet.create({
     borderRadius: 99,
     paddingVertical: 14,
     gap: 8,
-    marginTop: 4,
+    marginTop: 6,
   },
   loginBtnText: {
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "800",
-  },
-  demoPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0, 196, 140, 0.1)",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 99,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: "rgba(0, 196, 140, 0.25)",
-  },
-  demoPillText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#00875A",
   },
   footer: {
     flexDirection: "row",

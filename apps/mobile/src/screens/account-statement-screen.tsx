@@ -14,16 +14,18 @@ import {
   AlertCircle,
   Clock,
   FileText,
+  ExternalLink,
 } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
 import { ClientHeader } from "../components/client-header";
-import { ClientPaymentScheduleItem } from "../types/client";
+import { ClientPaymentScheduleItem, ClientPaymentReceiptItem } from "../types/client";
 
 export const AccountStatementScreen: React.FC = () => {
   const {
     selectedProperty,
     goBack,
     formatMoney,
+    formatDateDisplay,
     setSelectedReceiptPayment,
   } = useClientApp();
   const [activeSubTab, setActiveSubTab] = useState<"statement" | "payments">("statement");
@@ -39,28 +41,43 @@ export const AccountStatementScreen: React.FC = () => {
   const handleDownloadStatement = () => {
     Alert.alert(
       "Estado de Cuenta Digital",
-      `Se ha generado el Estado de Cuenta consolidado para la Unidad ${selectedProperty.unitNumber} (${selectedProperty.projectName}).`,
+      `Estado de cuenta oficial generado para la Unidad ${selectedProperty.unitNumber} (${selectedProperty.projectName}).`,
       [{ text: "Aceptar" }]
     );
   };
 
-  const handlePaymentRowPress = (payment: ClientPaymentScheduleItem) => {
-    if (payment.status === "PAGADO") {
-      setSelectedReceiptPayment(payment);
-    } else if (payment.status === "ATRASADO") {
+  const handleScheduleRowPress = (item: ClientPaymentScheduleItem) => {
+    if (item.status === "PAGADO") {
+      // Find matching receipt
+      const match = (selectedProperty.paymentsList || []).find(
+        (pl) => pl.reciboFolio === item.receiptNumber || pl.monto === item.amount
+      );
+      if (match) {
+        setSelectedReceiptPayment(match);
+      } else {
+        setSelectedReceiptPayment(item);
+      }
+    } else if (item.status === "ATRASADO") {
       Alert.alert(
         "Cuota Vencida",
-        `Esta cuota por ${formatMoney(payment.amount)} venció el ${payment.scheduledDate}. Por favor contacta a la desarrolladora para registrar tu pago o generar tu línea de captura.`,
+        `Esta cuota de ${formatMoney(item.amount)} venció el ${formatDateDisplay(item.scheduledDate)}. Por favor realiza tu abono para regularizar tu cuenta.`,
         [{ text: "Entendido" }]
       );
     } else {
       Alert.alert(
         "Cuota Programada",
-        `Esta cuota por ${formatMoney(payment.amount)} vence el ${payment.scheduledDate}.`,
+        `Cuota de ${formatMoney(item.amount)} con vencimiento el ${formatDateDisplay(item.scheduledDate)}.`,
         [{ text: "Aceptar" }]
       );
     }
   };
+
+  const handlePaymentReceiptPress = (receipt: ClientPaymentReceiptItem) => {
+    setSelectedReceiptPayment(receipt);
+  };
+
+  const scheduleItems = selectedProperty.schedule || selectedProperty.payments || [];
+  const paymentsList = selectedProperty.paymentsList || [];
 
   return (
     <View style={styles.container}>
@@ -133,7 +150,7 @@ export const AccountStatementScreen: React.FC = () => {
                 activeSubTab === "statement" && styles.segmentBtnTextActive,
               ]}
             >
-              Estado de Cuenta
+              Estado de Cuenta ({scheduleItems.length})
             </Text>
           </TouchableOpacity>
 
@@ -151,70 +168,125 @@ export const AccountStatementScreen: React.FC = () => {
                 activeSubTab === "payments" && styles.segmentBtnTextActive,
               ]}
             >
-              Pagos
+              Pagos Realizados ({paymentsList.length})
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Table Header */}
-        <View style={styles.tableHeaderRow}>
-          <Text style={[styles.tableHeaderCol, { flex: 0.8 }]}>Unidad</Text>
-          <Text style={[styles.tableHeaderCol, { flex: 1.4 }]}>Cantidad</Text>
-          <Text style={[styles.tableHeaderCol, { flex: 0.8 }]}>Intereses</Text>
-          <Text style={[styles.tableHeaderCol, { flex: 1.2, textAlign: "right" }]}>Estatus</Text>
-        </View>
+        {/* TAB 1: ESTADO DE CUENTA (CALENDARIO DE CUOTAS) */}
+        {activeSubTab === "statement" && (
+          <View style={styles.sectionWrap}>
+            <View style={styles.tableHeaderRow}>
+              <Text style={[styles.tableHeaderCol, { flex: 0.6 }]}>#</Text>
+              <Text style={[styles.tableHeaderCol, { flex: 1.3 }]}>Concepto</Text>
+              <Text style={[styles.tableHeaderCol, { flex: 1.4 }]}>Monto</Text>
+              <Text style={[styles.tableHeaderCol, { flex: 1.1, textAlign: "right" }]}>Estatus</Text>
+            </View>
 
-        {/* Payments List */}
-        <View style={styles.paymentsList}>
-          {selectedProperty.payments.map((p) => (
-            <TouchableOpacity
-              key={p.id}
-              style={styles.paymentRowCard}
-              onPress={() => handlePaymentRowPress(p)}
-              activeOpacity={0.8}
-            >
-              {/* Unidad */}
-              <Text style={[styles.cellUnit, { flex: 0.8 }]}>
-                {selectedProperty.unitNumber}
-              </Text>
+            <View style={styles.paymentsList}>
+              {scheduleItems.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>No hay cuotas programadas</Text>
+                </View>
+              ) : (
+                scheduleItems.map((p, idx) => (
+                  <TouchableOpacity
+                    key={p.id || `cuota-${idx}`}
+                    style={styles.paymentRowCard}
+                    onPress={() => handleScheduleRowPress(p)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.cellIndex, { flex: 0.6 }]}>
+                      {p.cuotaNumber || idx + 1}
+                    </Text>
 
-              {/* Cantidad */}
-              <Text style={[styles.cellAmount, { flex: 1.4 }]}>
-                {formatMoney(p.amount)}
-              </Text>
+                    <View style={{ flex: 1.3 }}>
+                      <Text style={styles.cellConcept} numberOfLines={1}>
+                        {p.concept || `Cuota ${idx + 1}`}
+                      </Text>
+                      <Text style={styles.cellDateSub}>
+                        {formatDateDisplay(p.scheduledDate)}
+                      </Text>
+                    </View>
 
-              {/* Intereses */}
-              <Text style={[styles.cellInterest, { flex: 0.8 }]}>
-                ${p.interestAmount || 0}
-              </Text>
+                    <Text style={[styles.cellAmount, { flex: 1.4 }]}>
+                      {formatMoney(p.amount)}
+                    </Text>
 
-              {/* Estatus Badge + Date */}
-              <View style={[styles.cellStatusGroup, { flex: 1.2 }]}>
-                {p.status === "PAGADO" ? (
-                  <View style={styles.badgePagado}>
-                    <Text style={styles.badgePagadoText}>Pagado</Text>
-                  </View>
-                ) : p.status === "ATRASADO" ? (
-                  <View style={styles.badgeAtrasado}>
-                    <Text style={styles.badgeAtrasadoText}>Atrasado</Text>
-                  </View>
-                ) : (
-                  <View style={styles.badgePendiente}>
-                    <Text style={styles.badgePendienteText}>Pendiente</Text>
-                  </View>
-                )}
-                <Text style={styles.paymentDateSub}>
-                  {p.paidDate || p.scheduledDate}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+                    <View style={[styles.cellStatusGroup, { flex: 1.1 }]}>
+                      {p.status === "PAGADO" ? (
+                        <View style={styles.badgePagado}>
+                          <Text style={styles.badgePagadoText}>Pagado</Text>
+                        </View>
+                      ) : p.status === "ATRASADO" ? (
+                        <View style={styles.badgeAtrasado}>
+                          <Text style={styles.badgeAtrasadoText}>Atrasado</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.badgePendiente}>
+                          <Text style={styles.badgePendienteText}>Pendiente</Text>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* TAB 2: PAGOS REALIZADOS & RECIBOS */}
+        {activeSubTab === "payments" && (
+          <View style={styles.sectionWrap}>
+            <View style={styles.tableHeaderRow}>
+              <Text style={[styles.tableHeaderCol, { flex: 1.4 }]}>Folio / Método</Text>
+              <Text style={[styles.tableHeaderCol, { flex: 1.3 }]}>Monto</Text>
+              <Text style={[styles.tableHeaderCol, { flex: 1.1, textAlign: "right" }]}>Recibo</Text>
+            </View>
+
+            <View style={styles.paymentsList}>
+              {paymentsList.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>No hay pagos registrados aún</Text>
+                </View>
+              ) : (
+                paymentsList.map((pl, idx) => (
+                  <TouchableOpacity
+                    key={pl.id || `pl-${idx}`}
+                    style={styles.paymentRowCard}
+                    onPress={() => handlePaymentReceiptPress(pl)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={{ flex: 1.4 }}>
+                      <Text style={styles.cellConcept} numberOfLines={1}>
+                        {pl.reciboFolio || pl.folio || `REC-${idx + 1}`}
+                      </Text>
+                      <Text style={styles.cellDateSub}>
+                        {formatDateDisplay(pl.fechaPago)} • {pl.metodoPago}
+                      </Text>
+                    </View>
+
+                    <Text style={[styles.cellAmount, { flex: 1.3, color: "#00C48C" }]}>
+                      {formatMoney(pl.monto)}
+                    </Text>
+
+                    <View style={[styles.cellStatusGroup, { flex: 1.1 }]}>
+                      <View style={styles.badgeRecibo}>
+                        <ExternalLink size={11} color="#FFFFFF" />
+                        <Text style={styles.badgeReciboText}>Ver Recibo</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Back Button */}
         <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.8}>
           <ArrowLeft size={18} color="#1F3652" />
-          <Text style={styles.backButtonText}>Volver</Text>
+          <Text style={styles.backButtonText}>Volver a la Propiedad</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -265,7 +337,7 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   gridVal: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "900",
     color: "#1F3652",
     marginBottom: 4,
@@ -303,118 +375,147 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   segmentBtnActive: {
-    backgroundColor: "#1F3652",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   segmentBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#64748B",
-  },
-  segmentBtnTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-  },
-  tableHeaderRow: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-  },
-  tableHeaderCol: {
     fontSize: 12,
     fontWeight: "700",
     color: "#64748B",
   },
+  segmentBtnTextActive: {
+    color: "#1F3652",
+    fontWeight: "900",
+  },
+  sectionWrap: {
+    gap: 8,
+  },
+  tableHeaderRow: {
+    flexDirection: "row",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  tableHeaderCol: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#64748B",
+    textTransform: "uppercase",
+  },
   paymentsList: {
-    gap: 10,
+    gap: 8,
   },
   paymentRowCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.02,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  cellUnit: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#1F3652",
-  },
-  cellAmount: {
-    fontSize: 14,
+  cellIndex: {
+    fontSize: 13,
     fontWeight: "800",
     color: "#1F3652",
   },
-  cellInterest: {
+  cellConcept: {
     fontSize: 13,
-    fontWeight: "600",
-    color: "#64748B",
+    fontWeight: "800",
+    color: "#1F3652",
+  },
+  cellDateSub: {
+    fontSize: 10,
+    color: "#94A3B8",
+    marginTop: 2,
+  },
+  cellAmount: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#1F3652",
   },
   cellStatusGroup: {
     alignItems: "flex-end",
-    gap: 3,
   },
   badgePagado: {
-    backgroundColor: "#00C48C",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 99,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   badgePagadoText: {
-    color: "#FFFFFF",
-    fontSize: 10,
+    color: "#166534",
+    fontSize: 11,
     fontWeight: "800",
   },
   badgeAtrasado: {
-    backgroundColor: "#EF4444",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 99,
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   badgeAtrasadoText: {
-    color: "#FFFFFF",
-    fontSize: 10,
+    color: "#DC2626",
+    fontSize: 11,
     fontWeight: "800",
   },
   badgePendiente: {
-    backgroundColor: "#1F3652",
-    paddingHorizontal: 10,
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  badgePendienteText: {
+    color: "#2563EB",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  badgeRecibo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#1B3047",
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 99,
   },
-  badgePendienteText: {
+  badgeReciboText: {
     color: "#FFFFFF",
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "700",
   },
-  paymentDateSub: {
-    fontSize: 10,
-    color: "#94A3B8",
+  emptyState: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  emptyText: {
+    fontSize: 13,
+    color: "#64748B",
     fontWeight: "600",
   },
   backButton: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start",
-    gap: 8,
+    justifyContent: "center",
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 99,
+    paddingVertical: 14,
+    borderRadius: 14,
+    gap: 8,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
     marginTop: 8,
   },
   backButtonText: {
