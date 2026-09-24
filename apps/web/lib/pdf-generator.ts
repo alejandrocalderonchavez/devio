@@ -920,3 +920,233 @@ export async function generateQuotePDF(data: QuotePDFData): Promise<{ success: b
     ghost.remove();
   }
 }
+
+// -----------------------------------------------------------------------------
+// 3. ESTADO DE CUENTA PDF & PREVIEW
+// -----------------------------------------------------------------------------
+export interface StatementPDFData {
+  projectName: string;
+  unitNumber: string;
+  clientName: string;
+  clientEmail?: string;
+  clientRfc?: string;
+  totalAmount: number;
+  paidAmount: number;
+  pendingAmount: number;
+  developerName?: string;
+  developerLogoUrl?: string;
+  projectLogoUrl?: string;
+  installments: Array<{
+    concept: string;
+    scheduledDate: string;
+    amount: number;
+    paidAmount?: number;
+    status: string;
+  }>;
+}
+
+export function getStatementHTML(data: StatementPDFData): string {
+  const emissionDate = new Date().toLocaleDateString("es-MX", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const formatMoney = (val: number) =>
+    new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+    }).format(val || 0);
+
+  const pctPaid = data.totalAmount > 0 ? ((data.paidAmount / data.totalAmount) * 100).toFixed(1) : "0";
+
+  return `
+    <div id="stat-pdf-container" style="width: 100%; max-width: 760px; margin: 0 auto; background: #ffffff; color: #1F3652; font-family: 'Inter', system-ui, sans-serif; padding: 24px; box-sizing: border-box;">
+      <!-- HEADER -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 16px; border-bottom: 2px solid #1F3652; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <img src="${data.developerLogoUrl || DEFAULT_DEV_LOGO}" alt="Developer" style="height: 38px; width: auto; max-width: 120px; object-fit: contain;" />
+          <div>
+            <div style="font-size: 16px; font-weight: 800; color: #1F3652;">${data.developerName || "Desarrollador Inmobiliario"}</div>
+            <div style="font-size: 12px; color: #64748B;">${data.projectName} • Unidad ${data.unitNumber}</div>
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 14px; font-weight: 800; color: #1F3652; text-transform: uppercase;">Estado de Cuenta</div>
+          <div style="font-size: 11px; color: #64748B;">Fecha de Emisión: ${emissionDate}</div>
+        </div>
+      </div>
+
+      <!-- CLIENT & UNIT SUMMARY -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px;">
+          <div style="font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 4px;">Titular de la Cuenta</div>
+          <div style="font-size: 13px; font-weight: 800; color: #1F3652;">${data.clientName}</div>
+          ${data.clientEmail ? `<div style="font-size: 11px; color: #64748B;">Email: ${data.clientEmail}</div>` : ""}
+          ${data.clientRfc ? `<div style="font-size: 11px; color: #64748B;">RFC: ${data.clientRfc}</div>` : ""}
+        </div>
+
+        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px;">
+          <div style="font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 4px;">Propiedad / Unidad</div>
+          <div style="font-size: 13px; font-weight: 800; color: #1F3652;">${data.projectName} - ${data.unitNumber}</div>
+          <div style="font-size: 11px; color: #00875A; font-weight: 700;">Avance de Pago: ${pctPaid}% Liquidado</div>
+        </div>
+      </div>
+
+      <!-- FINANCIAL SUMMARY CARDS -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 24px;">
+        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px; text-align: center;">
+          <div style="font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase;">Precio de Venta</div>
+          <div style="font-size: 16px; font-weight: 900; color: #1F3652; margin-top: 2px;">${formatMoney(data.totalAmount)}</div>
+        </div>
+        <div style="background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 8px; padding: 12px; text-align: center;">
+          <div style="font-size: 10px; font-weight: 700; color: #065F46; text-transform: uppercase;">Total Pagado</div>
+          <div style="font-size: 16px; font-weight: 900; color: #059669; margin-top: 2px;">${formatMoney(data.paidAmount)}</div>
+        </div>
+        <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 12px; text-align: center;">
+          <div style="font-size: 10px; font-weight: 700; color: #92400E; text-transform: uppercase;">Saldo Pendiente</div>
+          <div style="font-size: 16px; font-weight: 900; color: #D97706; margin-top: 2px;">${formatMoney(data.pendingAmount)}</div>
+        </div>
+      </div>
+
+      <!-- TABLE OF INSTALLMENTS -->
+      <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 24px;">
+        <thead>
+          <tr style="background: #1F3652; color: #FFFFFF;">
+            <th style="padding: 8px 10px; text-align: left; border-radius: 4px 0 0 0;">Concepto</th>
+            <th style="padding: 8px 10px; text-align: left;">Fecha Vence</th>
+            <th style="padding: 8px 10px; text-align: right;">Monto Prog.</th>
+            <th style="padding: 8px 10px; text-align: right;">Pagado</th>
+            <th style="padding: 8px 10px; text-align: center; border-radius: 0 4px 0 0;">Estatus</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.installments
+            .map(
+              (inst, i) => `
+            <tr style="border-bottom: 1px solid #E2E8F0; background: ${i % 2 === 0 ? "#FFFFFF" : "#F8FAFC"};">
+              <td style="padding: 8px 10px; font-weight: 700;">${inst.concept}</td>
+              <td style="padding: 8px 10px; color: #64748B;">${inst.scheduledDate}</td>
+              <td style="padding: 8px 10px; text-align: right; font-weight: 700;">${formatMoney(inst.amount)}</td>
+              <td style="padding: 8px 10px; text-align: right; color: ${inst.paidAmount ? "#059669" : "#64748B"}; font-weight: 700;">${formatMoney(inst.paidAmount || 0)}</td>
+              <td style="padding: 8px 10px; text-align: center;">
+                <span style="display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 9.5px; font-weight: 700; ${
+                  inst.status === "PAGADO"
+                    ? "background: #DCFCE7; color: #166534;"
+                    : inst.status === "ATRASADO"
+                    ? "background: #FEE2E2; color: #991B1B;"
+                    : "background: #FEF3C7; color: #92400E;"
+                }">
+                  ${inst.status}
+                </span>
+              </td>
+            </tr>
+          `
+            )
+            .join("")}
+        </tbody>
+      </table>
+
+      <!-- FOOTER -->
+      <div style="border-top: 1px solid #E2E8F0; padding-top: 12px; display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: #94A3B8;">
+        <span>Documento oficial de control de cobranza e historial de pagos.</span>
+        <span>Generado con <strong>Devio Real Estate Platform</strong></span>
+      </div>
+    </div>
+  `;
+}
+
+export function openStatementInNewTab(data: StatementPDFData) {
+  if (typeof window === "undefined") return;
+
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return;
+
+  const html = getStatementHTML(data);
+
+  const fullDocument = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <title>Estado de Cuenta - ${data.projectName} ${data.unitNumber}</title>
+      <style>
+        @page {
+          size: letter portrait;
+          margin: 10mm;
+        }
+        body {
+          margin: 0;
+          padding: 24px;
+          background: #F1F5F9;
+          font-family: 'Inter', system-ui, -apple-system, sans-serif;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .top-toolbar {
+          width: 760px;
+          max-width: 100%;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+        .action-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          border-radius: 9999px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          border: none;
+        }
+        .btn-print {
+          background-color: #1F3652;
+          color: #ffffff;
+        }
+        .document-wrapper {
+          width: 760px;
+          max-width: 100%;
+          background: #ffffff;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        @media print {
+          body {
+            background: #ffffff;
+            padding: 0;
+          }
+          .top-toolbar {
+            display: none !important;
+          }
+          .document-wrapper {
+            box-shadow: none !important;
+            border-radius: 0 !important;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="top-toolbar">
+        <span style="font-size: 14px; font-weight: 700; color: #1F3652;">Estado de Cuenta Oficial</span>
+        <button class="action-btn btn-print" onclick="window.print()">
+          Imprimir / Guardar PDF
+        </button>
+      </div>
+      <div class="document-wrapper">
+        ${html}
+      </div>
+    </body>
+    </html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(fullDocument);
+  printWindow.document.close();
+}
+
