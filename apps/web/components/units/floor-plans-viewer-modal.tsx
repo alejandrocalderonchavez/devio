@@ -83,7 +83,7 @@ export default function FloorPlansViewerModal({
     selectedUnitNumbers: string[];
   }>({
     name: "",
-    imageUrl: DEFAULT_BLUEPRINTS[0]?.url || "",
+    imageUrl: "",
     selectedUnitNumbers: [],
   });
 
@@ -98,7 +98,7 @@ export default function FloorPlansViewerModal({
   const handleOpenCreate = () => {
     setEditingForm({
       name: `Planta Tipo ${String.fromCharCode(65 + floorPlansList.length)}`,
-      imageUrl: DEFAULT_BLUEPRINTS[floorPlansList.length % DEFAULT_BLUEPRINTS.length]?.url || "",
+      imageUrl: "",
       selectedUnitNumbers: [],
     });
     setIsEditingModalOpen(true);
@@ -110,7 +110,7 @@ export default function FloorPlansViewerModal({
     setEditingForm({
       id: plan.id,
       name: plan.name,
-      imageUrl: plan.imageUrl || DEFAULT_BLUEPRINTS[0]?.url || "",
+      imageUrl: plan.imageUrl || "",
       selectedUnitNumbers: assigned,
     });
     setIsEditingModalOpen(true);

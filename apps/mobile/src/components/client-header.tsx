@@ -34,11 +34,6 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({
     activeTab,
     goBack,
     t,
-    language,
-    setLanguage,
-    currency,
-    setCurrency,
-    banxicoRate,
   } = useClientApp();
 
   const getInitials = (name?: string) => {
@@ -156,51 +151,6 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({
               )}
             </View>
           )}
-
-          {/* Controls Row: Banxico rate + Currency + Language */}
-          <View style={styles.controlsRow}>
-            <View style={styles.banxicoBadge}>
-              <Text style={styles.banxicoText}>
-                ${banxicoRate.toFixed(2)} MXN/USD
-              </Text>
-            </View>
-
-            {/* Currency toggle */}
-            <View style={styles.togglePill}>
-              <TouchableOpacity
-                style={[styles.toggleBtn, currency === "MXN" && styles.toggleBtnActive]}
-                onPress={() => { if (Platform.OS === "ios") Haptics.selectionAsync(); setCurrency("MXN"); }}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.toggleBtnText, currency === "MXN" && styles.toggleBtnTextActive]}>MXN</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toggleBtn, currency === "USD" && styles.toggleBtnActive]}
-                onPress={() => { if (Platform.OS === "ios") Haptics.selectionAsync(); setCurrency("USD"); }}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.toggleBtnText, currency === "USD" && styles.toggleBtnTextActive]}>USD</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Language toggle */}
-            <View style={styles.togglePill}>
-              <TouchableOpacity
-                style={[styles.toggleBtn, language === "es" && styles.toggleBtnActive]}
-                onPress={() => { if (Platform.OS === "ios") Haptics.selectionAsync(); setLanguage("es"); }}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.toggleBtnText, language === "es" && styles.toggleBtnTextActive]}>ES</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toggleBtn, language === "en" && styles.toggleBtnActive]}
-                onPress={() => { if (Platform.OS === "ios") Haptics.selectionAsync(); setLanguage("en"); }}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.toggleBtnText, language === "en" && styles.toggleBtnTextActive]}>EN</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         </View>
       )}
     </View>
@@ -297,7 +247,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   greetingSection: {
-    marginTop: 2,
+    marginTop: 4,
   },
   greetingEyebrow: {
     color: "rgba(255, 255, 255, 0.8)",
@@ -306,53 +256,10 @@ const styles = StyleSheet.create({
   },
   greetingName: {
     color: "#FFFFFF",
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "800",
     marginTop: 2,
     letterSpacing: -0.4,
-  },
-  controlsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  banxicoBadge: {
-    backgroundColor: "rgba(0, 196, 140, 0.2)",
-    borderWidth: 1,
-    borderColor: "rgba(0, 196, 140, 0.4)",
-    borderRadius: 99,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  banxicoText: {
-    color: "#00C48C",
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  togglePill: {
-    flexDirection: "row",
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: 99,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    overflow: "hidden",
-  },
-  toggleBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 99,
-  },
-  toggleBtnActive: {
-    backgroundColor: "#FFFFFF",
-  },
-  toggleBtnText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "rgba(255, 255, 255, 0.65)",
-  },
-  toggleBtnTextActive: {
-    color: "#1F3652",
   },
   subscreenRow: {
     flexDirection: "row",

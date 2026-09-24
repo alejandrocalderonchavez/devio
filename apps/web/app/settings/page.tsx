@@ -381,23 +381,23 @@ export default function SettingsPage() {
 
   // Developer Onboarding Data State with Logo
   const [devData, setDevData] = useState({
-    businessName: "Mi Desarrolladora S.A. de C.V.",
-    tradeName: developerName || "Mi Desarrolladora",
-    rfc: "DEV230917ABC",
-    taxRegime: "601 - General de Ley Personas Morales",
-    addressStreet: "Av. Principal 100",
-    addressCol: "Centro",
-    city: "Ciudad",
-    state: "Estado",
-    zipCode: "00000",
-    phone: "3312345678",
-    billingEmail: "facturacion@desarrolladora.mx",
-    contactEmail: "contacto@desarrolladora.mx",
-    legalRepresentative: "Representante Legal",
-    repRfc: "REPL800101AA1",
-    bankName: "Banco",
-    bankAccountName: "Desarrolladora Inmobiliaria",
-    clabe: "012345678901234567",
+    businessName: "",
+    tradeName: developerName || "",
+    rfc: "",
+    taxRegime: "",
+    addressStreet: "",
+    addressCol: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    phone: "",
+    billingEmail: "",
+    contactEmail: "",
+    legalRepresentative: "",
+    repRfc: "",
+    bankName: "",
+    bankAccountName: "",
+    clabe: "",
     logoName: "",
     logoUrl: "",
   });
@@ -438,13 +438,14 @@ export default function SettingsPage() {
       if (storedDev) {
         try {
           const d = JSON.parse(storedDev);
-          const tName = d.name || d.commercialName || d.tradeName || developerName || "Mi Desarrolladora";
+          const tName = d.name || d.commercialName || d.tradeName || developerName || "";
           const dLogo = d.logoPath || d.logoUrl || d.logo || activeLogo;
           setDevData((prev) => ({
             ...prev,
             businessName: d.legalName || d.businessName || prev.businessName,
-            tradeName: tName,
+            tradeName: tName || prev.tradeName,
             rfc: d.taxId || d.rfc || prev.rfc,
+            taxRegime: d.taxRegime || prev.taxRegime,
             addressStreet: d.addressLine1 || d.addressStreet || prev.addressStreet,
             addressCol: d.neighborhood || d.addressCol || prev.addressCol,
             city: d.city || prev.city,
@@ -453,6 +454,11 @@ export default function SettingsPage() {
             phone: d.phoneNumber || d.phone || prev.phone,
             billingEmail: d.email || d.billingEmail || prev.billingEmail,
             contactEmail: d.email || d.contactEmail || prev.contactEmail,
+            legalRepresentative: d.legalRepresentative || prev.legalRepresentative,
+            repRfc: d.repRfc || prev.repRfc,
+            bankName: d.bankName || prev.bankName,
+            bankAccountName: d.bankAccountName || prev.bankAccountName,
+            clabe: d.clabe || prev.clabe,
             logoUrl: dLogo || prev.logoUrl,
             logoName: d.logoName || (dLogo ? "logo-desarrolladora.png" : prev.logoName),
           }));
