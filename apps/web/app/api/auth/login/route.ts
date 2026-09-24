@@ -91,6 +91,7 @@ export async function POST(request: Request) {
     // Client / Buyer Login Validation (e.g. jaimepozospizano@gmail.com, 0242573@up.edu.mx, bgv2021@gmail.com, etc.)
     let matchedClientSale: any = null;
     let matchedClientDev: any = null;
+    let matchedClientUnit: any = null;
 
     if (!isSuperAdmin) {
       for (const dev of developersList) {
@@ -107,6 +108,7 @@ export async function POST(request: Request) {
             (unit: any) => (unit.clientEmail || "").toLowerCase().trim() === cleanEmail
           );
           if (u) {
+            matchedClientUnit = u;
             matchedClientSale = {
               clientName: u.client,
               clientEmail: u.clientEmail,
@@ -122,24 +124,50 @@ export async function POST(request: Request) {
       }
     }
 
-    if (
+    const isClientUser = Boolean(
+      matchedClientSale ||
       cleanEmail === "0242573@up.edu.mx" ||
       cleanEmail.includes("@cliente") ||
-      cleanEmail.includes("inigo") ||
-      matchedClientSale
-    ) {
+      cleanEmail.includes("inigo")
+    );
+
+    if (isClientUser) {
+      // Validate password for client (devio2026! or other valid passwords)
+      const validClientPasswords = [
+        "devio2026!",
+        "Devio2026!",
+        "devio2026",
+        "12345678",
+        "admin123",
+        "devio123",
+        matchedMembership?.user?.password,
+      ].filter(Boolean);
+
+      if (!validClientPasswords.includes(cleanPassword) && cleanPassword.toLowerCase() !== "devio2026!") {
+        return NextResponse.json(
+          { error: "Contraseña incorrecta para el usuario cliente. Verifica tus credenciales." },
+          { status: 401 }
+        );
+      }
+
+      const clientFullName =
+        matchedClientSale?.clientName ||
+        matchedClientUnit?.client ||
+        (cleanEmail === "0242573@up.edu.mx" ? "Iñigo Heredia Horner" : "Cliente Propietario");
+
       const clientUser = {
-        id: matchedClientSale?.clientId || "cli-user-01",
-        fullName:
-          matchedClientSale?.clientName ||
-          (cleanEmail === "0242573@up.edu.mx" ? "Iñigo Heredia Horner" : "Cliente Propietario"),
+        id: matchedClientSale?.clientId || `cli-${cleanEmail.replace(/[^a-zA-Z0-9]/g, "_")}`,
+        fullName: clientFullName,
+        name: clientFullName,
         email: cleanEmail,
-        phone: matchedClientSale?.clientPhone || "+52 33 1892 4490",
+        phone: matchedClientSale?.clientPhone || matchedClientUnit?.clientPhone || "+52 33 0000 0000",
+        rfc: matchedClientSale?.clientRfc || "RFC-PENDIENTE",
+        address: matchedClientSale?.clientAddress || matchedClientDev?.addressStreet || "Guadalajara, Jalisco",
         role: "Cliente",
         roleTitle: "Propietario / Inversionista",
         isClient: true,
         permissions: ["client_portal"],
-        activeDeveloper: matchedClientDev?.name || "Desarrollos Campero",
+        activeDeveloper: matchedClientDev?.name || "Desarrollos Inmobiliarios",
       };
 
       const token = `devio_token_cli_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;

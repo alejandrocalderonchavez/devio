@@ -41,6 +41,7 @@ import {
   Eye,
   DollarSign,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { openReceiptInNewTab, openStatementInNewTab } from "../../lib/pdf-generator";
 
@@ -62,7 +63,6 @@ interface PaymentItem {
 
 interface ClientProperty {
   id: string;
-  clientEmail?: string;
   developerName: string;
   developerLogo?: string;
   projectName: string;
@@ -95,369 +95,23 @@ interface ClientProperty {
   customAttributes: Array<{ label: string; value: string }>;
 }
 
-const INITIAL_PROPERTIES: ClientProperty[] = [
-  {
-    id: "prop-campero-51",
-    clientEmail: "jaimepozospizano@gmail.com",
-    developerName: "Desarrollos Campero",
-    developerLogo: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786128446577x181472833978802980/ChatGPT%20Image%2019%20mar%202026%2C%2011_35_22.png",
-    projectName: "Mainstreet Valle Real",
-    projectLogo: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786128446577x181472833978802980/ChatGPT%20Image%2019%20mar%202026%2C%2011_35_22.png",
-    projectAddress: "Av. del Servidor Público 1425, Zapopan, Jal.",
-    unitNumber: "5.1",
-    unitType: "Departamento",
-    totalPrice: 3077961.5,
-    paidAmount: 1613980.36,
-    pendingAmount: 1463981.14,
-    nextPaymentAmount: 25000,
-    nextPaymentDueDate: "28 Nov 2026",
-    nextPaymentDaysRemaining: 65,
-    overdueAmount: 125000.14,
-    constructionPct: 48,
-    lastProgressUpdateDate: "19/03/26",
-    estimatedDeliveryDate: "15 Dic 2027",
-    areaM2: 55,
-    bedrooms: 1,
-    bathrooms: 1,
-    parkingSpots: 1,
-    floorLevel: 5,
-    maintenanceFeeMonthly: 2200,
-    images: [
-      "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786128446577x181472833978802980/ChatGPT%20Image%2019%20mar%202026%2C%2011_35_22.png",
-      "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&auto=format&fit=crop&q=80",
-    ],
-    specialtiesProgress: [
-      { id: "esp-1", name: "1. Cimentación y Muros", percentage: 100 },
-      { id: "esp-2", name: "2. Estructura y Losas", percentage: 65 },
-      { id: "esp-3", name: "3. Instalaciones Hidrosanitarias", percentage: 40 },
-      { id: "esp-4", name: "4. Acabados y Cancelería", percentage: 25 },
-    ],
-    constructionMilestones: [
-      {
-        id: "ms-1",
-        title: "Avance Cimentación y Muros Milán",
-        date: "19 Mar 2026",
-        photo: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786128446577x181472833978802980/ChatGPT%20Image%2019%20mar%202026%2C%2011_35_22.png",
-        description: "Muros milán concluidos y zapatas armadas en sótano 2. Preparación para inicio de estructura nivel 1.",
-      },
-    ],
-    documents: [
-      { id: "doc-1", title: "Contrato Compraventa Mainstreet 5.1.pdf", category: "CONTRATO", fileSize: "3.2 MB", uploadDate: "28 Ene 2026", fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf" },
-      { id: "doc-2", title: "Plano Arquitectónico Unidad 5.1.pdf", category: "PLANO", fileSize: "5.1 MB", uploadDate: "28 Ene 2026", fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf" },
-      { id: "doc-3", title: "Reglamento Interno Mainstreet.pdf", category: "REGLAMENTO", fileSize: "1.4 MB", uploadDate: "30 Ene 2026", fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf" },
-    ],
-    payments: [
-      {
-        id: "pay-c-1",
-        cuotaNumber: 1,
-        concept: "Enganche (50%)",
-        scheduledAmount: 1538980.5,
-        scheduledDate: "28 Ene 2026",
-        paidAmount: 1538980.5,
-        pendingAmount: 0,
-        status: "PAGADO",
-        paidDate: "28 Ene 2026",
-        receiptNumber: "REC-CAMPERO-001",
-        paymentMethod: "Transferencia SPEI",
-        comprobanteUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
-        comprobanteName: "SPEI_Enganche_51.pdf",
-      },
-      {
-        id: "pay-c-2",
-        cuotaNumber: 2,
-        concept: "Mensualidad 1 de 8",
-        scheduledAmount: 25000,
-        scheduledDate: "28 Feb 2026",
-        paidAmount: 25000,
-        pendingAmount: 0,
-        status: "PAGADO",
-        paidDate: "28 Feb 2026",
-        receiptNumber: "REC-CAMPERO-002",
-        paymentMethod: "Transferencia SPEI",
-        comprobanteUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787160659411x524206819929862200/PB.02_190826.pdf",
-        comprobanteName: "Comprobante_SPEI_Feb.pdf",
-      },
-      {
-        id: "pay-c-3",
-        cuotaNumber: 3,
-        concept: "Mensualidad 2 de 8",
-        scheduledAmount: 25000,
-        scheduledDate: "30 Mar 2026",
-        paidAmount: 25000,
-        pendingAmount: 0,
-        status: "PAGADO",
-        paidDate: "30 Mar 2026",
-        receiptNumber: "REC-CAMPERO-003",
-        paymentMethod: "Transferencia SPEI",
-        comprobanteUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787160694821x872782615701958900/PB.02_190826.pdf",
-        comprobanteName: "Comprobante_SPEI_Mar.pdf",
-      },
-      {
-        id: "pay-c-4",
-        cuotaNumber: 4,
-        concept: "Mensualidad 3 de 8",
-        scheduledAmount: 25000,
-        scheduledDate: "29 Abr 2026",
-        paidAmount: 24999.86,
-        pendingAmount: 0.14,
-        status: "ATRASADO",
-        paidDate: "29 Abr 2026 (Parcial)",
-        receiptNumber: "REC-CAMPERO-004",
-        paymentMethod: "Transferencia SPEI",
-        comprobanteUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787160719227x792320715711896200/PB.02_190826.pdf",
-        comprobanteName: "Comprobante_Parcial_Abr.pdf",
-      },
-      {
-        id: "pay-c-5",
-        cuotaNumber: 5,
-        concept: "Mensualidad 4 de 8",
-        scheduledAmount: 25000,
-        scheduledDate: "29 May 2026",
-        paidAmount: 0,
-        pendingAmount: 25000,
-        status: "ATRASADO",
-        paymentMethod: "Pendiente SPEI",
-      },
-      {
-        id: "pay-c-6",
-        cuotaNumber: 6,
-        concept: "Mensualidad 5 de 8",
-        scheduledAmount: 25000,
-        scheduledDate: "28 Jun 2026",
-        paidAmount: 0,
-        pendingAmount: 25000,
-        status: "ATRASADO",
-        paymentMethod: "Pendiente SPEI",
-      },
-      {
-        id: "pay-c-7",
-        cuotaNumber: 7,
-        concept: "Mensualidad 6 de 8",
-        scheduledAmount: 25000,
-        scheduledDate: "28 Jul 2026",
-        paidAmount: 0,
-        pendingAmount: 25000,
-        status: "ATRASADO",
-        paymentMethod: "Pendiente SPEI",
-      },
-      {
-        id: "pay-c-8",
-        cuotaNumber: 8,
-        concept: "Mensualidad 7 de 8",
-        scheduledAmount: 25000,
-        scheduledDate: "28 Ago 2026",
-        paidAmount: 0,
-        pendingAmount: 25000,
-        status: "ATRASADO",
-        paymentMethod: "Pendiente SPEI",
-      },
-      {
-        id: "pay-c-9",
-        cuotaNumber: 9,
-        concept: "Mensualidad 8 de 8",
-        scheduledAmount: 25000,
-        scheduledDate: "28 Sep 2026",
-        paidAmount: 0,
-        pendingAmount: 25000,
-        status: "PENDIENTE",
-        paymentMethod: "Pendiente SPEI",
-      },
-      {
-        id: "pay-c-10",
-        cuotaNumber: 10,
-        concept: "Saldo Final / Contra Entrega",
-        scheduledAmount: 1338981.0,
-        scheduledDate: "15 Dic 2027",
-        paidAmount: 0,
-        pendingAmount: 1338981.0,
-        status: "PENDIENTE",
-        paymentMethod: "Crédito Hipotecario / Recursos Propios",
-      },
-    ],
-    customAttributes: [
-      { label: "Orientación", value: "Norte - Panorámica" },
-      { label: "Tipo de Vista", value: "Valle Real / Andares" },
-      { label: "Cajón Asignado", value: "Sótano 1, #51" },
-    ],
-  },
-  {
-    id: "prop-castellana-1c",
-    clientEmail: "0242573@up.edu.mx",
-    developerName: "Grupo VEQ",
-    developerLogo: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg",
-    projectName: "Castellana Residencial",
-    projectLogo: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg",
-    projectAddress: "Ramón Aldama del Puerto 5403, Dr. Atl · Guadalajara, Jal.",
-    unitNumber: "1C",
-    unitType: "Departamento",
-    totalPrice: 6000000,
-    paidAmount: 1200000,
-    pendingAmount: 4800000,
-    nextPaymentAmount: 250000,
-    nextPaymentDueDate: "17 Oct 2026",
-    nextPaymentDaysRemaining: 24,
-    overdueAmount: 250000,
-    constructionPct: 66,
-    lastProgressUpdateDate: "9/01/26",
-    estimatedDeliveryDate: "15 May 2028",
-    areaM2: 57,
-    bedrooms: 1,
-    bathrooms: 1,
-    parkingSpots: 1,
-    storageUnits: 1,
-    floorLevel: 1,
-    maintenanceFeeMonthly: 2800,
-    images: [
-      "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1000&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop&q=80",
-    ],
-    specialtiesProgress: [
-      { id: "esp-1", name: "1. Cimentación", percentage: 100 },
-      { id: "esp-2", name: "2. Estructura", percentage: 80 },
-      { id: "esp-3", name: "3. Instalaciones", percentage: 60 },
-      { id: "esp-4", name: "4. Acabados", percentage: 25 },
-    ],
-    constructionMilestones: [
-      {
-        id: "ms-2",
-        title: "Avance Estructura Nivel 4",
-        date: "01 Sep 2026",
-        photo: "https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=800&auto=format&fit=crop&q=80",
-        description: "Colado de losa en nivel 4 e instalación hidrosanitaria principal concluida.",
-      },
-    ],
-    documents: [
-      { id: "doc-1", title: "Contrato Compraventa Castellana 1C.pdf", category: "CONTRATO", fileSize: "2.4 MB", uploadDate: "17 Ago 2026", fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1789067273758x228921515033049470/1.4_100926.pdf" },
-    ],
-    payments: [
-      {
-        id: "pay-veq-1",
-        cuotaNumber: 1,
-        concept: "Enganche Inicial (20%)",
-        scheduledAmount: 1200000,
-        scheduledDate: "17 Ago 2026",
-        paidAmount: 1200000,
-        pendingAmount: 0,
-        status: "PAGADO",
-        paidDate: "17 Ago 2026",
-        receiptNumber: "REC-VEQ-0817",
-        paymentMethod: "SPEI Bancomer",
-        comprobanteUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1789067273758x228921515033049470/1.4_100926.pdf",
-        comprobanteName: "Comprobante_Enganche_1C.pdf",
-      },
-      {
-        id: "pay-veq-2",
-        cuotaNumber: 2,
-        concept: "Mensualidad 1 de 18",
-        scheduledAmount: 250000,
-        scheduledDate: "17 Sep 2026",
-        paidAmount: 0,
-        pendingAmount: 250000,
-        status: "ATRASADO",
-        paymentMethod: "Pendiente",
-      },
-      {
-        id: "pay-veq-3",
-        cuotaNumber: 3,
-        concept: "Mensualidad 2 de 18",
-        scheduledAmount: 250000,
-        scheduledDate: "17 Oct 2026",
-        paidAmount: 0,
-        pendingAmount: 250000,
-        status: "PENDIENTE",
-        paymentMethod: "Pendiente",
-      },
-    ],
-    customAttributes: [
-      { label: "Orientación", value: "Sur - Poniente" },
-      { label: "Tipo de Vista", value: "Parque Central / Alberca" },
-      { label: "Cajón Asignado", value: "Sótano 2, #E-14" },
-    ],
-  },
-  {
-    id: "prop-blackeleven-4b",
-    clientEmail: "0242573@up.edu.mx",
-    developerName: "Desarrollos Black Eleven",
-    developerLogo: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg",
-    projectName: "Black Eleven Residencial",
-    projectLogo: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg",
-    projectAddress: "Av. Rubén Darío 1120, Col. Providencia · Guadalajara, Jal.",
-    unitNumber: "4B",
-    unitType: "Departamento",
-    totalPrice: 7500000,
-    paidAmount: 4500000,
-    pendingAmount: 3000000,
-    nextPaymentAmount: 300000,
-    nextPaymentDueDate: "01 Nov 2026",
-    nextPaymentDaysRemaining: 39,
-    overdueAmount: 0,
-    constructionPct: 82,
-    lastProgressUpdateDate: "15/09/26",
-    estimatedDeliveryDate: "30 Nov 2027",
-    areaM2: 84,
-    bedrooms: 2,
-    bathrooms: 2,
-    images: [
-      "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1000&auto=format&fit=crop&q=80",
-    ],
-    specialtiesProgress: [
-      { id: "esp-11", name: "1. Cimentación", percentage: 100 },
-      { id: "esp-12", name: "2. Estructura", percentage: 100 },
-      { id: "esp-13", name: "3. Instalaciones", percentage: 88 },
-      { id: "esp-14", name: "4. Acabados", percentage: 55 },
-    ],
-    constructionMilestones: [
-      { id: "ms-11", title: "Avance Acabados", date: "15 Sep 2026", photo: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=800", description: "Pisos porcelánicos y cancelería." },
-    ],
-    documents: [
-      { id: "doc-11", title: "Contrato Compraventa Black Eleven 4B.pdf", category: "CONTRATO", fileSize: "3.1 MB", uploadDate: "05 Jun 2026", fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787161214759x388876139836020300/3.3_190826.pdf" },
-    ],
-    payments: [
-      {
-        id: "pay-be-1",
-        cuotaNumber: 1,
-        concept: "Enganche (30%)",
-        scheduledAmount: 2250000,
-        scheduledDate: "05 Jun 2026",
-        paidAmount: 2250000,
-        pendingAmount: 0,
-        status: "PAGADO",
-        paidDate: "05 Jun 2026",
-        receiptNumber: "REC-BE-001",
-        paymentMethod: "SPEI Banamex",
-        comprobanteUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787161214759x388876139836020300/3.3_190826.pdf",
-        comprobanteName: "SPEI_Enganche_4B.pdf",
-      },
-      {
-        id: "pay-be-2",
-        cuotaNumber: 2,
-        concept: "Abono a Capital Extraordinario",
-        scheduledAmount: 2250000,
-        scheduledDate: "15 Jul 2026",
-        paidAmount: 2250000,
-        pendingAmount: 0,
-        status: "PAGADO",
-        paidDate: "15 Jul 2026",
-        receiptNumber: "REC-BE-002",
-        paymentMethod: "SPEI Banamex",
-        comprobanteUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787161241187x613570117706534300/3.3_190826.pdf",
-        comprobanteName: "SPEI_Capital_4B.pdf",
-      },
-    ],
-    customAttributes: [
-      { label: "Orientación", value: "Norte - Oriente" },
-      { label: "Vista", value: "Panorámica Ciudad" },
-    ],
-  },
-];
-
 export default function ClientPortalWeb() {
   const router = useRouter();
+
+  // Loading & Session State
+  const [isLoading, setIsLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState("");
+  const [userName, setUserName] = useState("");
+  const [userPhone, setUserPhone] = useState("");
+  const [userRfc, setUserRfc] = useState("");
+  const [userAddress, setUserAddress] = useState("");
+  const [userAvatar, setUserAvatar] = useState("");
 
   // Navigation State
   const [activeTab, setActiveTab] = useState<"properties" | "profile">("properties");
   const [screen, setScreen] = useState<"main" | "detail" | "construction" | "documents" | "statement">("main");
-  const [selectedPropId, setSelectedPropId] = useState("prop-campero-51");
+  const [properties, setProperties] = useState<ClientProperty[]>([]);
+  const [selectedPropId, setSelectedPropId] = useState<string>("");
   const [selectedImageIdx, setSelectedImageIdx] = useState(0);
   const [unitInfoExpanded, setUnitInfoExpanded] = useState(true);
   const [docSearch, setDocSearch] = useState("");
@@ -465,59 +119,83 @@ export default function ClientPortalWeb() {
 
   // Modals & Viewers
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showReceiptPayment, setShowReceiptPayment] = useState<PaymentItem | null>(null);
   const [showVoucherPayment, setShowVoucherPayment] = useState<PaymentItem | null>(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
 
-  // User
-  const [userName, setUserName] = useState("Jaime Pozos Pizano");
-  const [userEmail, setUserEmail] = useState("jaimepozospizano@gmail.com");
-  const [userPhone, setUserPhone] = useState("+52 33 3858 9824");
-  const [userRfc, setUserRfc] = useState("POPJ991118QC8");
-  const [userAddress, setUserAddress] = useState("Av. del Servidor Público 1425, Zapopan, Jal.");
+  // Notifications State
+  const [notifications, setNotifications] = useState([
+    { id: "notif-1", title: "Aviso de Estado de Cuenta", body: "Tu estado de cuenta del periodo actual está actualizado.", time: "Hoy", read: false },
+    { id: "notif-2", title: "Nuevo Avance de Obra", body: "La desarrolladora ha publicado actualizaciones fotográficas en tu proyecto.", time: "Ayer", read: false },
+    { id: "notif-3", title: "Portal de Clientes Devio Activo", body: "Bienvenido a tu plataforma privada de seguimiento y pagos.", time: "Reciente", read: true },
+  ]);
 
-  // Sync user session on mount
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // Load Session and Fetch Real Data
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    async function loadClientData() {
+      if (typeof window === "undefined") return;
+
       const rawSession = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
+      let sessionEmail = "";
+
       if (rawSession) {
         try {
           const session = JSON.parse(rawSession);
           if (session.email) {
-            const clean = session.email.toLowerCase().trim();
-            setUserEmail(clean);
-            setUserName(session.fullName || session.name || (clean.includes("pozo") ? "Jaime Pozos Pizano" : "Iñigo Heredia Horner"));
+            sessionEmail = session.email.toLowerCase().trim();
+            setUserEmail(sessionEmail);
+            setUserName(session.fullName || session.name || "Cliente Devio");
             if (session.phone) setUserPhone(session.phone);
             if (session.rfc) setUserRfc(session.rfc);
             if (session.address) setUserAddress(session.address);
+            setUserAvatar(
+              session.avatarUrl ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(session.fullName || session.name || "Cliente")}&background=1F3652&color=fff&bold=true`
+            );
           }
         } catch (e) {}
       }
+
+      if (!sessionEmail) {
+        // If not logged in, redirect to login page
+        router.push("/login");
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const res = await fetch(`/api/client/properties?email=${encodeURIComponent(sessionEmail)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user) {
+            setUserName(data.user.name || userName);
+            if (data.user.phone) setUserPhone(data.user.phone);
+            if (data.user.rfc) setUserRfc(data.user.rfc);
+            if (data.user.address) setUserAddress(data.user.address);
+          }
+          if (Array.isArray(data.properties) && data.properties.length > 0) {
+            setProperties(data.properties);
+            setSelectedPropId(data.properties[0].id);
+          } else {
+            setProperties([]);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching client properties:", err);
+      } finally {
+        setIsLoading(false);
+      }
     }
-  }, []);
 
-  // Filter properties strictly by logged-in client email
-  const userProperties = useMemo(() => {
-    const cleanEmail = userEmail.trim().toLowerCase();
-    const filtered = INITIAL_PROPERTIES.filter(
-      (p) => !p.clientEmail || p.clientEmail.trim().toLowerCase() === cleanEmail
-    );
-    return filtered.length > 0 ? filtered : [INITIAL_PROPERTIES[0]!];
-  }, [userEmail]);
+    loadClientData();
+  }, [router]);
 
-  const selectedProp: ClientProperty = useMemo(() => {
-    return (userProperties.find((p) => p.id === selectedPropId) || userProperties[0] || INITIAL_PROPERTIES[0]) as ClientProperty;
-  }, [userProperties, selectedPropId]);
-
-  // Notifications
-  const [notifications, setNotifications] = useState([
-    { id: "notif-1", title: "Aviso de Cuota Vencida", body: "Tu cuota de Desarrollos Campero (Mainstreet Valle Real 5.1) tiene un saldo pendiente.", time: "Hace 2 horas", read: false },
-    { id: "notif-2", title: "Nuevo Avance de Obra Publicado", body: "Desarrollos Campero ha subido fotografías del Avance de Cimentación.", time: "Ayer a las 11:30 AM", read: false },
-    { id: "notif-3", title: "Recibo de Enganche Emitido", body: "Se generó tu recibo digital oficial por $1,538,980.50 MXN.", time: "28 Ene 2026", read: true },
-  ]);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const selectedProp: ClientProperty | null = useMemo(() => {
+    if (properties.length === 0) return null;
+    return properties.find((p) => p.id === selectedPropId) || properties[0] || null;
+  }, [properties, selectedPropId]);
 
   const formatMoney = (val: number) =>
     new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }).format(val || 0);
@@ -536,13 +214,15 @@ export default function ClientPortalWeb() {
   };
 
   const filteredDocs = useMemo(() => {
-    return selectedProp.documents.filter((d) =>
+    if (!selectedProp) return [];
+    return (selectedProp.documents || []).filter((d) =>
       d.title.toLowerCase().includes(docSearch.toLowerCase())
     );
-  }, [selectedProp.documents, docSearch]);
+  }, [selectedProp, docSearch]);
 
   // Handle Official Receipt View/PDF
   const handleOpenReceipt = (payment: PaymentItem) => {
+    if (!selectedProp) return;
     openReceiptInNewTab({
       folio: payment.receiptNumber || `REC-${selectedProp.unitNumber}-001`,
       projectName: selectedProp.projectName,
@@ -560,10 +240,22 @@ export default function ClientPortalWeb() {
     });
   };
 
+  // Loading Screen
+  if (isLoading) {
+    return (
+      <div style={{ minHeight: "100vh", backgroundColor: "#F8FAFC", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: "1rem" }}>
+        <Loader2 size={36} color="#1F3652" className="animate-spin" />
+        <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#1F3652" }}>
+          Cargando tu información...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#F8FAFC", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "0", boxSizing: "border-box" }}>
       
-      {/* Responsive Container: Fluid on mobile, comfortably centered on tablets and desktop */}
+      {/* Responsive Container */}
       <div
         style={{
           width: "100%",
@@ -656,8 +348,8 @@ export default function ClientPortalWeb() {
                     }}
                   >
                     <img
-                      src={userEmail === "0242573@up.edu.mx" ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80"}
-                      alt="Avatar"
+                      src={userAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=1F3652&color=fff&bold=true`}
+                      alt={userName}
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
                   </button>
@@ -698,7 +390,7 @@ export default function ClientPortalWeb() {
                 <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.8)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   {screen === "detail" ? "Detalle de Propiedad" : (screen === "construction" ? "Avance de Obra" : (screen === "documents" ? "Documentación Oficial" : "Estado de Cuenta y Pagos"))}
                 </div>
-                <div style={{ fontSize: "1.05rem", fontWeight: 800 }}>{selectedProp.projectName} · Unidad {selectedProp.unitNumber}</div>
+                <div style={{ fontSize: "1.05rem", fontWeight: 800 }}>{selectedProp?.projectName} · Unidad {selectedProp?.unitNumber}</div>
               </div>
 
               <div style={{ width: "38px" }} />
@@ -712,840 +404,858 @@ export default function ClientPortalWeb() {
           {/* TAB 1: PROPIEDADES */}
           {activeTab === "properties" && (
             <>
-              {/* PANTALLA 1: LISTA PRINCIPAL (MIS PROPIEDADES) */}
-              {screen === "main" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                  
-                  {/* Banner: Tu Próximo Pago (Clean Light Style) */}
-                  <div
-                    style={{
-                      backgroundColor: "#FFFFFF",
-                      borderRadius: "1.25rem",
-                      padding: "1.25rem 1.4rem",
-                      boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
-                      border: "1px solid #E2E8F0",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "0.6rem",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span
-                        style={{
-                          fontSize: "0.72rem",
-                          fontWeight: 800,
-                          letterSpacing: "0.04em",
-                          color: "#1F3652",
-                          backgroundColor: "#FEF3C7",
-                          padding: "0.25rem 0.65rem",
-                          borderRadius: "99px",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Tu Próximo Pago
-                      </span>
-                      <span style={{ fontSize: "0.78rem", color: "#64748B", fontWeight: 600 }}>
-                        {selectedProp.nextPaymentDaysRemaining} días restantes
-                      </span>
-                    </div>
-
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "0.5rem" }}>
-                      <div>
-                        <div style={{ fontSize: "1.75rem", fontWeight: 900, color: "#1F3652", letterSpacing: "-0.02em" }}>
-                          {formatMoneyCompact(selectedProp.nextPaymentAmount)}
-                        </div>
-                        <div style={{ fontSize: "0.8rem", color: "#64748B", marginTop: "2px" }}>
-                          Vence el <strong>{selectedProp.nextPaymentDueDate}</strong> • {selectedProp.projectName} ({selectedProp.unitNumber})
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => {
-                          setSelectedPropId(selectedProp.id);
-                          setScreen("statement");
-                          setStatementSubTab("payments");
-                        }}
-                        style={{
-                          backgroundColor: "#1F3652",
-                          color: "#FFFFFF",
-                          padding: "0.55rem 1.1rem",
-                          borderRadius: "0.6rem",
-                          border: "none",
-                          fontSize: "0.78rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Ver Pagos
-                      </button>
-                    </div>
-
-                    {selectedProp.overdueAmount ? (
+              {/* Empty state if no properties */}
+              {properties.length === 0 ? (
+                <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "3rem 1.5rem", textAlign: "center", border: "1px solid #E2E8F0" }}>
+                  <Building2 size={48} color="#94A3B8" style={{ margin: "0 auto 1rem auto" }} />
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.5rem" }}>
+                    No se encontraron propiedades vinculadas
+                  </h3>
+                  <p style={{ fontSize: "0.85rem", color: "#64748B", maxWidth: "420px", margin: "0 auto" }}>
+                    Tu cuenta ({userEmail}) no tiene unidades formalizadas registradas actualmente. Si adquiriste una propiedad, contacta a tu asesor comercial.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* PANTALLA 1: LISTA PRINCIPAL (MIS PROPIEDADES) */}
+                  {screen === "main" && selectedProp && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                      
+                      {/* Banner: Tu Próximo Pago (Clean Light Style) */}
                       <div
-                        style={{
-                          marginTop: "0.4rem",
-                          backgroundColor: "#FEF2F2",
-                          border: "1px solid #FECACA",
-                          borderRadius: "0.6rem",
-                          padding: "0.6rem 0.85rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          fontSize: "0.78rem",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "#DC2626", fontWeight: 700 }}>
-                          <AlertTriangle size={15} />
-                          <span>Saldo Vencido</span>
-                        </div>
-                        <span style={{ color: "#DC2626", fontWeight: 900 }}>{formatMoneyCompact(selectedProp.overdueAmount)}</span>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {/* List of Properties */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652" }}>
-                      Tus Propiedades Adquiridas ({userProperties.length})
-                    </span>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: userProperties.length > 1 ? "repeat(auto-fit, minmax(320px, 1fr))" : "1fr", gap: "1rem" }}>
-                    {userProperties.map((prop) => (
-                      <div
-                        key={prop.id}
-                        onClick={() => {
-                          setSelectedPropId(prop.id);
-                          setSelectedImageIdx(0);
-                          setScreen("detail");
-                        }}
                         style={{
                           backgroundColor: "#FFFFFF",
                           borderRadius: "1.25rem",
-                          overflow: "hidden",
-                          boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+                          padding: "1.25rem 1.4rem",
+                          boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
                           border: "1px solid #E2E8F0",
-                          cursor: "pointer",
-                          transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.6rem",
                         }}
                       >
-                        <div style={{ position: "relative", height: "180px", backgroundColor: "#E2E8F0" }}>
-                          <img
-                            src={prop.images[0]}
-                            alt={prop.projectName}
-                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                          />
-                          <div
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span
                             style={{
-                              position: "absolute",
-                              top: "12px",
-                              left: "12px",
-                              backgroundColor: "rgba(31, 54, 82, 0.9)",
-                              color: "#FFFFFF",
-                              padding: "0.25rem 0.75rem",
-                              borderRadius: "99px",
                               fontSize: "0.72rem",
                               fontWeight: 800,
+                              letterSpacing: "0.04em",
+                              color: "#1F3652",
+                              backgroundColor: "#FEF3C7",
+                              padding: "0.25rem 0.65rem",
+                              borderRadius: "99px",
+                              textTransform: "uppercase",
                             }}
                           >
-                            {prop.developerName}
+                            Tu Próximo Pago
+                          </span>
+                          <span style={{ fontSize: "0.78rem", color: "#64748B", fontWeight: 600 }}>
+                            {selectedProp.nextPaymentDaysRemaining} días restantes
+                          </span>
+                        </div>
+
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "0.5rem" }}>
+                          <div>
+                            <div style={{ fontSize: "1.75rem", fontWeight: 900, color: "#1F3652", letterSpacing: "-0.02em" }}>
+                              {formatMoneyCompact(selectedProp.nextPaymentAmount)}
+                            </div>
+                            <div style={{ fontSize: "0.8rem", color: "#64748B", marginTop: "2px" }}>
+                              Vence el <strong>{selectedProp.nextPaymentDueDate}</strong> • {selectedProp.projectName} ({selectedProp.unitNumber})
+                            </div>
                           </div>
+
+                          <button
+                            onClick={() => {
+                              setSelectedPropId(selectedProp.id);
+                              setScreen("statement");
+                              setStatementSubTab("payments");
+                            }}
+                            style={{
+                              backgroundColor: "#1F3652",
+                              color: "#FFFFFF",
+                              padding: "0.55rem 1.1rem",
+                              borderRadius: "0.6rem",
+                              border: "none",
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Ver Pagos
+                          </button>
+                        </div>
+
+                        {selectedProp.overdueAmount ? (
                           <div
                             style={{
-                              position: "absolute",
-                              bottom: "12px",
-                              right: "12px",
-                              backgroundColor: "rgba(0, 0, 0, 0.8)",
-                              color: "#FFFFFF",
-                              padding: "0.25rem 0.65rem",
-                              borderRadius: "0.45rem",
-                              fontSize: "0.75rem",
-                              fontWeight: 800,
+                              marginTop: "0.4rem",
+                              backgroundColor: "#FEF2F2",
+                              border: "1px solid #FECACA",
+                              borderRadius: "0.6rem",
+                              padding: "0.6rem 0.85rem",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              fontSize: "0.78rem",
                             }}
                           >
-                            Unidad {prop.unitNumber}
-                          </div>
-                        </div>
-
-                        <div style={{ padding: "1.1rem" }}>
-                          <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652" }}>
-                            {prop.projectName}
-                          </div>
-                          <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "3px" }}>
-                            {prop.projectAddress}
-                          </div>
-
-                          {/* Specs row */}
-                          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
-                            <span style={{ fontSize: "0.72rem", backgroundColor: "#F1F5F9", color: "#334155", padding: "0.25rem 0.6rem", borderRadius: "0.4rem", fontWeight: 700 }}>
-                              {prop.areaM2} m²
-                            </span>
-                            <span style={{ fontSize: "0.72rem", backgroundColor: "#F1F5F9", color: "#334155", padding: "0.25rem 0.6rem", borderRadius: "0.4rem", fontWeight: 700 }}>
-                              {prop.bedrooms} Recámaras
-                            </span>
-                            <span style={{ fontSize: "0.72rem", backgroundColor: "#F1F5F9", color: "#334155", padding: "0.25rem 0.6rem", borderRadius: "0.4rem", fontWeight: 700 }}>
-                              {prop.bathrooms} Baños
-                            </span>
-                          </div>
-
-                          {/* Obra progress bar */}
-                          <div style={{ marginTop: "1rem" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", fontWeight: 700, marginBottom: "4px" }}>
-                              <span style={{ color: "#475569" }}>Avance de Obra</span>
-                              <span style={{ color: "#00875A" }}>{prop.constructionPct}%</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "#DC2626", fontWeight: 700 }}>
+                              <AlertTriangle size={15} />
+                              <span>Saldo Vencido</span>
                             </div>
-                            <div style={{ height: "8px", backgroundColor: "#E2E8F0", borderRadius: "99px", overflow: "hidden" }}>
-                              <div style={{ width: `${prop.constructionPct}%`, height: "100%", backgroundColor: "#00C48C", borderRadius: "99px" }} />
-                            </div>
+                            <span style={{ color: "#DC2626", fontWeight: 900 }}>{formatMoneyCompact(selectedProp.overdueAmount)}</span>
                           </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* PANTALLA 2: DETALLE DE PROPIEDAD */}
-              {screen === "detail" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
-                  
-                  {/* Photo Carousel & Thumbnails */}
-                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", overflow: "hidden", border: "1px solid #E2E8F0" }}>
-                    <div style={{ height: "240px", width: "100%", position: "relative", backgroundColor: "#E2E8F0" }}>
-                      <img
-                        src={selectedProp.images[selectedImageIdx] || selectedProp.images[0]}
-                        alt="Foto Propiedad"
-                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                      />
-                    </div>
-                    {selectedProp.images.length > 1 && (
-                      <div style={{ display: "flex", gap: "0.6rem", padding: "0.75rem", backgroundColor: "#F8FAFC", overflowX: "auto" }}>
-                        {selectedProp.images.map((img, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => setSelectedImageIdx(idx)}
-                            style={{
-                              width: "65px",
-                              height: "46px",
-                              borderRadius: "0.45rem",
-                              overflow: "hidden",
-                              border: selectedImageIdx === idx ? "2.5px solid #1F3652" : "1px solid #CBD5E1",
-                              cursor: "pointer",
-                              padding: 0,
-                              flexShrink: 0,
-                            }}
-                          >
-                            <img src={img} alt="Thumb" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Payment Pills & Balance Button */}
-                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
-                    <div style={{ display: "flex", gap: "0.75rem", marginBottom: "0.85rem", flexWrap: "wrap" }}>
-                      <div style={{ flex: 1, minWidth: "140px", backgroundColor: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: "0.75rem", padding: "0.75rem 0.85rem" }}>
-                        <div style={{ fontSize: "0.7rem", color: "#92400E", fontWeight: 700 }}>Tu Próximo Pago</div>
-                        <div style={{ fontSize: "1.15rem", fontWeight: 900, color: "#78350F", marginTop: "2px" }}>
-                          {formatMoneyCompact(selectedProp.nextPaymentAmount)}
-                        </div>
-                      </div>
-                      <div style={{ flex: 1, minWidth: "140px", backgroundColor: "#FEE2E2", border: "1px solid #FECACA", borderRadius: "0.75rem", padding: "0.75rem 0.85rem" }}>
-                        <div style={{ fontSize: "0.7rem", color: "#991B1B", fontWeight: 700 }}>Saldo Vencido</div>
-                        <div style={{ fontSize: "1.15rem", fontWeight: 900, color: "#7F1D1D", marginTop: "2px" }}>
-                          {formatMoneyCompact(selectedProp.overdueAmount || 0)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => { setScreen("statement"); setStatementSubTab("payments"); }}
-                      style={{
-                        width: "100%",
-                        padding: "0.8rem",
-                        backgroundColor: "#1F3652",
-                        color: "#FFFFFF",
-                        border: "none",
-                        borderRadius: "0.65rem",
-                        fontWeight: 800,
-                        fontSize: "0.85rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Ver Saldo y Calendario de Pagos
-                    </button>
-                  </div>
-
-                  {/* Avance de Obra Summary Card */}
-                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontSize: "0.75rem", color: "#64748B", fontWeight: 700 }}>Avance General de Obra</div>
-                        <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#00875A", marginTop: "2px" }}>
-                          {selectedProp.constructionPct}%
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setScreen("construction")}
-                        style={{
-                          backgroundColor: "#F1F5F9",
-                          color: "#1F3652",
-                          border: "none",
-                          padding: "0.55rem 1rem",
-                          borderRadius: "0.6rem",
-                          fontSize: "0.8rem",
-                          fontWeight: 800,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Ver Avances y Fotos
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Resumen Financiero */}
-                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.85rem" }}>
-                      Resumen Financiero
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem", fontSize: "0.82rem" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ color: "#64748B" }}>Precio Total de Venta:</span>
-                        <strong style={{ color: "#1E293B" }}>{formatMoney(selectedProp.totalPrice)}</strong>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ color: "#64748B" }}>Total Pagado a la Fecha:</span>
-                        <strong style={{ color: "#00875A" }}>{formatMoney(selectedProp.paidAmount)}</strong>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ color: "#64748B" }}>Saldo Pendiente por Liquidar:</span>
-                        <strong style={{ color: "#B45309" }}>{formatMoney(selectedProp.pendingAmount)}</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Acciones Rápidas */}
-                  <div style={{ display: "flex", gap: "0.75rem" }}>
-                    <button
-                      onClick={() => setScreen("documents")}
-                      style={{
-                        flex: 1,
-                        padding: "0.85rem 0.6rem",
-                        backgroundColor: "#FFFFFF",
-                        border: "1px solid #E2E8F0",
-                        borderRadius: "0.85rem",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: "0.35rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <FileText size={20} color="#1F3652" />
-                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1F3652" }}>Documentos</span>
-                    </button>
-
-                    <button
-                      onClick={() => { setScreen("statement"); setStatementSubTab("statement"); }}
-                      style={{
-                        flex: 1,
-                        padding: "0.85rem 0.6rem",
-                        backgroundColor: "#FFFFFF",
-                        border: "1px solid #E2E8F0",
-                        borderRadius: "0.85rem",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: "0.35rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <CreditCard size={20} color="#1F3652" />
-                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1F3652" }}>Estado de Cuenta</span>
-                    </button>
-
-                    <Link
-                      href="/marketplace"
-                      style={{
-                        flex: 1,
-                        padding: "0.85rem 0.6rem",
-                        backgroundColor: "#FFFFFF",
-                        border: "1px solid #E2E8F0",
-                        borderRadius: "0.85rem",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: "0.35rem",
-                        textDecoration: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <ShoppingBag size={20} color="#1F3652" />
-                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1F3652" }}>Marketplace</span>
-                    </Link>
-                  </div>
-
-                  {/* Información de la Unidad (Collapsible) */}
-                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
-                    <div
-                      onClick={() => setUnitInfoExpanded(!unitInfoExpanded)}
-                      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
-                    >
-                      <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652" }}>Información Técnica de la Unidad</span>
-                      {unitInfoExpanded ? <ChevronUp size={18} color="#64748B" /> : <ChevronDown size={18} color="#64748B" />}
-                    </div>
-
-                    {unitInfoExpanded && (
-                      <div style={{ marginTop: "0.85rem", display: "flex", flexDirection: "column", gap: "0.55rem", fontSize: "0.82rem", borderTop: "1px solid #F1F5F9", paddingTop: "0.75rem" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ color: "#64748B" }}>Superficie Total:</span>
-                          <strong>{selectedProp.areaM2} m²</strong>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ color: "#64748B" }}>Recámaras:</span>
-                          <strong>{selectedProp.bedrooms}</strong>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ color: "#64748B" }}>Baños:</span>
-                          <strong>{selectedProp.bathrooms}</strong>
-                        </div>
-                        {selectedProp.customAttributes.map((attr, i) => (
-                          <div key={i} style={{ display: "flex", justifyContent: "space-between" }}>
-                            <span style={{ color: "#64748B" }}>{attr.label}:</span>
-                            <strong>{attr.value}</strong>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* PANTALLA 3: AVANCE DE OBRA */}
-              {screen === "construction" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
-                  
-                  {/* General Progress Card */}
-                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.3rem", border: "1px solid #E2E8F0" }}>
-                    <div style={{ fontSize: "0.8rem", color: "#64748B", fontWeight: 700 }}>Avance General de Obra</div>
-                    <div style={{ fontSize: "2.2rem", fontWeight: 900, color: "#00875A", margin: "0.3rem 0" }}>
-                      {selectedProp.constructionPct}%
-                    </div>
-                    <div style={{ fontSize: "0.8rem", color: "#64748B" }}>
-                      Fecha estimada de entrega: <strong style={{ color: "#1F3652" }}>{selectedProp.estimatedDeliveryDate}</strong>
-                    </div>
-                  </div>
-
-                  {/* Avance por Especialidad */}
-                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.85rem" }}>
-                      Avance por Especialidad
-                    </div>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-                      {selectedProp.specialtiesProgress.map((esp) => (
-                        <div key={esp.id}>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", fontWeight: 700, marginBottom: "4px" }}>
-                            <span style={{ color: "#334155" }}>{esp.name}</span>
-                            <span style={{ color: "#00875A" }}>{esp.percentage}%</span>
-                          </div>
-                          <div style={{ height: "8px", backgroundColor: "#E2E8F0", borderRadius: "99px", overflow: "hidden" }}>
-                            <div style={{ width: `${esp.percentage}%`, height: "100%", backgroundColor: "#00C48C", borderRadius: "99px" }} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Histórico Avances de Obra */}
-                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.85rem" }}>
-                      Histórico Fotográfico de Obra
-                    </div>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                      {selectedProp.constructionMilestones.map((m) => (
-                        <div key={m.id} style={{ borderRadius: "0.85rem", overflow: "hidden", border: "1px solid #E2E8F0" }}>
-                          <img src={m.photo} alt={m.title} style={{ width: "100%", height: "180px", objectFit: "cover", display: "block" }} />
-                          <div style={{ padding: "0.85rem" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <strong style={{ fontSize: "0.9rem", color: "#1F3652" }}>{m.title}</strong>
-                              <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 600 }}>{m.date}</span>
-                            </div>
-                            <p style={{ fontSize: "0.78rem", color: "#475569", marginTop: "0.4rem", lineHeight: 1.45 }}>
-                              {m.description}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* PANTALLA 4: DOCUMENTOS */}
-              {screen === "documents" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  {/* Search Bar */}
-                  <div style={{ position: "relative" }}>
-                    <Search size={18} color="#94A3B8" style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)" }} />
-                    <input
-                      type="text"
-                      placeholder="Buscar contrato, plano o reglamento..."
-                      value={docSearch}
-                      onChange={(e) => setDocSearch(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem 1rem 0.75rem 2.5rem",
-                        borderRadius: "0.85rem",
-                        border: "1px solid #CBD5E1",
-                        fontSize: "0.85rem",
-                        backgroundColor: "#FFFFFF",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                  </div>
-
-                  {filteredDocs.map((doc) => (
-                    <div
-                      key={doc.id}
-                      style={{
-                        backgroundColor: "#FFFFFF",
-                        borderRadius: "1rem",
-                        padding: "1rem 1.1rem",
-                        border: "1px solid #E2E8F0",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", minWidth: 0 }}>
-                        <div style={{ width: "40px", height: "40px", borderRadius: "0.6rem", backgroundColor: "rgba(31,54,82,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <FileText size={22} color="#1F3652" />
-                        </div>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {doc.title}
-                          </div>
-                          <div style={{ fontSize: "0.72rem", color: "#94A3B8", marginTop: "2px" }}>
-                            {doc.category} • {doc.fileSize} • {doc.uploadDate}
-                          </div>
-                        </div>
+                        ) : null}
                       </div>
 
-                      <a
-                        href={doc.fileUrl || "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          padding: "0.5rem 0.85rem",
-                          borderRadius: "0.5rem",
-                          backgroundColor: "#F1F5F9",
-                          color: "#1F3652",
-                          fontSize: "0.75rem",
-                          fontWeight: 800,
-                          textDecoration: "none",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.35rem",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Download size={14} /> Ver PDF
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* PANTALLA 5: ESTADO DE CUENTA & PAGOS (Back-Office Style Table) */}
-              {screen === "statement" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
-                  
-                  {/* Financial 4-metric Grid */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0.75rem" }}>
-                    <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
-                      <div style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 700 }}>Precio de Venta Total</div>
-                      <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#1F3652", marginTop: "3px" }}>
-                        {formatMoney(selectedProp.totalPrice)}
-                      </div>
-                    </div>
-                    <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
-                      <div style={{ fontSize: "0.72rem", color: "#00875A", fontWeight: 700 }}>Total Cobrado / Pagado</div>
-                      <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#00875A", marginTop: "3px" }}>
-                        {formatMoney(selectedProp.paidAmount)}
-                      </div>
-                    </div>
-                    <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
-                      <div style={{ fontSize: "0.72rem", color: "#B45309", fontWeight: 700 }}>Saldo Pendiente Total</div>
-                      <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#B45309", marginTop: "3px" }}>
-                        {formatMoney(selectedProp.pendingAmount)}
-                      </div>
-                    </div>
-                    <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
-                      <div style={{ fontSize: "0.72rem", color: "#DC2626", fontWeight: 700 }}>Saldo Vencido</div>
-                      <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#DC2626", marginTop: "3px" }}>
-                        {formatMoney(selectedProp.overdueAmount || 0)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Subtabs: Estado de Cuenta | Pagos */}
-                  <div style={{ display: "flex", backgroundColor: "#E2E8F0", padding: "4px", borderRadius: "0.75rem" }}>
-                    <button
-                      onClick={() => setStatementSubTab("statement")}
-                      style={{
-                        flex: 1,
-                        padding: "0.55rem",
-                        borderRadius: "0.55rem",
-                        border: "none",
-                        fontSize: "0.78rem",
-                        fontWeight: 800,
-                        backgroundColor: statementSubTab === "statement" ? "#FFFFFF" : "transparent",
-                        color: statementSubTab === "statement" ? "#1F3652" : "#64748B",
-                        cursor: "pointer",
-                        boxShadow: statementSubTab === "statement" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-                      }}
-                    >
-                      Resumen y Descarga
-                    </button>
-                    <button
-                      onClick={() => setStatementSubTab("payments")}
-                      style={{
-                        flex: 1,
-                        padding: "0.55rem",
-                        borderRadius: "0.55rem",
-                        border: "none",
-                        fontSize: "0.78rem",
-                        fontWeight: 800,
-                        backgroundColor: statementSubTab === "payments" ? "#FFFFFF" : "transparent",
-                        color: statementSubTab === "payments" ? "#1F3652" : "#64748B",
-                        cursor: "pointer",
-                        boxShadow: statementSubTab === "payments" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-                      }}
-                    >
-                      Calendario de Pagos y Comprobantes
-                    </button>
-                  </div>
-
-                  {statementSubTab === "statement" && (
-                    <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.3rem", border: "1px solid #E2E8F0", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                      {/* List of Properties */}
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div>
-                          <div style={{ fontSize: "1rem", fontWeight: 800, color: "#1F3652" }}>
-                            Estado de Cuenta Oficial
+                        <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652" }}>
+                          Tus Propiedades Adquiridas ({properties.length})
+                        </span>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: properties.length > 1 ? "repeat(auto-fit, minmax(320px, 1fr))" : "1fr", gap: "1rem" }}>
+                        {properties.map((prop) => (
+                          <div
+                            key={prop.id}
+                            onClick={() => {
+                              setSelectedPropId(prop.id);
+                              setSelectedImageIdx(0);
+                              setScreen("detail");
+                            }}
+                            style={{
+                              backgroundColor: "#FFFFFF",
+                              borderRadius: "1.25rem",
+                              overflow: "hidden",
+                              boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+                              border: "1px solid #E2E8F0",
+                              cursor: "pointer",
+                              transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                            }}
+                          >
+                            <div style={{ position: "relative", height: "180px", backgroundColor: "#E2E8F0" }}>
+                              <img
+                                src={prop.images[0] || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&auto=format&fit=crop&q=80"}
+                                alt={prop.projectName}
+                                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                              />
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: "12px",
+                                  left: "12px",
+                                  backgroundColor: "rgba(31, 54, 82, 0.9)",
+                                  color: "#FFFFFF",
+                                  padding: "0.25rem 0.75rem",
+                                  borderRadius: "99px",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {prop.developerName}
+                              </div>
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  bottom: "12px",
+                                  right: "12px",
+                                  backgroundColor: "rgba(0, 0, 0, 0.8)",
+                                  color: "#FFFFFF",
+                                  padding: "0.25rem 0.65rem",
+                                  borderRadius: "0.45rem",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 800,
+                                }}
+                              >
+                                Unidad {prop.unitNumber}
+                              </div>
+                            </div>
+
+                            <div style={{ padding: "1.1rem" }}>
+                              <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652" }}>
+                                {prop.projectName}
+                              </div>
+                              <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "3px" }}>
+                                {prop.projectAddress}
+                              </div>
+
+                              {/* Specs row */}
+                              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+                                <span style={{ fontSize: "0.72rem", backgroundColor: "#F1F5F9", color: "#334155", padding: "0.25rem 0.6rem", borderRadius: "0.4rem", fontWeight: 700 }}>
+                                  {prop.areaM2} m²
+                                </span>
+                                <span style={{ fontSize: "0.72rem", backgroundColor: "#F1F5F9", color: "#334155", padding: "0.25rem 0.6rem", borderRadius: "0.4rem", fontWeight: 700 }}>
+                                  {prop.bedrooms} Recámaras
+                                </span>
+                                <span style={{ fontSize: "0.72rem", backgroundColor: "#F1F5F9", color: "#334155", padding: "0.25rem 0.6rem", borderRadius: "0.4rem", fontWeight: 700 }}>
+                                  {prop.bathrooms} Baños
+                                </span>
+                              </div>
+
+                              {/* Obra progress bar */}
+                              <div style={{ marginTop: "1rem" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", fontWeight: 700, marginBottom: "4px" }}>
+                                  <span style={{ color: "#475569" }}>Avance de Obra</span>
+                                  <span style={{ color: "#00875A" }}>{prop.constructionPct}%</span>
+                                </div>
+                                <div style={{ height: "8px", backgroundColor: "#E2E8F0", borderRadius: "99px", overflow: "hidden" }}>
+                                  <div style={{ width: `${prop.constructionPct}%`, height: "100%", backgroundColor: "#00C48C", borderRadius: "99px" }} />
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                            Emisión formal certificada por {selectedProp.developerName}
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PANTALLA 2: DETALLE DE PROPIEDAD */}
+                  {screen === "detail" && selectedProp && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+                      
+                      {/* Photo Carousel & Thumbnails */}
+                      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", overflow: "hidden", border: "1px solid #E2E8F0" }}>
+                        <div style={{ height: "240px", width: "100%", position: "relative", backgroundColor: "#E2E8F0" }}>
+                          <img
+                            src={selectedProp.images[selectedImageIdx] || selectedProp.images[0]}
+                            alt="Foto Propiedad"
+                            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                          />
+                        </div>
+                        {selectedProp.images.length > 1 && (
+                          <div style={{ display: "flex", gap: "0.6rem", padding: "0.75rem", backgroundColor: "#F8FAFC", overflowX: "auto" }}>
+                            {selectedProp.images.map((img, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => setSelectedImageIdx(idx)}
+                                style={{
+                                  width: "65px",
+                                  height: "46px",
+                                  borderRadius: "0.45rem",
+                                  overflow: "hidden",
+                                  border: selectedImageIdx === idx ? "2.5px solid #1F3652" : "1px solid #CBD5E1",
+                                  cursor: "pointer",
+                                  padding: 0,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <img src={img} alt="Thumb" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Payment Pills & Balance Button */}
+                      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
+                        <div style={{ display: "flex", gap: "0.75rem", marginBottom: "0.85rem", flexWrap: "wrap" }}>
+                          <div style={{ flex: 1, minWidth: "140px", backgroundColor: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: "0.75rem", padding: "0.75rem 0.85rem" }}>
+                            <div style={{ fontSize: "0.7rem", color: "#92400E", fontWeight: 700 }}>Tu Próximo Pago</div>
+                            <div style={{ fontSize: "1.15rem", fontWeight: 900, color: "#78350F", marginTop: "2px" }}>
+                              {formatMoneyCompact(selectedProp.nextPaymentAmount)}
+                            </div>
+                          </div>
+                          <div style={{ flex: 1, minWidth: "140px", backgroundColor: "#FEE2E2", border: "1px solid #FECACA", borderRadius: "0.75rem", padding: "0.75rem 0.85rem" }}>
+                            <div style={{ fontSize: "0.7rem", color: "#991B1B", fontWeight: 700 }}>Saldo Vencido</div>
+                            <div style={{ fontSize: "1.15rem", fontWeight: 900, color: "#7F1D1D", marginTop: "2px" }}>
+                              {formatMoneyCompact(selectedProp.overdueAmount || 0)}
+                            </div>
                           </div>
                         </div>
 
                         <button
-                          onClick={() => {
-                            openStatementInNewTab({
-                              projectName: selectedProp.projectName,
-                              unitNumber: selectedProp.unitNumber,
-                              clientName: userName,
-                              clientEmail: userEmail,
-                              clientRfc: userRfc,
-                              totalAmount: selectedProp.totalPrice,
-                              paidAmount: selectedProp.paidAmount,
-                              pendingAmount: selectedProp.pendingAmount,
-                              installments: selectedProp.payments.map((p) => ({
-                                concept: p.concept,
-                                scheduledDate: p.scheduledDate,
-                                amount: p.scheduledAmount,
-                                paidAmount: p.paidAmount,
-                                status: p.status,
-                              })),
-                            } as any);
-                          }}
+                          onClick={() => { setScreen("statement"); setStatementSubTab("payments"); }}
                           style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.45rem",
+                            width: "100%",
+                            padding: "0.8rem",
                             backgroundColor: "#1F3652",
                             color: "#FFFFFF",
-                            padding: "0.6rem 1.1rem",
-                            borderRadius: "0.6rem",
                             border: "none",
+                            borderRadius: "0.65rem",
                             fontWeight: 800,
-                            fontSize: "0.78rem",
+                            fontSize: "0.85rem",
                             cursor: "pointer",
                           }}
                         >
-                          <Download size={15} /> Descargar PDF
+                          Ver Saldo y Calendario de Pagos
                         </button>
                       </div>
 
-                      <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.8rem" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ color: "#64748B" }}>Titular de la Cuenta:</span>
-                          <strong style={{ color: "#1F3652" }}>{userName}</strong>
+                      {/* Avance de Obra Summary Card */}
+                      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ fontSize: "0.75rem", color: "#64748B", fontWeight: 700 }}>Avance General de Obra</div>
+                            <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#00875A", marginTop: "2px" }}>
+                              {selectedProp.constructionPct}%
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setScreen("construction")}
+                            style={{
+                              backgroundColor: "#F1F5F9",
+                              color: "#1F3652",
+                              border: "none",
+                              padding: "0.55rem 1rem",
+                              borderRadius: "0.6rem",
+                              fontSize: "0.8rem",
+                              fontWeight: 800,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Ver Avances y Fotos
+                          </button>
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ color: "#64748B" }}>RFC Registrado:</span>
-                          <strong style={{ color: "#1F3652" }}>{userRfc}</strong>
+                      </div>
+
+                      {/* Resumen Financiero */}
+                      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
+                        <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.85rem" }}>
+                          Resumen Financiero
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ color: "#64748B" }}>Unidad Adquirida:</span>
-                          <strong style={{ color: "#1F3652" }}>{selectedProp.projectName} · #{selectedProp.unitNumber}</strong>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem", fontSize: "0.82rem" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ color: "#64748B" }}>Precio Total de Venta:</span>
+                            <strong style={{ color: "#1E293B" }}>{formatMoney(selectedProp.totalPrice)}</strong>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ color: "#64748B" }}>Total Pagado a la Fecha:</span>
+                            <strong style={{ color: "#00875A" }}>{formatMoney(selectedProp.paidAmount)}</strong>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ color: "#64748B" }}>Saldo Pendiente por Liquidar:</span>
+                            <strong style={{ color: "#B45309" }}>{formatMoney(selectedProp.pendingAmount)}</strong>
+                          </div>
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ color: "#64748B" }}>Porcentaje Liquidado:</span>
-                          <strong style={{ color: "#00875A" }}>{((selectedProp.paidAmount / selectedProp.totalPrice) * 100).toFixed(1)}%</strong>
+                      </div>
+
+                      {/* Acciones Rápidas */}
+                      <div style={{ display: "flex", gap: "0.75rem" }}>
+                        <button
+                          onClick={() => setScreen("documents")}
+                          style={{
+                            flex: 1,
+                            padding: "0.85rem 0.6rem",
+                            backgroundColor: "#FFFFFF",
+                            border: "1px solid #E2E8F0",
+                            borderRadius: "0.85rem",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <FileText size={20} color="#1F3652" />
+                          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1F3652" }}>Documentos</span>
+                        </button>
+
+                        <button
+                          onClick={() => { setScreen("statement"); setStatementSubTab("statement"); }}
+                          style={{
+                            flex: 1,
+                            padding: "0.85rem 0.6rem",
+                            backgroundColor: "#FFFFFF",
+                            border: "1px solid #E2E8F0",
+                            borderRadius: "0.85rem",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <CreditCard size={20} color="#1F3652" />
+                          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1F3652" }}>Estado de Cuenta</span>
+                        </button>
+
+                        <Link
+                          href="/marketplace"
+                          style={{
+                            flex: 1,
+                            padding: "0.85rem 0.6rem",
+                            backgroundColor: "#FFFFFF",
+                            border: "1px solid #E2E8F0",
+                            borderRadius: "0.85rem",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            textDecoration: "none",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <ShoppingBag size={20} color="#1F3652" />
+                          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1F3652" }}>Marketplace</span>
+                        </Link>
+                      </div>
+
+                      {/* Información de la Unidad (Collapsible) */}
+                      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
+                        <div
+                          onClick={() => setUnitInfoExpanded(!unitInfoExpanded)}
+                          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+                        >
+                          <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652" }}>Información Técnica de la Unidad</span>
+                          {unitInfoExpanded ? <ChevronUp size={18} color="#64748B" /> : <ChevronDown size={18} color="#64748B" />}
+                        </div>
+
+                        {unitInfoExpanded && (
+                          <div style={{ marginTop: "0.85rem", display: "flex", flexDirection: "column", gap: "0.55rem", fontSize: "0.82rem", borderTop: "1px solid #F1F5F9", paddingTop: "0.75rem" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <span style={{ color: "#64748B" }}>Superficie Total:</span>
+                              <strong>{selectedProp.areaM2} m²</strong>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <span style={{ color: "#64748B" }}>Recámaras:</span>
+                              <strong>{selectedProp.bedrooms}</strong>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <span style={{ color: "#64748B" }}>Baños:</span>
+                              <strong>{selectedProp.bathrooms}</strong>
+                            </div>
+                            {selectedProp.customAttributes.map((attr, i) => (
+                              <div key={i} style={{ display: "flex", justifyContent: "space-between" }}>
+                                <span style={{ color: "#64748B" }}>{attr.label}:</span>
+                                <strong>{attr.value}</strong>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PANTALLA 3: AVANCE DE OBRA */}
+                  {screen === "construction" && selectedProp && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+                      
+                      {/* General Progress Card */}
+                      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.3rem", border: "1px solid #E2E8F0" }}>
+                        <div style={{ fontSize: "0.8rem", color: "#64748B", fontWeight: 700 }}>Avance General de Obra</div>
+                        <div style={{ fontSize: "2.2rem", fontWeight: 900, color: "#00875A", margin: "0.3rem 0" }}>
+                          {selectedProp.constructionPct}%
+                        </div>
+                        <div style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                          Fecha estimada de entrega: <strong style={{ color: "#1F3652" }}>{selectedProp.estimatedDeliveryDate}</strong>
+                        </div>
+                      </div>
+
+                      {/* Avance por Especialidad */}
+                      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
+                        <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.85rem" }}>
+                          Avance por Especialidad
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                          {selectedProp.specialtiesProgress.map((esp) => (
+                            <div key={esp.id}>
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", fontWeight: 700, marginBottom: "4px" }}>
+                                <span style={{ color: "#334155" }}>{esp.name}</span>
+                                <span style={{ color: "#00875A" }}>{esp.percentage}%</span>
+                              </div>
+                              <div style={{ height: "8px", backgroundColor: "#E2E8F0", borderRadius: "99px", overflow: "hidden" }}>
+                                <div style={{ width: `${esp.percentage}%`, height: "100%", backgroundColor: "#00C48C", borderRadius: "99px" }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Histórico Avances de Obra */}
+                      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
+                        <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.85rem" }}>
+                          Histórico Fotográfico de Obra
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                          {selectedProp.constructionMilestones.map((m) => (
+                            <div key={m.id} style={{ borderRadius: "0.85rem", overflow: "hidden", border: "1px solid #E2E8F0" }}>
+                              <img src={m.photo} alt={m.title} style={{ width: "100%", height: "180px", objectFit: "cover", display: "block" }} />
+                              <div style={{ padding: "0.85rem" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                  <strong style={{ fontSize: "0.9rem", color: "#1F3652" }}>{m.title}</strong>
+                                  <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 600 }}>{m.date}</span>
+                                </div>
+                                <p style={{ fontSize: "0.78rem", color: "#475569", marginTop: "0.4rem", lineHeight: 1.45 }}>
+                                  {m.description}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* TABLA DE PAGOS ESTILO BACK OFFICE DEVIO */}
-                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", overflow: "hidden", border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-                    <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652" }}>
-                          Desglose de Cuotas y Cobranza
+                  {/* PANTALLA 4: DOCUMENTOS */}
+                  {screen === "documents" && selectedProp && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                      {/* Search Bar */}
+                      <div style={{ position: "relative" }}>
+                        <Search size={18} color="#94A3B8" style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)" }} />
+                        <input
+                          type="text"
+                          placeholder="Buscar contrato, plano o reglamento..."
+                          value={docSearch}
+                          onChange={(e) => setDocSearch(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem 1rem 0.75rem 2.5rem",
+                            borderRadius: "0.85rem",
+                            border: "1px solid #CBD5E1",
+                            fontSize: "0.85rem",
+                            backgroundColor: "#FFFFFF",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      </div>
+
+                      {filteredDocs.map((doc) => (
+                        <div
+                          key={doc.id}
+                          style={{
+                            backgroundColor: "#FFFFFF",
+                            borderRadius: "1rem",
+                            padding: "1rem 1.1rem",
+                            border: "1px solid #E2E8F0",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "0.75rem",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", minWidth: 0 }}>
+                            <div style={{ width: "40px", height: "40px", borderRadius: "0.6rem", backgroundColor: "rgba(31,54,82,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <FileText size={22} color="#1F3652" />
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {doc.title}
+                              </div>
+                              <div style={{ fontSize: "0.72rem", color: "#94A3B8", marginTop: "2px" }}>
+                                {doc.category} • {doc.fileSize} • {doc.uploadDate}
+                              </div>
+                            </div>
+                          </div>
+
+                          <a
+                            href={doc.fileUrl || "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              padding: "0.5rem 0.85rem",
+                              borderRadius: "0.5rem",
+                              backgroundColor: "#F1F5F9",
+                              color: "#1F3652",
+                              fontSize: "0.75rem",
+                              fontWeight: 800,
+                              textDecoration: "none",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <Download size={14} /> Ver PDF
+                          </a>
                         </div>
-                        <div style={{ fontSize: "0.72rem", color: "#64748B" }}>
-                          Haz clic en los botones para descargar el Recibo Oficial Devio o consultar el Comprobante Bancario SPEI
+                      ))}
+                    </div>
+                  )}
+
+                  {/* PANTALLA 5: ESTADO DE CUENTA & PAGOS */}
+                  {screen === "statement" && selectedProp && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+                      
+                      {/* Financial 4-metric Grid */}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0.75rem" }}>
+                        <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
+                          <div style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 700 }}>Precio de Venta Total</div>
+                          <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#1F3652", marginTop: "3px" }}>
+                            {formatMoney(selectedProp.totalPrice)}
+                          </div>
+                        </div>
+                        <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
+                          <div style={{ fontSize: "0.72rem", color: "#00875A", fontWeight: 700 }}>Total Cobrado / Pagado</div>
+                          <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#00875A", marginTop: "3px" }}>
+                            {formatMoney(selectedProp.paidAmount)}
+                          </div>
+                        </div>
+                        <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
+                          <div style={{ fontSize: "0.72rem", color: "#B45309", fontWeight: 700 }}>Saldo Pendiente Total</div>
+                          <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#B45309", marginTop: "3px" }}>
+                            {formatMoney(selectedProp.pendingAmount)}
+                          </div>
+                        </div>
+                        <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
+                          <div style={{ fontSize: "0.72rem", color: "#DC2626", fontWeight: 700 }}>Saldo Vencido</div>
+                          <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#DC2626", marginTop: "3px" }}>
+                            {formatMoney(selectedProp.overdueAmount || 0)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Subtabs: Estado de Cuenta | Pagos */}
+                      <div style={{ display: "flex", backgroundColor: "#E2E8F0", padding: "4px", borderRadius: "0.75rem" }}>
+                        <button
+                          onClick={() => setStatementSubTab("statement")}
+                          style={{
+                            flex: 1,
+                            padding: "0.55rem",
+                            borderRadius: "0.55rem",
+                            border: "none",
+                            fontSize: "0.78rem",
+                            fontWeight: 800,
+                            backgroundColor: statementSubTab === "statement" ? "#FFFFFF" : "transparent",
+                            color: statementSubTab === "statement" ? "#1F3652" : "#64748B",
+                            cursor: "pointer",
+                            boxShadow: statementSubTab === "statement" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                          }}
+                        >
+                          Resumen y Descarga
+                        </button>
+                        <button
+                          onClick={() => setStatementSubTab("payments")}
+                          style={{
+                            flex: 1,
+                            padding: "0.55rem",
+                            borderRadius: "0.55rem",
+                            border: "none",
+                            fontSize: "0.78rem",
+                            fontWeight: 800,
+                            backgroundColor: statementSubTab === "payments" ? "#FFFFFF" : "transparent",
+                            color: statementSubTab === "payments" ? "#1F3652" : "#64748B",
+                            cursor: "pointer",
+                            boxShadow: statementSubTab === "payments" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                          }}
+                        >
+                          Calendario de Pagos y Comprobantes
+                        </button>
+                      </div>
+
+                      {statementSubTab === "statement" && (
+                        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.3rem", border: "1px solid #E2E8F0", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div style={{ fontSize: "1rem", fontWeight: 800, color: "#1F3652" }}>
+                                Estado de Cuenta Oficial
+                              </div>
+                              <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                                Emisión formal certificada por {selectedProp.developerName}
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                openStatementInNewTab({
+                                  projectName: selectedProp.projectName,
+                                  unitNumber: selectedProp.unitNumber,
+                                  clientName: userName,
+                                  clientEmail: userEmail,
+                                  clientRfc: userRfc,
+                                  totalAmount: selectedProp.totalPrice,
+                                  paidAmount: selectedProp.paidAmount,
+                                  pendingAmount: selectedProp.pendingAmount,
+                                  developerName: selectedProp.developerName,
+                                  developerLogoUrl: selectedProp.developerLogo,
+                                  projectLogoUrl: selectedProp.projectLogo,
+                                  installments: selectedProp.payments.map((p) => ({
+                                    concept: p.concept,
+                                    scheduledDate: p.scheduledDate,
+                                    amount: p.scheduledAmount,
+                                    paidAmount: p.paidAmount,
+                                    status: p.status,
+                                  })),
+                                });
+                              }}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.45rem",
+                                backgroundColor: "#1F3652",
+                                color: "#FFFFFF",
+                                padding: "0.6rem 1.1rem",
+                                borderRadius: "0.6rem",
+                                border: "none",
+                                fontWeight: 800,
+                                fontSize: "0.78rem",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <Download size={15} /> Descargar PDF
+                            </button>
+                          </div>
+
+                          <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.8rem" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <span style={{ color: "#64748B" }}>Titular de la Cuenta:</span>
+                              <strong style={{ color: "#1F3652" }}>{userName}</strong>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <span style={{ color: "#64748B" }}>RFC Registrado:</span>
+                              <strong style={{ color: "#1F3652" }}>{userRfc}</strong>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <span style={{ color: "#64748B" }}>Unidad Adquirida:</span>
+                              <strong style={{ color: "#1F3652" }}>{selectedProp.projectName} · #{selectedProp.unitNumber}</strong>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <span style={{ color: "#64748B" }}>Porcentaje Liquidado:</span>
+                              <strong style={{ color: "#00875A" }}>{((selectedProp.paidAmount / selectedProp.totalPrice) * 100).toFixed(1)}%</strong>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* TABLA DE PAGOS ESTILO BACK OFFICE DEVIO */}
+                      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", overflow: "hidden", border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+                        <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652" }}>
+                              Desglose de Cuotas y Cobranza
+                            </div>
+                            <div style={{ fontSize: "0.72rem", color: "#64748B" }}>
+                              Haz clic en los botones para descargar el Recibo Oficial Devio o consultar el Comprobante Bancario SPEI
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem", minWidth: "620px" }}>
+                            <thead>
+                              <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#64748B", textAlign: "left" }}>
+                                <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}># Cuota / Concepto</th>
+                                <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Fecha Vence</th>
+                                <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "right" }}>Monto Prog.</th>
+                                <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "right" }}>Pagado</th>
+                                <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "center" }}>Estatus</th>
+                                <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "center" }}>Recibo / Comprobante</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedProp.payments.map((p) => {
+                                const isPaid = p.status === "PAGADO";
+                                const isOverdue = p.status === "ATRASADO";
+
+                                return (
+                                  <tr
+                                    key={p.id}
+                                    style={{
+                                      borderBottom: "1px solid #F1F5F9",
+                                      transition: "background 0.15s ease",
+                                    }}
+                                  >
+                                    {/* Concepto */}
+                                    <td style={{ padding: "0.85rem 1rem", color: "#1F3652" }}>
+                                      <div style={{ fontWeight: 700 }}>{p.concept}</div>
+                                      <div style={{ fontSize: "0.7rem", color: "#94A3B8" }}>
+                                        {p.paymentMethod || "Transferencia SPEI"}
+                                      </div>
+                                    </td>
+
+                                    {/* Fecha */}
+                                    <td style={{ padding: "0.85rem 1rem", color: "#475569", whiteSpace: "nowrap" }}>
+                                      {p.scheduledDate}
+                                    </td>
+
+                                    {/* Monto Programado */}
+                                    <td style={{ padding: "0.85rem 1rem", textAlign: "right", fontWeight: 700, color: "#1F3652" }}>
+                                      {formatMoney(p.scheduledAmount)}
+                                    </td>
+
+                                    {/* Monto Pagado */}
+                                    <td style={{ padding: "0.85rem 1rem", textAlign: "right", fontWeight: 800, color: isPaid ? "#00875A" : (p.paidAmount > 0 ? "#D97706" : "#64748B") }}>
+                                      {formatMoney(p.paidAmount)}
+                                    </td>
+
+                                    {/* Estatus Badge estilo Back Office */}
+                                    <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
+                                      <span
+                                        style={{
+                                          display: "inline-block",
+                                          padding: "0.22rem 0.65rem",
+                                          borderRadius: "99px",
+                                          fontSize: "0.7rem",
+                                          fontWeight: 800,
+                                          backgroundColor: isPaid ? "rgba(0,196,140,0.12)" : isOverdue ? "#FEE2E2" : "#FEF3C7",
+                                          color: isPaid ? "#00A877" : isOverdue ? "#DC2626" : "#D97706",
+                                          border: isPaid ? "1px solid rgba(0,196,140,0.25)" : isOverdue ? "1px solid #FECACA" : "1px solid #FDE68A",
+                                        }}
+                                      >
+                                        {p.status}
+                                      </span>
+                                    </td>
+
+                                    {/* Acciones: Recibo Devio + Comprobante Bancario */}
+                                    <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
+                                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap", justifyContent: "center" }}>
+                                        {/* Recibo Oficial PDF */}
+                                        {isPaid || p.paidAmount > 0 ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenReceipt(p)}
+                                            title="Abrir Recibo Oficial Devio en formato PDF"
+                                            style={{
+                                              display: "inline-flex",
+                                              alignItems: "center",
+                                              gap: "0.3rem",
+                                              padding: "0.35rem 0.65rem",
+                                              backgroundColor: "rgba(0,196,140,0.12)",
+                                              color: "#00A877",
+                                              border: "1px solid rgba(0,196,140,0.3)",
+                                              borderRadius: "0.5rem",
+                                              fontSize: "0.72rem",
+                                              fontWeight: 800,
+                                              cursor: "pointer",
+                                            }}
+                                          >
+                                            <FileText size={13} /> Recibo PDF
+                                          </button>
+                                        ) : null}
+
+                                        {/* Comprobante Bancario SPEI */}
+                                        {p.comprobanteUrl ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => setShowVoucherPayment(p)}
+                                            title="Ver comprobante de transferencia bancaria subido"
+                                            style={{
+                                              display: "inline-flex",
+                                              alignItems: "center",
+                                              gap: "0.3rem",
+                                              padding: "0.35rem 0.65rem",
+                                              backgroundColor: "rgba(31,54,82,0.08)",
+                                              color: "#1F3652",
+                                              border: "1px solid rgba(31,54,82,0.2)",
+                                              borderRadius: "0.5rem",
+                                              fontSize: "0.72rem",
+                                              fontWeight: 800,
+                                              cursor: "pointer",
+                                            }}
+                                          >
+                                            <ExternalLink size={13} /> Comprobante SPEI
+                                          </button>
+                                        ) : (
+                                          !isPaid && (
+                                            <span style={{ fontSize: "0.7rem", color: "#94A3B8" }}>
+                                              Sin comprobante
+                                            </span>
+                                          )
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
                     </div>
-
-                    <div style={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem", minWidth: "620px" }}>
-                        <thead>
-                          <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#64748B", textAlign: "left" }}>
-                            <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}># Cuota / Concepto</th>
-                            <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Fecha Vence</th>
-                            <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "right" }}>Monto Prog.</th>
-                            <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "right" }}>Pagado</th>
-                            <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "center" }}>Estatus</th>
-                            <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "center" }}>Recibo / Comprobante</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedProp.payments.map((p) => {
-                            const isPaid = p.status === "PAGADO";
-                            const isOverdue = p.status === "ATRASADO";
-
-                            return (
-                              <tr
-                                key={p.id}
-                                style={{
-                                  borderBottom: "1px solid #F1F5F9",
-                                  transition: "background 0.15s ease",
-                                }}
-                              >
-                                {/* Concepto */}
-                                <td style={{ padding: "0.85rem 1rem", color: "#1F3652" }}>
-                                  <div style={{ fontWeight: 700 }}>{p.concept}</div>
-                                  <div style={{ fontSize: "0.7rem", color: "#94A3B8" }}>
-                                    {p.paymentMethod || "Transferencia SPEI"}
-                                  </div>
-                                </td>
-
-                                {/* Fecha */}
-                                <td style={{ padding: "0.85rem 1rem", color: "#475569", whiteSpace: "nowrap" }}>
-                                  {p.scheduledDate}
-                                </td>
-
-                                {/* Monto Programado */}
-                                <td style={{ padding: "0.85rem 1rem", textAlign: "right", fontWeight: 700, color: "#1F3652" }}>
-                                  {formatMoney(p.scheduledAmount)}
-                                </td>
-
-                                {/* Monto Pagado */}
-                                <td style={{ padding: "0.85rem 1rem", textAlign: "right", fontWeight: 800, color: isPaid ? "#00875A" : (p.paidAmount > 0 ? "#D97706" : "#64748B") }}>
-                                  {formatMoney(p.paidAmount)}
-                                </td>
-
-                                {/* Estatus Badge estilo Back Office */}
-                                <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
-                                  <span
-                                    style={{
-                                      display: "inline-block",
-                                      padding: "0.22rem 0.65rem",
-                                      borderRadius: "99px",
-                                      fontSize: "0.7rem",
-                                      fontWeight: 800,
-                                      backgroundColor: isPaid ? "rgba(0,196,140,0.12)" : isOverdue ? "#FEE2E2" : "#FEF3C7",
-                                      color: isPaid ? "#00A877" : isOverdue ? "#DC2626" : "#D97706",
-                                      border: isPaid ? "1px solid rgba(0,196,140,0.25)" : isOverdue ? "1px solid #FECACA" : "1px solid #FDE68A",
-                                    }}
-                                  >
-                                    {p.status}
-                                  </span>
-                                </td>
-
-                                {/* Acciones: Recibo Devio + Comprobante Bancario */}
-                                <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
-                                  <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap", justifyContent: "center" }}>
-                                    {/* Recibo Oficial PDF */}
-                                    {isPaid || p.paidAmount > 0 ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenReceipt(p)}
-                                        title="Abrir Recibo Oficial Devio en formato PDF"
-                                        style={{
-                                          display: "inline-flex",
-                                          alignItems: "center",
-                                          gap: "0.3rem",
-                                          padding: "0.35rem 0.65rem",
-                                          backgroundColor: "rgba(0,196,140,0.12)",
-                                          color: "#00A877",
-                                          border: "1px solid rgba(0,196,140,0.3)",
-                                          borderRadius: "0.5rem",
-                                          fontSize: "0.72rem",
-                                          fontWeight: 800,
-                                          cursor: "pointer",
-                                        }}
-                                      >
-                                        <FileText size={13} /> Recibo PDF
-                                      </button>
-                                    ) : null}
-
-                                    {/* Comprobante Bancario SPEI */}
-                                    {p.comprobanteUrl ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => setShowVoucherPayment(p)}
-                                        title="Ver comprobante de transferencia bancaria subido"
-                                        style={{
-                                          display: "inline-flex",
-                                          alignItems: "center",
-                                          gap: "0.3rem",
-                                          padding: "0.35rem 0.65rem",
-                                          backgroundColor: "rgba(31,54,82,0.08)",
-                                          color: "#1F3652",
-                                          border: "1px solid rgba(31,54,82,0.2)",
-                                          borderRadius: "0.5rem",
-                                          fontSize: "0.72rem",
-                                          fontWeight: 800,
-                                          cursor: "pointer",
-                                        }}
-                                      >
-                                        <ExternalLink size={13} /> Comprobante SPEI
-                                      </button>
-                                    ) : (
-                                      !isPaid && (
-                                        <span style={{ fontSize: "0.7rem", color: "#94A3B8" }}>
-                                          Sin comprobante
-                                        </span>
-                                      )
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
+                  )}
+                </>
               )}
             </>
           )}
@@ -1557,51 +1267,12 @@ export default function ClientPortalWeb() {
               {/* Profile Card */}
               <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.5rem", border: "1px solid #E2E8F0", textAlign: "center" }}>
                 <img
-                  src={userEmail === "0242573@up.edu.mx" ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80" : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80"}
+                  src={userAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=1F3652&color=fff&bold=true`}
                   alt="Avatar"
                   style={{ width: "80px", height: "80px", borderRadius: "50%", objectFit: "cover", margin: "0 auto 0.75rem auto", display: "block", border: "3px solid #E2E8F0" }}
                 />
                 <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1F3652" }}>{userName}</div>
                 <div style={{ fontSize: "0.8rem", color: "#64748B", marginTop: "2px" }}>{userEmail}</div>
-
-                {/* Staging Account Switcher */}
-                <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #F1F5F9", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                  <span style={{ fontSize: "0.7rem", fontWeight: 800, color: "#94A3B8", textTransform: "uppercase" }}>Cambiar de Cliente (Pruebas Staging)</span>
-                  <select
-                    value={userEmail}
-                    onChange={(e) => {
-                      const newEmail = e.target.value;
-                      setUserEmail(newEmail);
-                      if (newEmail === "jaimepozospizano@gmail.com") {
-                        setUserName("Jaime Pozos Pizano");
-                        setUserPhone("+52 33 3858 9824");
-                        setUserRfc("POPJ991118QC8");
-                        setUserAddress("Av. del Servidor Público 1425, Zapopan, Jal.");
-                        setSelectedPropId("prop-campero-51");
-                      } else {
-                        setUserName("Iñigo Heredia Horner");
-                        setUserPhone("+52 33 1892 4490");
-                        setUserRfc("HEHI9604128N2");
-                        setUserAddress("Av. Providencia 2340, Depto 402, Guadalajara, Jal.");
-                        setSelectedPropId("prop-castellana-1c");
-                      }
-                    }}
-                    style={{
-                      width: "100%",
-                      padding: "0.6rem",
-                      borderRadius: "0.6rem",
-                      border: "1px solid #CBD5E1",
-                      backgroundColor: "#F8FAFC",
-                      fontSize: "0.8rem",
-                      fontWeight: 700,
-                      color: "#1F3652",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <option value="jaimepozospizano@gmail.com">Jaime Pozos (Desarrollos Campero · Mainstreet 5.1)</option>
-                    <option value="0242573@up.edu.mx">Iñigo Heredia (Grupo VEQ · Castellana 1C / Black Eleven 4B)</option>
-                  </select>
-                </div>
               </div>
 
               {/* Personal Data Section */}
@@ -1613,15 +1284,15 @@ export default function ClientPortalWeb() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", fontSize: "0.82rem" }}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "#64748B" }}>Teléfono de Contacto:</span>
-                    <strong>{userPhone}</strong>
+                    <strong>{userPhone || "No registrado"}</strong>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "#64748B" }}>RFC Registrado:</span>
-                    <strong>{userRfc}</strong>
+                    <strong>{userRfc || "XAXX010101000"}</strong>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "#64748B" }}>Domicilio Fiscal:</span>
-                    <strong style={{ textAlign: "right", maxWidth: "260px" }}>{userAddress}</strong>
+                    <strong style={{ textAlign: "right", maxWidth: "260px" }}>{userAddress || "Guadalajara, Jal."}</strong>
                   </div>
                 </div>
 
@@ -1887,8 +1558,22 @@ export default function ClientPortalWeb() {
 
               <button
                 onClick={() => {
+                  if (typeof window !== "undefined") {
+                    const raw = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
+                    if (raw) {
+                      try {
+                        const parsed = JSON.parse(raw);
+                        parsed.fullName = userName;
+                        parsed.phone = userPhone;
+                        parsed.rfc = userRfc;
+                        parsed.address = userAddress;
+                        localStorage.setItem("devio_user_session", JSON.stringify(parsed));
+                        sessionStorage.setItem("devio_user_session", JSON.stringify(parsed));
+                      } catch (e) {}
+                    }
+                  }
                   setShowEditProfile(false);
-                  alert("Datos actualizados correctamente.");
+                  alert("Datos personales actualizados correctamente.");
                 }}
                 style={{ backgroundColor: "#1F3652", color: "#FFFFFF", padding: "0.75rem", borderRadius: "0.6rem", fontWeight: 800, border: "none", cursor: "pointer", fontSize: "0.8rem", marginTop: "0.5rem" }}
               >
@@ -1934,4 +1619,3 @@ export default function ClientPortalWeb() {
     </div>
   );
 }
-
