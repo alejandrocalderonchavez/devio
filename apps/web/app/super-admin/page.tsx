@@ -274,6 +274,21 @@ function SuperAdminContent() {
           setDeliveryLogs(getNotificationDeliveryLogs());
         });
 
+      // Fetch live scheduled notifications from API (future obligations at 9:00 AM CDMX)
+      fetch("/api/notifications/scheduled")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.scheduled) && data.scheduled.length > 0) {
+            setScheduledNotifications(data.scheduled);
+            saveScheduledNotifications(data.scheduled);
+          } else {
+            setScheduledNotifications(getScheduledNotifications());
+          }
+        })
+        .catch(() => {
+          setScheduledNotifications(getScheduledNotifications());
+        });
+
       // Read custom unit pricing map
       const storedCustomPricing = localStorage.getItem("devio_custom_unit_pricing");
       let customPricingMap: Record<string, { devPrice?: number; projectPrices?: Record<string, number> }> = {};
@@ -905,7 +920,14 @@ function SuperAdminContent() {
       }
     >();
 
+    const todayCdmxTime = new Date("2026-09-23T00:00:00-06:00").getTime();
     scheduledNotifications.forEach((sch) => {
+      const schTime = new Date(sch.scheduledFor).getTime();
+      // Eliminar y no programar cuotas vencidas pasadas anteriores a hoy (23 Sep 2026)
+      if (schTime && schTime < todayCdmxTime - 24 * 60 * 60 * 1000) {
+        return;
+      }
+
       const dateKey = (sch.scheduledFor || "").slice(0, 10);
       const groupKey = `${sch.triggerKey}__${sch.recipientName}__${dateKey}__${sch.sourceEvent}`;
 
@@ -916,7 +938,7 @@ function SuperAdminContent() {
           triggerName: sch.triggerName,
           category: sch.category,
           scheduledFor: sch.scheduledFor,
-          scheduledForFormatted: sch.scheduledForFormatted,
+          scheduledForFormatted: ((sch.scheduledForFormatted || "").split(",")[0] || "").trim(),
           relativeTime: sch.relativeTime,
           recipientName: sch.recipientName,
           recipientContact: sch.recipientContact,
@@ -2444,7 +2466,7 @@ function SuperAdminContent() {
                         <thead>
                           <tr style={{ borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
                             <th style={{ width: "40px", padding: "0.75rem 0.5rem 0.75rem 0.75rem" }}></th>
-                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Fecha / Hora Programada</th>
+                            <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Fecha Programada</th>
                             <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Evento / Disparador</th>
                             <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Canales ({filteredScheduled.reduce((acc, g) => acc + g.channels.length, 0)})</th>
                             <th style={{ padding: "0.75rem 1rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#64748B" }}>Destinatario</th>

@@ -631,33 +631,66 @@ async function runMigration() {
 
     obligationCount++;
 
-    // Automated Scheduled Notification for future/pending payments
-    if (status === 'PENDING' || status === 'OVERDUE') {
+    // Automated Scheduled Notification for future payments (from today forward in CDMX timezone)
+    const todayCdmx = new Date('2026-09-23T00:00:00-06:00');
+    if (dueDate >= todayCdmx && status !== 'PAID') {
       const clientEmail = item['mail_cliente'] || 'comprador@ejemplo.com';
-      const scheduledNotifDate = new Date(dueDate.getTime() - 5 * 24 * 60 * 60 * 1000);
-      scheduledNotifDate.setHours(9, 0, 0, 0);
-      scheduledNotifsToGenerate.push({
-        id: `sch-bubble-${bubbleId}`,
-        triggerKey: status === 'OVERDUE' ? 'payments.overdue_notice' : 'payments.upcoming_reminder',
-        triggerName: status === 'OVERDUE' ? 'Alerta de Morosidad (Saldo Vencido)' : 'Recordatorio Preventivo de Mensualidad',
-        category: 'COBRANZA',
-        channel: 'WHATSAPP',
-        scheduledFor: scheduledNotifDate.toISOString(),
-        scheduledForFormatted: scheduledNotifDate.toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-        relativeTime: status === 'OVERDUE' ? 'Vencido' : 'Próximo vencimiento',
-        recipientName: 'Comprador Titular',
-        recipientContact: clientEmail,
-        recipientRole: 'Comprador / Titular',
-        developerName: 'Desarrolladora Devio',
-        projectName: 'Proyecto Residencial',
-        unitName: 'Unidad',
-        sourceEvent: `Cuota ${title} #CUOTA-${bubbleId.slice(-4)}`,
-        status: 'PROGRAMADA',
-        payloadSummary: `${title} por $${amount.toLocaleString('es-MX')} MXN (Vence ${dueDate.toLocaleDateString('es-MX')})`,
-        metadata: {
-          monto: `$${amount.toLocaleString('es-MX')} MXN`,
-          fecha_vencimiento: dueDate.toLocaleDateString('es-MX'),
-        },
+      let notifDate = new Date(dueDate.getTime() - 5 * 24 * 60 * 60 * 1000);
+      if (notifDate < todayCdmx) {
+        notifDate = new Date('2026-09-24T09:00:00-06:00');
+      }
+      const y = notifDate.getFullYear();
+      const m = String(notifDate.getMonth() + 1).padStart(2, '0');
+      const d = String(notifDate.getDate()).padStart(2, '0');
+      const iso = `${y}-${m}-${d}T09:00:00-06:00`;
+      const formattedDate = notifDate.toLocaleDateString('es-MX', {
+        timeZone: 'America/Mexico_City',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+
+      const diffMs = notifDate.getTime() - todayCdmx.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      let relTime = 'Próximo vencimiento';
+      if (diffDays <= 0) relTime = 'Hoy, 09:00 a.m.';
+      else if (diffDays === 1) relTime = 'Mañana, 09:00 a.m.';
+      else if (diffDays <= 30) relTime = `En ${diffDays} días`;
+      else {
+        const diffMonths = Math.round(diffDays / 30);
+        relTime = `En ${diffMonths} meses`;
+      }
+
+      const channels = [
+        { chan: 'WHATSAPP', contact: '+52 33 2256 7499' },
+        { chan: 'POSTMARK', contact: clientEmail },
+        { chan: 'PUSH', contact: 'App Devio / Web Push' },
+      ];
+
+      channels.forEach((ch) => {
+        scheduledNotifsToGenerate.push({
+          id: `sch-bubble-${bubbleId}-${ch.chan.toLowerCase()}`,
+          triggerKey: 'payments.upcoming_reminder',
+          triggerName: 'Recordatorio Preventivo de Mensualidad',
+          category: 'COBRANZA',
+          channel: ch.chan,
+          scheduledFor: iso,
+          scheduledForFormatted: formattedDate,
+          relativeTime: relTime,
+          recipientName: 'Comprador Titular',
+          recipientContact: ch.contact,
+          recipientRole: 'Comprador / Titular',
+          developerName: 'Desarrolladora Devio',
+          projectName: 'Proyecto Residencial',
+          unitName: 'Unidad',
+          sourceEvent: `Cuota ${title} #CUOTA-${bubbleId.slice(-4)}`,
+          status: 'PROGRAMADA',
+          payloadSummary: `${title} por $${amount.toLocaleString('es-MX')} MXN (Vence ${dueDate.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })})`,
+          metadata: {
+            monto: `$${amount.toLocaleString('es-MX')} MXN`,
+            fecha_vencimiento: dueDate.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' }),
+          },
+        });
       });
     }
   }

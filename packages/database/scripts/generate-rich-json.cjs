@@ -542,6 +542,90 @@ async function generateRichJson() {
   fs.writeFileSync(outputPath, JSON.stringify(formattedDevs, null, 2));
   console.log(`✅ ${formattedDevs.length} desarrolladoras y sus proyectos exportados a ${outputPath}`);
 
+  // ---------------------------------------------------------------------------
+  // GENERAR COLA DE NOTIFICACIONES PROGRAMADAS FUTURAS (A partir de hoy 9:00 AM CDMX)
+  // ---------------------------------------------------------------------------
+  const todayCdmx = new Date('2026-09-23T00:00:00-06:00');
+  const futureScheduledNotifs = [];
+
+  formattedDevs.forEach((dev) => {
+    (dev.projects || []).forEach((proj) => {
+      (proj.sales || []).forEach((sale) => {
+        (sale.schedule || []).forEach((inst) => {
+          if (!inst.scheduledDate && !inst.fechaProgramada) return;
+          const rawDateStr = inst.scheduledDate || inst.fechaProgramada;
+          const dueDate = new Date(rawDateStr);
+          if (isNaN(dueDate.getTime())) return;
+
+          // Solo programar cuotas futuras a partir de hoy (23 de septiembre 2026 en adelante)
+          if (dueDate >= todayCdmx && inst.status !== 'Pagado') {
+            let notifDate = new Date(dueDate.getTime() - 5 * 24 * 60 * 60 * 1000);
+            if (notifDate < todayCdmx) {
+              notifDate = new Date('2026-09-24T09:00:00-06:00');
+            }
+            const y = notifDate.getFullYear();
+            const m = String(notifDate.getMonth() + 1).padStart(2, '0');
+            const d = String(notifDate.getDate()).padStart(2, '0');
+            const iso = `${y}-${m}-${d}T09:00:00-06:00`;
+            const formattedDate = notifDate.toLocaleDateString('es-MX', {
+              timeZone: 'America/Mexico_City',
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            });
+
+            const diffMs = notifDate.getTime() - todayCdmx.getTime();
+            const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+            let relTime = 'Próximo vencimiento';
+            if (diffDays <= 0) relTime = 'Hoy, 09:00 a.m.';
+            else if (diffDays === 1) relTime = 'Mañana, 09:00 a.m.';
+            else if (diffDays <= 30) relTime = `En ${diffDays} días`;
+            else {
+              const diffMonths = Math.round(diffDays / 30);
+              relTime = `En ${diffMonths} meses`;
+            }
+
+            const channels = [
+              { chan: 'WHATSAPP', contact: sale.clientPhone || '+52 33 2256 7499' },
+              { chan: 'POSTMARK', contact: sale.clientEmail || 'comprador@ejemplo.com' },
+              { chan: 'PUSH', contact: 'App Devio / Web Push' },
+            ];
+
+            channels.forEach((ch) => {
+              futureScheduledNotifs.push({
+                id: `sch-${inst.id}-${ch.chan.toLowerCase()}`,
+                triggerKey: 'payments.upcoming_reminder',
+                triggerName: 'Recordatorio Preventivo de Mensualidad',
+                category: 'COBRANZA',
+                channel: ch.chan,
+                scheduledFor: iso,
+                scheduledForFormatted: formattedDate,
+                relativeTime: relTime,
+                recipientName: sale.clientName || 'Comprador Titular',
+                recipientContact: ch.contact,
+                recipientRole: 'Comprador / Titular',
+                developerName: dev.name,
+                projectName: proj.name,
+                unitName: sale.unit || 'Unidad',
+                sourceEvent: `Cuota ${inst.concept || 'Mensualidad'} (${sale.folio})`,
+                status: 'PROGRAMADA',
+                payloadSummary: `${inst.concept || 'Mensualidad'} por $${Number(inst.montoProgramado || inst.scheduledAmount || 0).toLocaleString('es-MX')} MXN (Vence ${dueDate.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })})`,
+                metadata: {
+                  monto: `$${Number(inst.montoProgramado || inst.scheduledAmount || 0).toLocaleString('es-MX')} MXN`,
+                  fecha_vencimiento: rawDateStr,
+                },
+              });
+            });
+          }
+        });
+      });
+    });
+  });
+
+  const scheduledExportPath = path.resolve(__dirname, '../../../apps/web/data/migrated-scheduled-notifications.json');
+  fs.writeFileSync(scheduledExportPath, JSON.stringify(futureScheduledNotifs, null, 2));
+  console.log(`✅ ${futureScheduledNotifs.length} notificaciones programadas futuras (3 canales a las 9:00 a.m. CDMX) exportadas a ${scheduledExportPath}`);
+
   await prisma.$disconnect();
   await pool.end();
 }
