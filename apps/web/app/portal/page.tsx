@@ -36,6 +36,59 @@ import {
 } from "lucide-react";
 import { openReceiptInNewTab, openStatementInNewTab } from "../../lib/pdf-generator";
 
+const round2 = (num: number) => Math.round((Number(num || 0) + Number.EPSILON) * 100) / 100;
+
+function parseDateFlexible(dateStr: string): Date | null {
+  if (!dateStr || typeof dateStr !== "string") return null;
+  const clean = dateStr.trim();
+  if (!clean || clean.toLowerCase() === "pendiente" || clean.toLowerCase() === "parcial" || clean === "-") return null;
+
+  // Handle ISO format YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
+    const datePart = clean.split("T")[0] || clean;
+    const parts = datePart.split("-").map(Number);
+    if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+      return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+  }
+
+  // Handle DD/MM/YYYY or DD-MM-YYYY
+  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(clean)) {
+    const parts = clean.split(/[\/\-]/).map(Number);
+    if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+      return new Date(parts[2], parts[1] - 1, parts[0]);
+    }
+  }
+
+  // Handle Spanish text dates like "18 Sep 2026", "15 Abr 2026"
+  const monthMap: Record<string, number> = {
+    ene: 0, feb: 1, mar: 2, abr: 3, may: 4, jun: 5,
+    jul: 6, ago: 7, sep: 8, sept: 8, oct: 9, nov: 10, dic: 11,
+    jan: 0, apr: 3, aug: 7, dec: 11,
+  };
+  const parts = clean.replace(/,/g, "").split(/\s+/);
+  if (parts.length >= 3 && parts[0] && parts[1] && parts[2]) {
+    const day = parseInt(parts[0], 10);
+    const monthKey = parts[1].toLowerCase().slice(0, 3);
+    const year = parseInt(parts[2], 10);
+    if (!isNaN(day) && !isNaN(year) && monthMap[monthKey] !== undefined) {
+      return new Date(year, monthMap[monthKey], day);
+    }
+  }
+
+  const parsed = new Date(clean);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDateDisplay(dateStr: string): string {
+  if (!dateStr || dateStr.toLowerCase() === "pendiente" || dateStr.toLowerCase() === "parcial") {
+    return dateStr || "-";
+  }
+  const d = parseDateFlexible(dateStr);
+  if (!d) return dateStr;
+  return d.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 interface ScheduleInstallment {
   id: string;
   cuotaNumber: number;
@@ -220,7 +273,8 @@ export default function ClientPortalWeb() {
   const filteredDocs = useMemo(() => {
     if (!selectedProp) return [];
     return (selectedProp.documents || []).filter((d) =>
-      d.title.toLowerCase().includes(docSearch.toLowerCase())
+      d.title.toLowerCase().includes(docSearch.toLowerCase()) ||
+      d.category.toLowerCase().includes(docSearch.toLowerCase())
     );
   }, [selectedProp, docSearch]);
 
@@ -237,21 +291,25 @@ export default function ClientPortalWeb() {
       capitalAmount: receipt.moratoryAmount ? Math.max(0, receipt.monto - receipt.moratoryAmount) : receipt.monto,
       interestAmount: receipt.moratoryAmount || 0,
       planName: "Plan Personalizado",
-      emissionDate: receipt.fechaPago,
+      emissionDate: formatDateDisplay(receipt.fechaPago),
       developerName: selectedProp.developerName,
       developerLogoUrl: selectedProp.developerLogo,
       projectLogoUrl: selectedProp.projectLogo,
     });
   };
 
-  // Compute Next Payment dynamically
+  // Compute Next Payment dynamically from schedule
   const nextPaymentInfo = useMemo(() => {
     if (!selectedProp) return null;
-    const pendingCuotas = (selectedProp.schedule || []).filter((s) => s.montoPendiente > 0);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const pendingCuotas = (selectedProp.schedule || []).filter((s) => round2(s.montoPendiente) > 0.05);
     if (pendingCuotas.length === 0) {
       return {
         amount: 0,
         dueDate: "Al corriente",
+        formattedDueDate: "Al corriente",
         daysRemaining: 0,
         concept: "Sin pagos pendientes",
         isAllPaid: true,
@@ -262,13 +320,20 @@ export default function ClientPortalWeb() {
     }
 
     const nextCuota = pendingCuotas[0]!;
+    const instDate = parseDateFlexible(nextCuota.fechaProgramada);
+    let diffDays = 30;
+    if (instDate) {
+      diffDays = Math.ceil((instDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
     const overdueCuotas = pendingCuotas.filter((s) => s.status === "Atrasado");
-    const totalOverdue = overdueCuotas.reduce((acc, s) => acc + s.montoPendiente, 0);
+    const totalOverdue = round2(overdueCuotas.reduce((acc, s) => acc + s.montoPendiente, 0));
 
     return {
-      amount: nextCuota.montoPendiente,
+      amount: round2(nextCuota.montoPendiente),
       dueDate: nextCuota.fechaProgramada,
-      daysRemaining: selectedProp.nextPaymentDaysRemaining,
+      formattedDueDate: formatDateDisplay(nextCuota.fechaProgramada),
+      daysRemaining: diffDays,
       concept: nextCuota.concept,
       isAllPaid: false,
       hasOverdue: totalOverdue > 0,
@@ -506,7 +571,7 @@ export default function ClientPortalWeb() {
                               <div style={{ fontSize: "0.8rem", color: "#64748B", marginTop: "2px" }}>
                                 {nextPaymentInfo.isAllPaid
                                   ? `${selectedProp.projectName} (${selectedProp.unitNumber}) - 100% Liquidado`
-                                  : `${nextPaymentInfo.concept} • Vence el ${nextPaymentInfo.dueDate} • ${selectedProp.projectName} (${selectedProp.unitNumber})`}
+                                  : `${nextPaymentInfo.concept} • Vence el ${nextPaymentInfo.formattedDueDate} • ${selectedProp.projectName} (${selectedProp.unitNumber})`}
                               </div>
                             </div>
 
@@ -514,7 +579,7 @@ export default function ClientPortalWeb() {
                               onClick={() => {
                                 setSelectedPropId(selectedProp.id);
                                 setScreen("statement");
-                                setStatementSubTab("payments");
+                                setStatementSubTab("statement");
                               }}
                               style={{
                                 backgroundColor: "#1F3652",
@@ -704,7 +769,7 @@ export default function ClientPortalWeb() {
                                 {formatMoney(nextPaymentInfo.amount)}
                               </div>
                               <div style={{ fontSize: "0.68rem", color: "#92400E", marginTop: "2px" }}>
-                                {nextPaymentInfo.isAllPaid ? "Al corriente" : `Vence ${nextPaymentInfo.dueDate}`}
+                                {nextPaymentInfo.isAllPaid ? "Al corriente" : `Vence ${nextPaymentInfo.formattedDueDate}`}
                               </div>
                             </div>
                             
@@ -974,56 +1039,64 @@ export default function ClientPortalWeb() {
                         />
                       </div>
 
-                      {filteredDocs.map((doc) => (
-                        <div
-                          key={doc.id}
-                          style={{
-                            backgroundColor: "#FFFFFF",
-                            borderRadius: "1rem",
-                            padding: "1rem 1.1rem",
-                            border: "1px solid #E2E8F0",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: "0.75rem",
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", minWidth: 0 }}>
-                            <div style={{ width: "40px", height: "40px", borderRadius: "0.6rem", backgroundColor: "rgba(31,54,82,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                              <FileText size={22} color="#1F3652" />
-                            </div>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {doc.title}
-                              </div>
-                              <div style={{ fontSize: "0.72rem", color: "#94A3B8", marginTop: "2px" }}>
-                                {doc.category} • {doc.fileSize} • {doc.uploadDate}
-                              </div>
-                            </div>
-                          </div>
-
-                          <a
-                            href={doc.fileUrl || "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"}
-                            target="_blank"
-                            rel="noreferrer"
+                      {filteredDocs.length === 0 ? (
+                        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", padding: "2.5rem 1rem", textAlign: "center", border: "1px solid #E2E8F0" }}>
+                          <FileText size={32} color="#94A3B8" style={{ margin: "0 auto 0.5rem auto" }} />
+                          <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#1F3652" }}>No se encontraron documentos</div>
+                          <div style={{ fontSize: "0.78rem", color: "#64748B", marginTop: "4px" }}>Prueba buscando con otro término.</div>
+                        </div>
+                      ) : (
+                        filteredDocs.map((doc) => (
+                          <div
+                            key={doc.id}
                             style={{
-                              padding: "0.5rem 0.85rem",
-                              borderRadius: "0.5rem",
-                              backgroundColor: "#F1F5F9",
-                              color: "#1F3652",
-                              fontSize: "0.75rem",
-                              fontWeight: 800,
-                              textDecoration: "none",
+                              backgroundColor: "#FFFFFF",
+                              borderRadius: "1rem",
+                              padding: "1rem 1.1rem",
+                              border: "1px solid #E2E8F0",
                               display: "flex",
                               alignItems: "center",
-                              gap: "0.35rem",
-                              flexShrink: 0,
+                              justifyContent: "space-between",
+                              gap: "0.75rem",
                             }}
                           >
-                            <Download size={14} /> Ver PDF
-                          </a>
-                        </div>
-                      ))}
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", minWidth: 0 }}>
+                              <div style={{ width: "40px", height: "40px", borderRadius: "0.6rem", backgroundColor: "rgba(31,54,82,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <FileText size={22} color="#1F3652" />
+                              </div>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {doc.title}
+                                </div>
+                                <div style={{ fontSize: "0.72rem", color: "#94A3B8", marginTop: "2px" }}>
+                                  {doc.category} • {doc.fileSize} • {formatDateDisplay(doc.uploadDate)}
+                                </div>
+                              </div>
+                            </div>
+
+                            <a
+                              href={doc.fileUrl || "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf"}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                padding: "0.5rem 0.85rem",
+                                borderRadius: "0.5rem",
+                                backgroundColor: "#1B3047",
+                                color: "#FFFFFF",
+                                fontSize: "0.75rem",
+                                fontWeight: 800,
+                                textDecoration: "none",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <Download size={14} /> Abrir PDF
+                            </a>
+                          </div>
+                        ))
+                      )}
                     </div>
                   )}
 
@@ -1138,7 +1211,7 @@ export default function ClientPortalWeb() {
                                   projectLogoUrl: selectedProp.projectLogo,
                                   installments: (selectedProp.schedule || []).map((s) => ({
                                     concept: s.concept,
-                                    scheduledDate: s.fechaProgramada,
+                                    scheduledDate: formatDateDisplay(s.fechaProgramada),
                                     amount: s.montoProgramado,
                                     paidAmount: s.montoPagado,
                                     status: s.status,
@@ -1192,7 +1265,7 @@ export default function ClientPortalWeb() {
 
                                       {/* Fecha programada */}
                                       <td style={{ padding: "0.85rem 1rem", color: "#475569", whiteSpace: "nowrap" }}>
-                                        {row.fechaProgramada}
+                                        {formatDateDisplay(row.fechaProgramada)}
                                       </td>
 
                                       {/* Monto programado */}
@@ -1221,7 +1294,7 @@ export default function ClientPortalWeb() {
                                             Parcial
                                           </span>
                                         ) : (
-                                          row.fechaPago
+                                          formatDateDisplay(row.fechaPago)
                                         )}
                                       </td>
 
@@ -1307,7 +1380,7 @@ export default function ClientPortalWeb() {
                                       >
                                         {/* Fecha pago */}
                                         <td style={{ padding: "0.85rem 1rem", color: "#475569", whiteSpace: "nowrap" }}>
-                                          {p.fechaPago}
+                                          {formatDateDisplay(p.fechaPago)}
                                         </td>
 
                                         {/* Método de pago */}
@@ -1620,7 +1693,7 @@ export default function ClientPortalWeb() {
                   Unidad {selectedVoucherForView.unit} • {selectedVoucherForView.metodoPago}
                 </div>
                 <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "4px" }}>
-                  Fecha de Aplicación: <strong>{selectedVoucherForView.fechaPago}</strong>
+                  Fecha de Aplicación: <strong>{formatDateDisplay(selectedVoucherForView.fechaPago)}</strong>
                 </div>
                 {selectedVoucherForView.reciboFolio && (
                   <div style={{ fontSize: "0.72rem", color: "#00A877", fontWeight: 700, marginTop: "4px" }}>

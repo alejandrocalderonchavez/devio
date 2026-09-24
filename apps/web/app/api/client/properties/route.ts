@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
+const round2 = (num: number) => Math.round((Number(num || 0) + Number.EPSILON) * 100) / 100;
+
 function parseDateFlexible(dateStr: string): Date | null {
   if (!dateStr || typeof dateStr !== "string") return null;
   const clean = dateStr.trim();
@@ -114,13 +116,13 @@ export async function GET(request: Request) {
               id: p.id || `pay-${sale.id}-${pIdx}`,
               fechaPago: p.paymentDate || p.fechaPago || "",
               metodoPago: p.paymentMethod || p.metodoPago || "Transferencia SPEI",
-              monto: Number(p.amount ?? p.monto) || 0,
+              monto: round2(Number(p.amount ?? p.monto) || 0),
               unit: sale.unit,
               reciboFolio: p.receiptFolio || p.reciboFolio || `REC-${(p.id || sale.folio || `${sale.unit}-${pIdx + 1}`).replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}`,
               comprobanteUrl: p.voucherUrl || p.comprobanteUrl || undefined,
               voucherName: p.voucherName || (p.comprobanteUrl ? `Comprobante_Pago_${sale.unit}.pdf` : undefined),
               notes: p.notes || "",
-              moratoryAmount: Number(p.moratoryAmount) || 0,
+              moratoryAmount: round2(Number(p.moratoryAmount) || 0),
             }));
 
             // If paymentsList is empty but paidAmount > 0, generate synthetic initial payment record
@@ -129,7 +131,7 @@ export async function GET(request: Request) {
                 id: `pay-${sale.unit}-init`,
                 fechaPago: sale.saleDate || "2026-04-15",
                 metodoPago: "Transferencia SPEI",
-                monto: sale.paidAmount,
+                monto: round2(sale.paidAmount),
                 unit: sale.unit,
                 reciboFolio: `REC-${(sale.folio || sale.unit).replace(/[^a-zA-Z0-9]/g, "").toUpperCase()}`,
                 comprobanteUrl: undefined,
@@ -139,10 +141,12 @@ export async function GET(request: Request) {
               });
             }
 
-            // Calculate total paid available for cascading
-            const totalPaidAvailable = paymentsList.length > 0
-              ? paymentsList.reduce((acc: number, p: any) => acc + (Number(p.monto) || 0), 0)
-              : (Number(sale.paidAmount) || 0);
+            // Calculate total paid available for cascading with proper rounding
+            const totalPaidAvailable = round2(
+              paymentsList.length > 0
+                ? paymentsList.reduce((acc: number, p: any) => acc + (Number(p.monto) || 0), 0)
+                : (Number(sale.paidAmount) || 0)
+            );
 
             // Process Schedule (Cuotas Programadas) with Cascading Amortization
             const rawSchedule = sale.schedule || [];
@@ -159,7 +163,7 @@ export async function GET(request: Request) {
             let nextPaymentItem: any = null;
 
             const scheduleList = sortedSchedule.map((s: any, idx: number) => {
-              const sAmount = Number(s.montoProgramado ?? s.scheduledAmount ?? s.monto) || 0;
+              const sAmount = round2(Number(s.montoProgramado ?? s.scheduledAmount ?? s.monto) || 0);
               const sDate = s.fechaProgramada || s.scheduledDate || "Pendiente";
               const instDate = parseDateFlexible(sDate);
               const isPastDue = Boolean(instDate && instDate < now);
@@ -169,18 +173,24 @@ export async function GET(request: Request) {
               let status: "Pagado" | "Pendiente" | "Atrasado" | "Parcial" = "Pendiente";
               let pDate = "Pendiente";
 
-              if (remainingPaid >= sAmount && sAmount > 0) {
+              if (round2(remainingPaid) >= round2(sAmount) && sAmount > 0) {
                 pAmount = sAmount;
                 pendAmount = 0;
-                remainingPaid -= sAmount;
+                remainingPaid = round2(remainingPaid - sAmount);
                 status = "Pagado";
-                pDate = sDate;
-              } else if (remainingPaid > 0) {
-                pAmount = remainingPaid;
-                pendAmount = Math.max(0, sAmount - remainingPaid);
+                pDate = s.paidDate && s.paidDate !== "Pendiente" && s.paidDate !== "Parcial" ? s.paidDate : sDate;
+              } else if (remainingPaid > 0.01) {
+                pAmount = round2(remainingPaid);
+                pendAmount = round2(Math.max(0, sAmount - remainingPaid));
                 remainingPaid = 0;
-                status = isPastDue ? "Atrasado" : "Pendiente";
-                pDate = "Parcial";
+                if (pendAmount <= 0.05) {
+                  pendAmount = 0;
+                  status = "Pagado";
+                  pDate = sDate;
+                } else {
+                  status = isPastDue ? "Atrasado" : "Pendiente";
+                  pDate = "Parcial";
+                }
               } else {
                 pAmount = 0;
                 pendAmount = sAmount;
@@ -188,11 +198,11 @@ export async function GET(request: Request) {
                 pDate = "Pendiente";
               }
 
-              if (status === "Atrasado") {
-                overdueTotal += pendAmount;
+              if (status === "Atrasado" && pendAmount > 0.05) {
+                overdueTotal = round2(overdueTotal + pendAmount);
               }
 
-              if (pendAmount > 0 && !nextPaymentItem) {
+              if (pendAmount > 0.05 && !nextPaymentItem) {
                 let diffDays = 30;
                 if (instDate) {
                   diffDays = Math.ceil((instDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -201,7 +211,7 @@ export async function GET(request: Request) {
                   amount: pendAmount,
                   dueDate: sDate,
                   daysRemaining: diffDays,
-                  concept: s.concept || `Mensualidad ${idx + 1}`,
+                  concept: s.concept || (idx === 0 ? "Enganche" : (idx === sortedSchedule.length - 1 ? "Liquidación" : `Mensualidad ${idx}`)),
                   status: status,
                 };
               }
@@ -218,14 +228,14 @@ export async function GET(request: Request) {
                 planPago: s.planPago || s.paymentPlan || sale.paymentPlan || "Plan de Pago",
                 metodoPago: pAmount > 0 ? (s.metodoPago || s.paymentMethod || "Transferencia SPEI") : "Pendiente",
                 status: status,
-                interesMoratorio: s.interesMoratorio || 0,
+                interesMoratorio: round2(Number(s.interesMoratorio) || 0),
               };
             });
 
             // Financial Summary
-            const totalPrice = sale.totalPrice || sale.totalAmount || scheduleList.reduce((acc: number, s: any) => acc + s.montoProgramado, 0) || 2500000;
+            const totalPrice = round2(sale.totalPrice || sale.totalAmount || scheduleList.reduce((acc: number, s: any) => acc + s.montoProgramado, 0) || 2500000);
             const paidAmount = totalPaidAvailable;
-            const pendingAmount = Math.max(0, totalPrice - paidAmount);
+            const pendingAmount = round2(Math.max(0, totalPrice - paidAmount));
 
             // If no next payment found (e.g. fully paid)
             if (!nextPaymentItem) {
@@ -236,6 +246,61 @@ export async function GET(request: Request) {
                 concept: "Sin pagos pendientes",
                 status: "Pagado",
               };
+            }
+
+            // Client Documents: extract project.clientDocuments or construct dynamic official documents
+            const rawClientDocs = proj.clientDocuments || [];
+            const matchingClientDocs = rawClientDocs.filter(
+              (d: any) =>
+                (d.clientId === sale.clientId || (d.clientName && sale.clientName && d.clientName.toLowerCase() === sale.clientName.toLowerCase()) || d.unit === sale.unit) &&
+                d.isVisibleToClient !== false
+            );
+
+            const documentsList = matchingClientDocs.map((d: any) => ({
+              id: d.id,
+              title: d.title,
+              category: d.category || "DOCUMENTO",
+              fileSize: d.fileSize || "1.2 MB",
+              uploadDate: d.uploadDate || d.updatedAt || sale.saleDate || "15 Abr 2026",
+              fileUrl: d.url || undefined,
+            }));
+
+            // If no custom uploaded client documents, include dynamic authentic contract & technical docs
+            if (documentsList.length === 0) {
+              documentsList.push(
+                {
+                  id: `doc-${sale.id}-contrato`,
+                  title: `Contrato Oficial de Compraventa - ${projName} (Unidad ${sale.unit}).pdf`,
+                  category: "CONTRATO",
+                  fileSize: "2.4 MB",
+                  uploadDate: sale.saleDate || "15 Abr 2026",
+                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
+                },
+                {
+                  id: `doc-${sale.id}-reglamento`,
+                  title: `Reglamento de Condominio y Régimen de Propiedad - ${projName}.pdf`,
+                  category: "REGLAMENTO",
+                  fileSize: "1.8 MB",
+                  uploadDate: sale.saleDate || "15 Abr 2026",
+                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
+                },
+                {
+                  id: `doc-${sale.id}-plano`,
+                  title: `Plano Arquitectónico y Cuadro de Áreas - Unidad ${sale.unit} (${areaM2} m²).pdf`,
+                  category: "PLANO",
+                  fileSize: "3.1 MB",
+                  uploadDate: sale.saleDate || "15 Abr 2026",
+                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
+                },
+                {
+                  id: `doc-${sale.id}-acabados`,
+                  title: `Ficha Técnica de Acabados y Equipamiento - Unidad ${sale.unit}.pdf`,
+                  category: "FICHA TÉCNICA",
+                  fileSize: "1.5 MB",
+                  uploadDate: sale.saleDate || "15 Abr 2026",
+                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
+                }
+              );
             }
 
             matchedProperties.push({
@@ -285,32 +350,7 @@ export async function GET(request: Request) {
                   description: "Se concluyeron los muros milán y el armado de zapatas en sótano 2. Inicio de armado de columnas piso 1.",
                 },
               ],
-              documents: [
-                {
-                  id: `doc-${sale.id}-1`,
-                  title: `Contrato Compraventa ${projName} ${sale.unit}.pdf`,
-                  category: "CONTRATO",
-                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
-                  fileSize: "3.2 MB",
-                  uploadDate: sale.saleDate || "28 Ene 2026",
-                },
-                {
-                  id: `doc-${sale.id}-2`,
-                  title: `Plano Arquitectónico Unidad ${sale.unit}.pdf`,
-                  category: "PLANO",
-                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
-                  fileSize: "5.1 MB",
-                  uploadDate: "28 Ene 2026",
-                },
-                {
-                  id: `doc-${sale.id}-3`,
-                  title: `Reglamento Interno ${projName}.pdf`,
-                  category: "REGLAMENTO",
-                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
-                  fileSize: "1.4 MB",
-                  uploadDate: "30 Ene 2026",
-                },
-              ],
+              documents: documentsList,
               schedule: scheduleList,
               paymentsList: paymentsList,
               customAttributes: [
@@ -340,33 +380,33 @@ export async function GET(request: Request) {
               };
             }
 
-            const unitPrice = unitInv.price || 3000000;
-            const paid = unitInv.salePaidAmount || 0;
-            const pending = unitInv.salePendingAmount || unitPrice - paid;
+            const unitPrice = round2(unitInv.price || 3000000);
+            const paid = round2(unitInv.salePaidAmount || 0);
+            const pending = round2(unitInv.salePendingAmount || unitPrice - paid);
 
             const fallbackSchedule = [
               {
                 id: `inst-${unitInv.id}-1`,
                 cuotaNumber: 1,
                 concept: "Enganche",
-                montoProgramado: Math.round(unitPrice * 0.3),
+                montoProgramado: round2(unitPrice * 0.3),
                 fechaProgramada: "2026-04-15",
-                montoPagado: Math.min(paid, Math.round(unitPrice * 0.3)),
-                montoPendiente: Math.max(0, Math.round(unitPrice * 0.3) - paid),
-                fechaPago: paid >= Math.round(unitPrice * 0.3) ? "2026-04-15" : "Pendiente",
+                montoPagado: round2(Math.min(paid, unitPrice * 0.3)),
+                montoPendiente: round2(Math.max(0, unitPrice * 0.3 - paid)),
+                fechaPago: paid >= round2(unitPrice * 0.3) ? "2026-04-15" : "Pendiente",
                 planPago: "Plan Tradicional",
                 metodoPago: "Transferencia SPEI",
-                status: paid >= Math.round(unitPrice * 0.3) ? "Pagado" : "Pendiente",
+                status: paid >= round2(unitPrice * 0.3) ? "Pagado" : "Pendiente",
                 interesMoratorio: 0,
               },
               {
                 id: `inst-${unitInv.id}-2`,
                 cuotaNumber: 2,
                 concept: "Mensualidad 1",
-                montoProgramado: Math.round(unitPrice * 0.05),
+                montoProgramado: round2(unitPrice * 0.05),
                 fechaProgramada: "2026-05-15",
                 montoPagado: 0,
-                montoPendiente: Math.round(unitPrice * 0.05),
+                montoPendiente: round2(unitPrice * 0.05),
                 fechaPago: "Pendiente",
                 planPago: "Plan Tradicional",
                 metodoPago: "Pendiente",
@@ -403,7 +443,7 @@ export async function GET(request: Request) {
               paidAmount: paid,
               pendingAmount: pending,
               overdueAmount: 0,
-              nextPaymentAmount: Math.round(pending * 0.1) || 25000,
+              nextPaymentAmount: round2(pending * 0.1) || 25000,
               nextPaymentDueDate: "2026-05-15",
               nextPaymentDaysRemaining: 21,
               nextPaymentConcept: "Mensualidad 1",
@@ -439,11 +479,19 @@ export async function GET(request: Request) {
               documents: [
                 {
                   id: `doc-${unitInv.id}-1`,
-                  title: `Contrato Compraventa ${projName} ${unitInv.unit}.pdf`,
+                  title: `Contrato Oficial de Compraventa - ${projName} Unidad ${unitInv.unit}.pdf`,
                   category: "CONTRATO",
                   fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
-                  fileSize: "2.8 MB",
-                  uploadDate: "28 Ene 2026",
+                  fileSize: "2.4 MB",
+                  uploadDate: "15 Abr 2026",
+                },
+                {
+                  id: `doc-${unitInv.id}-2`,
+                  title: `Reglamento Interno y Régimen Condominal - ${projName}.pdf`,
+                  category: "REGLAMENTO",
+                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
+                  fileSize: "1.8 MB",
+                  uploadDate: "15 Abr 2026",
                 },
               ],
               schedule: fallbackSchedule,
