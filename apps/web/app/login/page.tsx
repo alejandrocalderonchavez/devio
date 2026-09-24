@@ -99,50 +99,15 @@ function LoginContent() {
           }
         } else {
           const errData = await response.json().catch(() => ({}));
-          // Si el servidor rechazó explícitamente las credenciales, verificar solo si fue registrado en este navegador
-          if (typeof window !== "undefined") {
-            const rawRegisteredUsers = localStorage.getItem("devio_registered_users");
-            if (rawRegisteredUsers) {
-              try {
-                const parsed = JSON.parse(rawRegisteredUsers);
-                const match = parsed.find(
-                  (u: any) => u.email?.toLowerCase().trim() === cleanEmail && (!u.password || u.password === password)
-                );
-                if (match) {
-                  loggedUser = match;
-                  sessionToken = `devio_session_local_${Date.now()}`;
-                  localStorage.removeItem("devio_projects_state");
-                  sessionStorage.removeItem("devio_projects_state");
-                  localStorage.removeItem("devio_impersonation");
-                  sessionStorage.removeItem("devio_impersonation");
-                }
-              } catch (e) {}
-            }
-          }
-
-          if (!loggedUser) {
-            setIsSubmitting(false);
-            setErrorMessage(errData.error || "Credenciales inválidas. Verifica tu correo y contraseña.");
-            return;
-          }
+          setIsSubmitting(false);
+          setErrorMessage(errData.error || "Credenciales inválidas. Verifica tu correo y contraseña.");
+          return;
         }
-      } catch (apiErr) {
-        // En caso de fallo de red, verificar usuario local
-        if (typeof window !== "undefined") {
-          const rawRegisteredUsers = localStorage.getItem("devio_registered_users");
-          if (rawRegisteredUsers) {
-            try {
-              const parsed = JSON.parse(rawRegisteredUsers);
-              const match = parsed.find(
-                (u: any) => u.email?.toLowerCase().trim() === cleanEmail && (!u.password || u.password === password)
-              );
-              if (match) {
-                loggedUser = match;
-                sessionToken = `devio_session_local_${Date.now()}`;
-              }
-            } catch (e) {}
-          }
-        }
+      } catch (apiErr: any) {
+        console.error("Login request error:", apiErr);
+        setIsSubmitting(false);
+        setErrorMessage(apiErr.message || "Error de conexión con el servidor. Intenta de nuevo.");
+        return;
       }
 
       // 3. Si se encontró usuario válido:
