@@ -7,7 +7,7 @@ export interface ServerNotificationLog {
   recipient: string;
   recipientName: string;
   developerName: string;
-  status: "ENVIADO" | "ENTREGADO" | "FALLIDO" | "PENDIENTE";
+  status: "ENVIADO" | "ENTREGADO" | "FALLIDO" | "PENDIENTE" | "PAUSADO";
   errorDetails?: string;
   retryCount: number;
   metadata?: Record<string, any>;

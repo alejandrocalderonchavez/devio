@@ -1807,21 +1807,10 @@ export default function ProjectPaymentsPage() {
                     <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#1F3652", display: "block", marginBottom: "0.35rem" }}>
                       Fecha Programada
                     </label>
-                    <input
-                      type="text"
+                    <DevioDatePicker
                       value={editPaymentForm.scheduledDate}
-                      onChange={(e) => setEditPaymentForm({ ...editPaymentForm, scheduledDate: e.target.value })}
-                      placeholder="Ej. 17 Oct 2026"
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1px solid #CBD5E1",
-                        fontSize: "0.85rem",
-                        color: "#1F3652",
-                        fontWeight: 600,
-                      }}
-                      required
+                      onChange={(val) => setEditPaymentForm({ ...editPaymentForm, scheduledDate: val })}
+                      placeholder="Seleccionar fecha"
                     />
                   </div>
                 </div>
@@ -2259,20 +2248,10 @@ export default function ProjectPaymentsPage() {
                     <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#1F3652", display: "block", marginBottom: "0.35rem" }}>
                       Fecha Real de Pago
                     </label>
-                    <input
-                      type="text"
+                    <DevioDatePicker
                       value={editAbonoForm.fechaPago}
-                      onChange={(e) => setEditAbonoForm({ ...editAbonoForm, fechaPago: e.target.value })}
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1px solid #CBD5E1",
-                        fontSize: "0.85rem",
-                        color: "#1F3652",
-                        fontWeight: 600,
-                      }}
-                      required
+                      onChange={(val) => setEditAbonoForm({ ...editAbonoForm, fechaPago: val })}
+                      placeholder="Seleccionar fecha de pago"
                     />
                   </div>
                 </div>

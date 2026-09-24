@@ -142,7 +142,7 @@ export async function sendAndLogNotification({
   channel = "POSTMARK",
   fromEmail,
   fromName,
-}: SendAndLogOptions): Promise<{ success: boolean; error?: string; logId: string }> {
+}: SendAndLogOptions): Promise<{ success: boolean; error?: string; logId: string; bypassed?: boolean }> {
   const logId = `log-${channel.toLowerCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   const nowStr = new Date().toLocaleString("es-MX", {
     day: "2-digit",
@@ -151,6 +151,32 @@ export async function sendAndLogNotification({
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  const channelsConfig = getNotificationChannelsConfig();
+  const channelKey = channel.toLowerCase() as "postmark" | "whatsapp" | "push";
+  const isMuted = channelsConfig.masterMute || !channelsConfig[channelKey]?.enabled;
+
+  // Staging Kill Switch Guard: If master is muted or channel is disabled, block external API dispatch
+  if (isMuted) {
+    const mutedLog: NotificationDeliveryLog = {
+      id: logId,
+      timestamp: nowStr,
+      triggerKey,
+      triggerName,
+      channel,
+      recipient: to,
+      recipientName,
+      developerName,
+      status: "PAUSADO",
+      errorDetails: channelsConfig.masterMute
+        ? "🛡️ Modo Staging Activo: Envío bloqueado por Kill-Switch maestro en Super Admin."
+        : `⏸ Canal ${channel} desactivado en configuración de integraciones.`,
+      retryCount: 0,
+      metadata: { templateAlias, templateModel, stagingBypassed: true },
+    };
+    recordNotificationDeliveryLog(mutedLog);
+    return { success: true, logId, bypassed: true };
+  }
 
   const initialLog: NotificationDeliveryLog = {
     id: logId,
@@ -249,6 +275,26 @@ export function dispatchSystemNotification(options: DispatchNotificationOptions)
   });
 
   const devName = options.developerName || "Devio Inmobiliario";
+
+  // Staging Kill-Switch Check
+  if (channelsConfig.masterMute) {
+    const mutedLog: NotificationDeliveryLog = {
+      id: `log-muted-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: nowStr,
+      triggerKey: template.triggerKey,
+      triggerName: template.title,
+      channel: "POSTMARK",
+      recipient: options.recipientEmail || options.recipientPhone || "Destinatario",
+      recipientName: options.recipientName,
+      developerName: devName,
+      status: "PAUSADO",
+      errorDetails: "🛡️ Modo Staging Activo: Todos los canales están desactivados por el Switch Maestro en Super Admin.",
+      retryCount: 0,
+      metadata: options.metadata,
+    };
+    saveNotificationDeliveryLogs([mutedLog, ...getNotificationDeliveryLogs()]);
+    return [mutedLog];
+  }
 
   // 1. POSTMARK EMAIL
   if (

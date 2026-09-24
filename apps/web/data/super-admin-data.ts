@@ -62,25 +62,29 @@ export interface SuperAdminAuditLog {
 }
 
 export interface NotificationChannelConfig {
+  masterMute: boolean;
+  stagingMode: boolean;
   postmark: {
     enabled: boolean;
     senderAlias: string;
     fromEmail: string;
     serverApiToken: string;
-    status: "CONNECTED" | "UNCONFIGURED" | "ERROR";
+    status: "CONNECTED" | "UNCONFIGURED" | "PAUSED" | "ERROR";
   };
   whatsapp: {
     enabled: boolean;
     accountAlias: string;
     fromNumber: string;
     apiToken: string;
-    status: "CONNECTED" | "UNCONFIGURED" | "ERROR";
+    phoneNumberId?: string;
+    wabaId?: string;
+    status: "CONNECTED" | "UNCONFIGURED" | "PAUSED" | "ERROR";
   };
   push: {
     enabled: boolean;
     vapidPublicKey: string;
     appIconUrl: string;
-    status: "CONNECTED" | "UNCONFIGURED";
+    status: "CONNECTED" | "UNCONFIGURED" | "PAUSED";
   };
 }
 
@@ -118,7 +122,7 @@ export interface NotificationDeliveryLog {
   recipient: string;
   recipientName: string;
   developerName: string;
-  status: "ENVIADO" | "ENTREGADO" | "FALLIDO" | "PENDIENTE";
+  status: "ENVIADO" | "ENTREGADO" | "FALLIDO" | "PENDIENTE" | "PAUSADO";
   errorDetails?: string;
   retryCount: number;
   metadata?: Record<string, any>;
@@ -225,6 +229,8 @@ export const INITIAL_SUPER_ADMIN_DEVELOPERS: SuperAdminDeveloper[] = [
 ];
 
 export const INITIAL_NOTIFICATION_CHANNELS: NotificationChannelConfig = {
+  masterMute: false, // Control maestro de Staging (cuando es true, desactiva y bloquea todos los envíos reales)
+  stagingMode: true,
   postmark: {
     enabled: true,
     senderAlias: "DEVIO",

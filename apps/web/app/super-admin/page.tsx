@@ -60,6 +60,9 @@ import {
   CalendarClock,
   Tag,
   SlidersHorizontal,
+  BellOff,
+  Power,
+  Radio,
 } from "lucide-react";
 import {
   SuperAdminDeveloper,
@@ -82,6 +85,7 @@ import {
 } from "../../data/super-admin-data";
 import { useProject } from "../../context/project-context";
 import { PERMISSIONS_CATALOG, getRolePermissionsMap, PermissionKey, UserRole } from "../../lib/permissions";
+import { DevioDatePicker } from "../../components/ui/devio-date-picker";
 import {
   getNotificationChannelsConfig,
   saveNotificationChannelsConfig,
@@ -247,6 +251,43 @@ function SuperAdminContent() {
   const toggleExpandDev = (id: string) => {
     setExpandedDevIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  // Channel control handlers for Staging Mute / Master Kill-Switch
+  const handleToggleMasterMute = () => {
+    const newMute = !channelsConfig.masterMute;
+    const updated: NotificationChannelConfig = {
+      ...channelsConfig,
+      masterMute: newMute,
+      stagingMode: newMute,
+    };
+    setChannelsConfig(updated);
+    saveNotificationChannelsConfig(updated);
+    showToast(
+      newMute ? "🔕 Modo Staging Activado (Triggers Silenciados)" : "🔔 Canales en Vivo Activados (Producción)",
+      newMute
+        ? "Todas las llamadas externas a Postmark y WhatsApp quedan silenciadas. Los triggers registrarán estado PAUSADO seguro."
+        : "Las notificaciones salientes se enviarán normalmente a través de las APIs externas.",
+      newMute ? "warning" : "success"
+    );
+  };
+
+  const handleToggleChannel = (channel: "postmark" | "whatsapp" | "push") => {
+    const isCurrentlyEnabled = channelsConfig[channel]?.enabled ?? true;
+    const updated: NotificationChannelConfig = {
+      ...channelsConfig,
+      [channel]: {
+        ...channelsConfig[channel],
+        enabled: !isCurrentlyEnabled,
+      },
+    };
+    setChannelsConfig(updated);
+    saveNotificationChannelsConfig(updated);
+    showToast(
+      `Canal ${channel.toUpperCase()} ${!isCurrentlyEnabled ? "Habilitado" : "Desactivado"}`,
+      `El canal ahora está ${!isCurrentlyEnabled ? "listo para enviar notificaciones" : "silenciado y en pausa"}.`,
+      !isCurrentlyEnabled ? "success" : "info"
     );
   };
 
@@ -3119,67 +3160,367 @@ function SuperAdminContent() {
             {/* SUBTAB 4: CANALES DE INTEGRACIÓN (POSTMARK, WHATSAPP, PUSH)         */}
             {/* =================================================================== */}
             {notifSubTab === "channels" && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.25rem" }}>
-                {/* Postmark Card */}
-                <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <Mail size={18} color="#2F80ED" />
-                      <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>Postmark Email Server</h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+                {/* Master Staging Kill-Switch Banner */}
+                <div
+                  style={{
+                    backgroundColor: channelsConfig.masterMute ? "#FFFBEB" : "#F0FDF4",
+                    borderRadius: "1rem",
+                    border: channelsConfig.masterMute ? "2px solid #F59E0B" : "2px solid #22C55E",
+                    padding: "1.5rem",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "1rem",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.85rem", maxWidth: "750px" }}>
+                      <div
+                        style={{
+                          width: "44px",
+                          height: "44px",
+                          borderRadius: "0.75rem",
+                          backgroundColor: channelsConfig.masterMute ? "#FEF3C7" : "#DCFCE7",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {channelsConfig.masterMute ? (
+                          <BellOff size={24} color="#D97706" />
+                        ) : (
+                          <Radio size={24} color="#16A34A" />
+                        )}
+                      </div>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                          <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                            Kill-Switch Maestro de Notificaciones (Entorno Staging)
+                          </h3>
+                          <span
+                            style={{
+                              fontSize: "0.72rem",
+                              fontWeight: 800,
+                              textTransform: "uppercase",
+                              padding: "0.2rem 0.6rem",
+                              borderRadius: "9999px",
+                              backgroundColor: channelsConfig.masterMute ? "#FEF3C7" : "#DCFCE7",
+                              color: channelsConfig.masterMute ? "#92400E" : "#166534",
+                              border: channelsConfig.masterMute ? "1px solid #FDE68A" : "1px solid #BBF7D0",
+                            }}
+                          >
+                            {channelsConfig.masterMute ? "🔕 MODO STAGING / SILENCIADO" : "🔔 MODO PRODUCCIÓN / EN VIVO"}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: "0.83rem", color: "#475569", margin: 0, lineHeight: 1.45 }}>
+                          {channelsConfig.masterMute
+                            ? "Todas las llamadas salientes a Postmark y WhatsApp están completamente desactivadas y protegidas para evitar disparos accidentales a números o correos reales durante pruebas. Todos los triggers registrarán estado PAUSADO (Staging) de forma segura."
+                            : "Los canales de comunicación están activos. Toda notificación generada por el sistema o por cron jobs será despachada en tiempo real hacia los destinatarios por correo electrónico y WhatsApp."}
+                        </p>
+                      </div>
                     </div>
-                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "0.15rem 0.55rem", borderRadius: "99px" }}>
-                      ● Conectado
-                    </span>
-                  </div>
-                  <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: "0.5rem" }}>
-                    Remitente Oficial: <strong>{channelsConfig.postmark.fromEmail}</strong>
-                  </div>
-                  <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: "0.5rem" }}>
-                    Sender Alias: <strong>{channelsConfig.postmark.senderAlias}</strong>
-                  </div>
-                  <div style={{ fontSize: "0.78rem", color: "#64748B" }}>
-                    Plantillas en Postmark: <strong>12 registradas</strong>
+
+                    {/* Master Switch Button */}
+                    <button
+                      type="button"
+                      onClick={handleToggleMasterMute}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.6rem",
+                        padding: "0.75rem 1.4rem",
+                        borderRadius: "9999px",
+                        fontWeight: 800,
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        border: "none",
+                        backgroundColor: channelsConfig.masterMute ? "#D97706" : "#16A34A",
+                        color: "#FFFFFF",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                      }}
+                    >
+                      <Power size={17} />
+                      {channelsConfig.masterMute ? "Activar Notificaciones en Vivo" : "Desactivar Todos los Canales (Modo Staging)"}
+                    </button>
                   </div>
                 </div>
 
-                {/* WhatsApp Card */}
-                <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <MessageSquare size={18} color="#00C48C" />
-                      <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>WhatsApp Cloud API (WABA)</h4>
-                    </div>
-                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "0.15rem 0.55rem", borderRadius: "99px" }}>
-                      ● Activo
-                    </span>
-                  </div>
-                  <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: "0.5rem" }}>
-                    Número Emisor: <strong>{channelsConfig.whatsapp.fromNumber}</strong>
-                  </div>
-                  <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: "0.5rem" }}>
-                    Cuenta: <strong>{channelsConfig.whatsapp.accountAlias}</strong>
-                  </div>
-                  <div style={{ fontSize: "0.78rem", color: "#64748B" }}>
-                    Plantillas Meta Aprobadas: <strong>8 activas</strong>
-                  </div>
-                </div>
+                {/* Individual Channel Cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1.25rem" }}>
+                  {/* Postmark Email Server */}
+                  <div
+                    style={{
+                      backgroundColor: "#FFFFFF",
+                      borderRadius: "1rem",
+                      border: channelsConfig.masterMute
+                        ? "1px solid #E2E8F0"
+                        : (channelsConfig.postmark?.enabled ?? true)
+                        ? "1px solid #2F80ED"
+                        : "1px solid #CBD5E1",
+                      padding: "1.5rem",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      gap: "1rem",
+                      opacity: channelsConfig.masterMute || !(channelsConfig.postmark?.enabled ?? true) ? 0.85 : 1,
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <Mail size={20} color="#2F80ED" />
+                          <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                            Postmark Email Server
+                          </h4>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            padding: "0.18rem 0.6rem",
+                            borderRadius: "99px",
+                            backgroundColor: channelsConfig.masterMute
+                              ? "#FEF3C7"
+                              : (channelsConfig.postmark?.enabled ?? true)
+                              ? "#DCFCE7"
+                              : "#F1F5F9",
+                            color: channelsConfig.masterMute
+                              ? "#92400E"
+                              : (channelsConfig.postmark?.enabled ?? true)
+                              ? "#166534"
+                              : "#64748B",
+                          }}
+                        >
+                          {channelsConfig.masterMute
+                            ? "● Pausado por Staging"
+                            : (channelsConfig.postmark?.enabled ?? true)
+                            ? "● Conectado (Activo)"
+                            : "● Desactivado"}
+                        </span>
+                      </div>
 
-                {/* Web Push Card */}
-                <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", border: "1px solid #E2E8F0", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <Smartphone size={18} color="#9333EA" />
-                      <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>Web Push Notifications</h4>
+                      <div style={{ fontSize: "0.8rem", color: "#64748B", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                        <div>
+                          Remitente Oficial: <strong style={{ color: "#1F3652" }}>{channelsConfig.postmark.fromEmail}</strong>
+                        </div>
+                        <div>
+                          Sender Alias: <strong style={{ color: "#1F3652" }}>{channelsConfig.postmark.senderAlias}</strong>
+                        </div>
+                        <div>
+                          Server Token: <code style={{ fontSize: "0.75rem", backgroundColor: "#F1F5F9", padding: "0.15rem 0.4rem", borderRadius: "0.3rem" }}>ec9d2701...4433-8135</code>
+                        </div>
+                        <div>
+                          Plantillas Postmark: <strong style={{ color: "#1F3652" }}>12 registradas</strong>
+                        </div>
+                      </div>
                     </div>
-                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#166534", backgroundColor: "#DCFCE7", padding: "0.15rem 0.55rem", borderRadius: "99px" }}>
-                      ● Habilitado
-                    </span>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #F1F5F9", paddingTop: "0.85rem" }}>
+                      <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748B" }}>
+                        Canal Email Individual
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleChannel("postmark")}
+                        style={{
+                          padding: "0.4rem 0.9rem",
+                          borderRadius: "9999px",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          border: "1px solid #CBD5E1",
+                          backgroundColor: (channelsConfig.postmark?.enabled ?? true) ? "#FFFFFF" : "#F8FAFC",
+                          color: (channelsConfig.postmark?.enabled ?? true) ? "#DC2626" : "#16A34A",
+                        }}
+                      >
+                        {(channelsConfig.postmark?.enabled ?? true) ? "Desactivar Canal" : "Activar Canal"}
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ fontSize: "0.78rem", color: "#64748B", marginBottom: "0.5rem" }}>
-                    VAPID Key: <strong>{channelsConfig.push.vapidPublicKey.substring(0, 20)}...</strong>
+
+                  {/* WhatsApp Cloud API (WABA) */}
+                  <div
+                    style={{
+                      backgroundColor: "#FFFFFF",
+                      borderRadius: "1rem",
+                      border: channelsConfig.masterMute
+                        ? "1px solid #E2E8F0"
+                        : (channelsConfig.whatsapp?.enabled ?? true)
+                        ? "1px solid #00C48C"
+                        : "1px solid #CBD5E1",
+                      padding: "1.5rem",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      gap: "1rem",
+                      opacity: channelsConfig.masterMute || !(channelsConfig.whatsapp?.enabled ?? true) ? 0.85 : 1,
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <MessageSquare size={20} color="#00C48C" />
+                          <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                            WhatsApp Cloud API (WABA)
+                          </h4>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            padding: "0.18rem 0.6rem",
+                            borderRadius: "99px",
+                            backgroundColor: channelsConfig.masterMute
+                              ? "#FEF3C7"
+                              : (channelsConfig.whatsapp?.enabled ?? true)
+                              ? "#DCFCE7"
+                              : "#F1F5F9",
+                            color: channelsConfig.masterMute
+                              ? "#92400E"
+                              : (channelsConfig.whatsapp?.enabled ?? true)
+                              ? "#166534"
+                              : "#64748B",
+                          }}
+                        >
+                          {channelsConfig.masterMute
+                            ? "● Pausado por Staging"
+                            : (channelsConfig.whatsapp?.enabled ?? true)
+                            ? "● Activo (Verificado)"
+                            : "● Desactivado"}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: "0.8rem", color: "#64748B", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                        <div>
+                          Número Emisor: <strong style={{ color: "#1F3652" }}>{channelsConfig.whatsapp.fromNumber}</strong>
+                        </div>
+                        <div>
+                          Cuenta Meta: <strong style={{ color: "#1F3652" }}>{channelsConfig.whatsapp.accountAlias}</strong>
+                        </div>
+                        <div>
+                          Phone Number ID: <code style={{ fontSize: "0.75rem", backgroundColor: "#F1F5F9", padding: "0.15rem 0.4rem", borderRadius: "0.3rem" }}>{channelsConfig.whatsapp.phoneNumberId}</code>
+                        </div>
+                        <div>
+                          Plantillas Meta Aprobadas: <strong style={{ color: "#1F3652" }}>8 activas</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #F1F5F9", paddingTop: "0.85rem" }}>
+                      <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748B" }}>
+                        Canal WhatsApp Individual
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleChannel("whatsapp")}
+                        style={{
+                          padding: "0.4rem 0.9rem",
+                          borderRadius: "9999px",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          border: "1px solid #CBD5E1",
+                          backgroundColor: (channelsConfig.whatsapp?.enabled ?? true) ? "#FFFFFF" : "#F8FAFC",
+                          color: (channelsConfig.whatsapp?.enabled ?? true) ? "#DC2626" : "#16A34A",
+                        }}
+                      >
+                        {(channelsConfig.whatsapp?.enabled ?? true) ? "Desactivar Canal" : "Activar Canal"}
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ fontSize: "0.78rem", color: "#64748B" }}>
-                    App Icon: <strong>{channelsConfig.push.appIconUrl}</strong>
+
+                  {/* Web Push Card */}
+                  <div
+                    style={{
+                      backgroundColor: "#FFFFFF",
+                      borderRadius: "1rem",
+                      border: channelsConfig.masterMute
+                        ? "1px solid #E2E8F0"
+                        : (channelsConfig.push?.enabled ?? true)
+                        ? "1px solid #9333EA"
+                        : "1px solid #CBD5E1",
+                      padding: "1.5rem",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      gap: "1rem",
+                      opacity: channelsConfig.masterMute || !(channelsConfig.push?.enabled ?? true) ? 0.85 : 1,
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <Smartphone size={20} color="#9333EA" />
+                          <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                            Web Push Notifications
+                          </h4>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            padding: "0.18rem 0.6rem",
+                            borderRadius: "99px",
+                            backgroundColor: channelsConfig.masterMute
+                              ? "#FEF3C7"
+                              : (channelsConfig.push?.enabled ?? true)
+                              ? "#DCFCE7"
+                              : "#F1F5F9",
+                            color: channelsConfig.masterMute
+                              ? "#92400E"
+                              : (channelsConfig.push?.enabled ?? true)
+                              ? "#166534"
+                              : "#64748B",
+                          }}
+                        >
+                          {channelsConfig.masterMute
+                            ? "● Pausado por Staging"
+                            : (channelsConfig.push?.enabled ?? true)
+                            ? "● Habilitado"
+                            : "● Desactivado"}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: "0.8rem", color: "#64748B", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                        <div>
+                          VAPID Key: <strong style={{ color: "#1F3652" }}>{channelsConfig.push.vapidPublicKey.substring(0, 20)}...</strong>
+                        </div>
+                        <div>
+                          App Icon: <strong style={{ color: "#1F3652" }}>{channelsConfig.push.appIconUrl}</strong>
+                        </div>
+                        <div>
+                          Service Worker: <code style={{ fontSize: "0.75rem", backgroundColor: "#F1F5F9", padding: "0.15rem 0.4rem", borderRadius: "0.3rem" }}>/sw-push.js</code>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #F1F5F9", paddingTop: "0.85rem" }}>
+                      <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748B" }}>
+                        Canal Web Push Individual
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleChannel("push")}
+                        style={{
+                          padding: "0.4rem 0.9rem",
+                          borderRadius: "9999px",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          border: "1px solid #CBD5E1",
+                          backgroundColor: (channelsConfig.push?.enabled ?? true) ? "#FFFFFF" : "#F8FAFC",
+                          color: (channelsConfig.push?.enabled ?? true) ? "#DC2626" : "#16A34A",
+                        }}
+                      >
+                        {(channelsConfig.push?.enabled ?? true) ? "Desactivar Canal" : "Activar Canal"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -4570,20 +4911,10 @@ function SuperAdminContent() {
                     <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
                       Fecha de Envío
                     </label>
-                    <input
-                      type="date"
+                    <DevioDatePicker
                       value={newScheduleDate}
-                      onChange={(e) => setNewScheduleDate(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.5rem",
-                        border: "1px solid #CBD5E1",
-                        fontSize: "0.85rem",
-                        color: "#1F3652",
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
+                      onChange={(val) => setNewScheduleDate(val)}
+                      placeholder="Seleccionar fecha"
                     />
                   </div>
 

@@ -19,6 +19,37 @@ export async function POST(request: Request) {
       );
     }
 
+    // Safety Staging Guard: Check if master mute or staging override is present
+    if (body.masterMute === true || body.stagingMode === true || process.env.NEXT_PUBLIC_NOTIFICATIONS_MUTED === "true") {
+      console.log(`[Postmark Staging Muted] Envío a ${to} pausado por Modo Staging / Kill-Switch activo.`);
+      addServerLog({
+        id: `log-pmk-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        timestamp: new Date().toLocaleString("es-MX", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        triggerKey: `postmark.${templateAlias}`,
+        triggerName: `Notificación (${templateAlias})`,
+        channel: "POSTMARK",
+        recipient: to,
+        recipientName: templateModel.nombre || "Usuario Devio",
+        developerName: templateModel.desarrolladora || "Devio Inmobiliario",
+        status: "PAUSADO",
+        errorDetails: "Pausado: Modo Staging / Canales Desactivados en Super Admin.",
+        retryCount: 0,
+        metadata: { templateAlias, templateModel, bypassedByStaging: true },
+      });
+      return NextResponse.json({
+        success: true,
+        bypassed: true,
+        status: "PAUSADO",
+        message: "Notificación pausada por Kill-Switch de Staging (Sin llamadas salientes a Postmark)",
+      });
+    }
+
     const postmarkToken =
       process.env.POSTMARK_SERVER_TOKEN || "ec9d2701-f4ec-4433-8135-a0e64a59244d";
     const finalFromEmail =
