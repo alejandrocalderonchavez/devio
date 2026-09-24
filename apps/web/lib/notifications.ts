@@ -76,7 +76,20 @@ export function getScheduledNotifications(): ScheduledNotification[] {
   const stored = localStorage.getItem(STORAGE_KEY_SCHEDULED) || sessionStorage.getItem(STORAGE_KEY_SCHEDULED);
   if (stored) {
     try {
-      return JSON.parse(stored);
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        // Filter out legacy dummy records with hardcoded IDs
+        const filtered = parsed.filter(
+          (s: any) =>
+            s &&
+            !["sch-1-wa", "sch-1-pmk", "sch-1-push", "sch-3-wa", "sch-3-pmk", "sch-3-push", "sch-5-wa", "sch-5-pmk", "sch-5-push"].includes(s.id) &&
+            s.developerName !== "Lippu México"
+        );
+        if (filtered.length !== parsed.length) {
+          saveScheduledNotifications(filtered);
+        }
+        return filtered;
+      }
     } catch (e) {}
   }
   return INITIAL_SCHEDULED_NOTIFICATIONS;

@@ -319,11 +319,12 @@ function SuperAdminContent() {
       fetch("/api/notifications/scheduled")
         .then((res) => res.json())
         .then((data) => {
-          if (data.success && Array.isArray(data.scheduled) && data.scheduled.length > 0) {
+          if (data.success && Array.isArray(data.scheduled)) {
             setScheduledNotifications(data.scheduled);
             saveScheduledNotifications(data.scheduled);
           } else {
-            setScheduledNotifications(getScheduledNotifications());
+            setScheduledNotifications([]);
+            saveScheduledNotifications([]);
           }
         })
         .catch(() => {
@@ -961,11 +962,14 @@ function SuperAdminContent() {
       }
     >();
 
-    const todayCdmxTime = new Date("2026-09-23T00:00:00-06:00").getTime();
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+    const todayTime = todayMidnight.getTime();
+
     scheduledNotifications.forEach((sch) => {
       const schTime = new Date(sch.scheduledFor).getTime();
-      // Eliminar y no programar cuotas vencidas pasadas anteriores a hoy (23 Sep 2026)
-      if (schTime && schTime < todayCdmxTime - 24 * 60 * 60 * 1000) {
+      // Eliminar y no programar cuotas vencidas pasadas ya enviadas
+      if (schTime && schTime < todayTime - 24 * 60 * 60 * 1000 && sch.status === "ENVIADA") {
         return;
       }
 
@@ -2260,7 +2264,14 @@ function SuperAdminContent() {
                   <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", border: "1px solid #E2E8F0", padding: "1.1rem 1.25rem", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
                     <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 700, textTransform: "uppercase" }}>Próximas en 7 Días</span>
                     <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#D97706", marginTop: "0.2rem" }}>
-                      {scheduledNotifications.filter((s) => s.relativeTime.includes("días") || s.relativeTime.includes("Mes")).length}
+                      {(() => {
+                        const nowMs = Date.now();
+                        const next7DaysMs = nowMs + 7 * 24 * 60 * 60 * 1000;
+                        return scheduledNotifications.filter((s) => {
+                          const t = new Date(s.scheduledFor).getTime();
+                          return t >= nowMs && t <= next7DaysMs && (s.status === "PROGRAMADA" || s.status === "EN_COLA");
+                        }).length;
+                      })()}
                     </div>
                     <span style={{ fontSize: "0.72rem", color: "#64748B" }}>Recordatorios preventivos y cobros</span>
                   </div>
