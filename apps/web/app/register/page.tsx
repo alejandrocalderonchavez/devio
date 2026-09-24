@@ -90,7 +90,7 @@ function RegisterContent() {
     setPhoneNumber(formatted);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
@@ -119,13 +119,9 @@ function RegisterContent() {
     const cleanEmail = email.trim().toLowerCase();
     const phoneFull = `${phoneCountry} ${phoneNumber}`;
 
-    // 1. Enviar registro al backend NestJS (si está configurado)
-    const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
-    const isPublicHost = typeof window !== "undefined" && !window.location.hostname.includes("localhost") && !window.location.hostname.includes("127.0.0.1");
-    const apiUrl = configuredApiUrl || (isPublicHost ? "" : "http://localhost:4000");
-
-    if (apiUrl) {
-      fetch(`${apiUrl}/v1/auth/register`, {
+    // 1. Enviar registro a /api/auth/register para persistir en Supabase (Prisma)
+    try {
+      await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -134,8 +130,12 @@ function RegisterContent() {
           phone: phoneFull,
           roleTitle,
           password,
+          developerName: `${fullName} Desarrollos`,
+          inviteToken: activeInvite?.token,
         }),
-      }).catch(() => {});
+      });
+    } catch (e) {
+      console.warn("Could not register in database API:", e);
     }
 
     // 2. Guardar información del usuario superadmin en sesión local para el flujo de onboarding

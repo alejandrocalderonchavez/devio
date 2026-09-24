@@ -724,6 +724,13 @@ export default function SettingsPage() {
       }
       window.dispatchEvent(new Event("devio_developer_updated"));
       window.dispatchEvent(new Event("storage"));
+
+      // Persistir en Supabase (Prisma)
+      fetch("/api/developers", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      }).catch((err) => console.warn("Could not save developer to API:", err));
     }
     showToast("Datos de Desarrolladora Guardados", "Se actualizaron los datos corporativos, fiscales y el logotipo oficial de la empresa.");
     setShowDeveloperModal(false);

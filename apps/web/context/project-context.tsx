@@ -527,6 +527,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       }
       return updated;
     });
+
+    // Persistir en Supabase (Prisma)
+    fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newProject),
+    }).catch((err) => console.warn("Could not save project to API:", err));
   };
 
   const resetToCleanState = () => {
@@ -1056,6 +1063,22 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
     saveProjects(updated);
     showToast("Venta Registrada Exitosamente", `Folio ${saleFolio} guardado para la unidad ${unitNum}.`, "success");
+
+    // Persistir en Supabase (Prisma)
+    fetch("/api/sales", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: rawProjId || projId,
+        unitNumber: unitNum,
+        unitId: salePayload.unit?.id,
+        client: salePayload.client,
+        coOwners,
+        financials: salePayload.financials,
+        initialPayment: salePayload.initialPayment,
+        folio: saleFolio,
+      }),
+    }).catch((err) => console.warn("Could not save sale to API:", err));
   };
 
   const registerPayment = (
@@ -1256,6 +1279,21 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
     saveProjects(updated);
     showToast("Pago Registrado Exitosamente", `Se abonaron ${formatMoney(payAmount)} a la unidad ${unitNum}.`, "success");
+
+    // Persistir en Supabase (Prisma)
+    fetch("/api/payments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        unitNumber: paymentPayload.unitNumber,
+        amount: paymentPayload.amount,
+        paymentDate: paymentPayload.paymentDate,
+        paymentMethod: paymentPayload.paymentMethod,
+        reference: paymentPayload.reference,
+        notes: paymentPayload.notes,
+      }),
+    }).catch((err) => console.warn("Could not save payment to API:", err));
   };
 
   const updateSaleScheduleInstallment = (
