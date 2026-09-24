@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
+import PaymentPlanModal from "@/components/plans/payment-plan-modal";
 import {
   generateUnitsExcelTemplate,
   generateAdditionalsExcelTemplate,
@@ -652,18 +653,6 @@ export default function ProjectOnboardingPage() {
 
   const [isPaymentPlanModalOpen, setIsPaymentPlanModalOpen] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
-  const [modalPlanData, setModalPlanData] = useState<PaymentPlanItem>({
-    id: "",
-    name: "",
-    paymentType: "ESQUEMA",
-    downPaymentPercentage: 20,
-    installmentsCount: 12,
-    periodicity: "Mensual",
-    settlementPercentage: 60,
-    interestPercentage: 0,
-    discountPercentage: 0,
-    internalNotes: "",
-  });
 
   // ETAPA 6: DOCUMENTOS - Inicialmente vacío
   const [documents, setDocuments] = useState<ProjectDocumentItem[]>([]);
@@ -689,203 +678,6 @@ export default function ProjectOnboardingPage() {
     { id: "INDUSTRIAL", title: "Industrial", subtitle: "Parques y naves", icon: Factory },
     { id: "MIXED", title: "Mixto", subtitle: "Usos mixtos", icon: Layers },
   ];
-
-  // Cálculos de validación en tiempo real y sugerencias de corrección para el plan de pagos
-  const planValidation = useMemo(() => {
-    if (modalPlanData.paymentType === "CONTADO") {
-      if (!modalPlanData.name.trim()) {
-        return {
-          isValid: false,
-          errorTitle: "Nombre requerido",
-          errorMessage: "Ingresa un nombre para identificar este plan de pago de contado.",
-          fixes: [] as { label: string; action: () => void }[],
-          downPct: 100,
-          installmentsPct: 0,
-          settlementPct: 0,
-          totalPct: 100,
-        };
-      }
-      return {
-        isValid: true,
-        errorTitle: null,
-        errorMessage: null,
-        fixes: [] as { label: string; action: () => void }[],
-        downPct: 100,
-        installmentsPct: 0,
-        settlementPct: 0,
-        totalPct: 100,
-      };
-    }
-
-    const down = Number(modalPlanData.downPaymentPercentage) || 0;
-    const settlement = Number(modalPlanData.settlementPercentage) || 0;
-    const plazos = Number(modalPlanData.installmentsCount) || 0;
-    const sumDownSettlement = down + settlement;
-    const remainingPct = 100 - sumDownSettlement;
-    const totalPct = down + (plazos > 0 ? Math.max(0, remainingPct) : 0) + settlement;
-
-    if (!modalPlanData.name.trim()) {
-      return {
-        isValid: false,
-        errorTitle: "Nombre requerido",
-        errorMessage: "Ingresa un nombre para identificar este plan de pago.",
-        fixes: [] as { label: string; action: () => void }[],
-        downPct: down,
-        installmentsPct: Math.max(0, remainingPct),
-        settlementPct: settlement,
-        totalPct,
-      };
-    }
-
-    if (down <= 0) {
-      return {
-        isValid: false,
-        errorTitle: "Enganche requerido",
-        errorMessage: "El enganche debe ser mayor a 0% para un esquema de pagos. Si es liquidación total en una sola exhibición, selecciona 'Pago de contado'.",
-        fixes: [
-          {
-            label: "Asignar 15% de Enganche",
-            action: () => setModalPlanData((prev) => ({
-              ...prev,
-              downPaymentPercentage: 15,
-              settlementPercentage: Math.min(prev.settlementPercentage, 85),
-            })),
-          },
-          {
-            label: "Cambiar a Pago de Contado (100%)",
-            action: () => setModalPlanData((prev) => ({
-              ...prev,
-              paymentType: "CONTADO",
-              downPaymentPercentage: 100,
-              settlementPercentage: 0,
-              installmentsCount: 0,
-            })),
-          },
-        ],
-        downPct: down,
-        installmentsPct: Math.max(0, remainingPct),
-        settlementPct: settlement,
-        totalPct,
-      };
-    }
-
-    if (sumDownSettlement > 100) {
-      const excess = sumDownSettlement - 100;
-      return {
-        isValid: false,
-        errorTitle: "Porcentajes excedidos (>100%)",
-        errorMessage: `El Enganche (${down}%) y la Liquidación (${settlement}%) suman ${sumDownSettlement}%, excediendo el 100% total por ${excess}%. Las parcialidades quedarían en ${remainingPct}%, lo cual no es válido.`,
-        fixes: [
-          {
-            label: `Ajustar Liquidación a ${Math.max(0, 100 - down)}%`,
-            action: () => setModalPlanData((prev) => ({
-              ...prev,
-              settlementPercentage: Math.max(0, 100 - down),
-            })),
-          },
-          {
-            label: `Ajustar Enganche a ${Math.max(0, 100 - settlement)}%`,
-            action: () => setModalPlanData((prev) => ({
-              ...prev,
-              downPaymentPercentage: Math.max(0, 100 - settlement),
-            })),
-          },
-          {
-            label: `Distribuir: ${down}% Enganche / ${Math.floor((100 - down) / 2)}% Mensualidades / ${100 - down - Math.floor((100 - down) / 2)}% Liquidación`,
-            action: () => {
-              const half = Math.floor((100 - down) / 2);
-              setModalPlanData((prev) => ({
-                ...prev,
-                settlementPercentage: 100 - down - half,
-                installmentsCount: plazos > 0 ? plazos : 12,
-              }));
-            },
-          },
-        ],
-        downPct: down,
-        installmentsPct: remainingPct,
-        settlementPct: settlement,
-        totalPct: sumDownSettlement,
-      };
-    }
-
-    if (sumDownSettlement === 100 && plazos > 0) {
-      return {
-        isValid: false,
-        errorTitle: "Plazos sin porcentaje asignado (0%)",
-        errorMessage: `Definiste ${plazos} plazos, pero el Enganche (${down}%) y la Liquidación (${settlement}%) ya suman el 100%. No queda porcentaje para las parcialidades (quedarían en 0%).`,
-        fixes: [
-          {
-            label: `Reducir Liquidación para dejar 40% en ${plazos} plazos (${(40 / plazos).toFixed(1)}% c/u)`,
-            action: () => setModalPlanData((prev) => ({
-              ...prev,
-              settlementPercentage: Math.max(0, 100 - down - 40),
-            })),
-          },
-          {
-            label: "Cambiar Plazos a 0 (Solo Enganche y Liquidación)",
-            action: () => setModalPlanData((prev) => ({
-              ...prev,
-              installmentsCount: 0,
-            })),
-          },
-        ],
-        downPct: down,
-        installmentsPct: 0,
-        settlementPct: settlement,
-        totalPct: 100,
-      };
-    }
-
-    if (sumDownSettlement < 100 && plazos === 0) {
-      return {
-        isValid: false,
-        errorTitle: "Porcentaje flotante sin plazos",
-        errorMessage: `Queda un ${remainingPct}% pendiente de asignar porque el número de plazos es 0. Debes asignar mensualidades o sumar el ${remainingPct}% a la liquidación.`,
-        fixes: [
-          {
-            label: `Sumar ${remainingPct}% a la Liquidación (Total: ${settlement + remainingPct}%)`,
-            action: () => setModalPlanData((prev) => ({
-              ...prev,
-              settlementPercentage: 100 - down,
-            })),
-          },
-          {
-            label: `Asignar 12 plazos para cubrir el ${remainingPct}% (${(remainingPct / 12).toFixed(1)}% c/u)`,
-            action: () => setModalPlanData((prev) => ({
-              ...prev,
-              installmentsCount: 12,
-            })),
-          },
-          {
-            label: `Asignar 24 plazos para cubrir el ${remainingPct}% (${(remainingPct / 24).toFixed(1)}% c/u)`,
-            action: () => setModalPlanData((prev) => ({
-              ...prev,
-              installmentsCount: 24,
-            })),
-          },
-        ],
-        downPct: down,
-        installmentsPct: remainingPct,
-        settlementPct: settlement,
-        totalPct: sumDownSettlement,
-      };
-    }
-
-    return {
-      isValid: true,
-      errorTitle: null,
-      errorMessage: null,
-      fixes: [] as { label: string; action: () => void }[],
-      downPct: down,
-      installmentsPct: remainingPct,
-      settlementPct: settlement,
-      totalPct: 100,
-    };
-  }, [modalPlanData]);
-
-  const installmentsTotalPercentage = planValidation.installmentsPct;
-  const isPlanSumValid = planValidation.isValid;
 
   // ---------------------------------------------------------------------------
   // PLANTILLAS Y SUBIDA MASIVA EXCEL
@@ -1130,44 +922,10 @@ export default function ProjectOnboardingPage() {
   const handleOpenPaymentPlanModal = (plan?: PaymentPlanItem) => {
     if (plan) {
       setEditingPlanId(plan.id);
-      setModalPlanData({ ...plan });
     } else {
       setEditingPlanId(null);
-      setModalPlanData({
-        id: `pp-${Date.now()}`,
-        name: "",
-        paymentType: "ESQUEMA",
-        downPaymentPercentage: 20,
-        installmentsCount: 12,
-        periodicity: "Mensual",
-        settlementPercentage: 60,
-        interestPercentage: 0,
-        discountPercentage: 0,
-        internalNotes: "",
-      });
     }
     setIsPaymentPlanModalOpen(true);
-  };
-
-  const handleSavePaymentPlan = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!planValidation.isValid) return;
-    if (!modalPlanData.name.trim()) return;
-
-    let updatedLibrary: PaymentPlanItem[];
-    if (editingPlanId) {
-      updatedLibrary = globalPlanLibrary.map((p) =>
-        p.id === editingPlanId ? modalPlanData : p
-      );
-    } else {
-      updatedLibrary = [...globalPlanLibrary, modalPlanData];
-      if (!selectedPlanIds.includes(modalPlanData.id)) {
-        setSelectedPlanIds((prev) => [...prev, modalPlanData.id]);
-      }
-    }
-
-    saveGlobalLibrary(updatedLibrary);
-    setIsPaymentPlanModalOpen(false);
   };
 
   const handleDeletePlanFromLibrary = (planId: string) => {
@@ -3469,335 +3227,43 @@ export default function ProjectOnboardingPage() {
         </form>
       </div>
 
-      {/* MODAL: PLANES DE PAGO */}
-      {isPaymentPlanModalOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(22, 43, 63, 0.65)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: "1rem",
-          }}
-        >
-          <div
-            className="modal-content"
-            style={{
-              backgroundColor: "var(--devio-white)",
-              borderRadius: "1rem",
-              width: "100%",
-              maxWidth: "680px",
-              padding: "2rem",
-              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.25)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
-              <div>
-                <h2 style={{ fontSize: "1.5rem", color: "var(--devio-blue-dark)" }}>
-                  {editingPlanId ? "Editar Plan de Pago" : "Nuevo Plan de Pago"}
-                </h2>
-                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                  Define los porcentajes de enganche, mensualidades y condiciones de liquidación.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsPaymentPlanModalOpen(false)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--devio-neutral-3)" }}
-              >
-                <X size={24} />
-              </button>
-            </div>
+      {/* PAYMENT_PLAN_MODAL_PLACEHOLDER */}
+      <PaymentPlanModal
+        isOpen={isPaymentPlanModalOpen}
+        onClose={() => {
+          setIsPaymentPlanModalOpen(false);
+          setEditingPlanId(null);
+        }}
+        initialPlan={editingPlanId ? globalPlanLibrary.find((p) => p.id === editingPlanId) : null}
+        onSave={(savedPlan) => {
+          const newPlan: PaymentPlanItem = {
+            id: savedPlan.id,
+            name: savedPlan.name,
+            paymentType: savedPlan.paymentType,
+            downPaymentPercentage: savedPlan.downPaymentPercentage,
+            installmentsCount: savedPlan.installmentsCount,
+            periodicity: savedPlan.periodicity,
+            settlementPercentage: savedPlan.settlementPercentage,
+            interestPercentage: savedPlan.interestPercentage,
+            discountPercentage: savedPlan.discountPercentage,
+            internalNotes: savedPlan.internalNotes || savedPlan.description || "",
+          };
 
-            <form onSubmit={handleSavePaymentPlan}>
-              <div className="form-group" style={{ marginBottom: "1.25rem" }}>
-                <label className="form-label">Nombre del Plan *</label>
-                <input
-                  type="text"
-                  value={modalPlanData.name}
-                  onChange={(e) => setModalPlanData({ ...modalPlanData, name: e.target.value })}
-                  placeholder="Ej. Plan Tradicional 20/80"
-                  className="form-input"
-                  required
-                />
-              </div>
+          let updatedLibrary: PaymentPlanItem[];
+          if (editingPlanId) {
+            updatedLibrary = globalPlanLibrary.map((p) => (p.id === editingPlanId ? newPlan : p));
+          } else {
+            updatedLibrary = [...globalPlanLibrary, newPlan];
+            if (!selectedPlanIds.includes(newPlan.id)) {
+              setSelectedPlanIds((prev) => [...prev, newPlan.id]);
+            }
+          }
+          saveGlobalLibrary(updatedLibrary);
+          setIsPaymentPlanModalOpen(false);
+          setEditingPlanId(null);
+        }}
+      />
 
-              {/* ¿Cómo se pagará este plan? */}
-              <div style={{ marginBottom: "1.25rem" }}>
-                <label className="form-label" style={{ marginBottom: "0.5rem", display: "block", textAlign: "center", fontSize: "0.95rem" }}>
-                  ¿Cómo se pagará este plan?
-                </label>
-                <div className="grid-cols-2">
-                  <div
-                    onClick={() => setModalPlanData({ ...modalPlanData, paymentType: "ESQUEMA" })}
-                    className={`radio-card ${modalPlanData.paymentType === "ESQUEMA" ? "active" : ""}`}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.3rem" }}>
-                      <input type="radio" checked={modalPlanData.paymentType === "ESQUEMA"} readOnly className="custom-checkbox" />
-                      <strong style={{ fontSize: "0.875rem" }}>Esquema de pago</strong>
-                    </div>
-                    <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>
-                      El cliente pagará mediante enganche, parcialidades y liquidación final.
-                    </p>
-                  </div>
-
-                  <div
-                    onClick={() => setModalPlanData({ ...modalPlanData, paymentType: "CONTADO" })}
-                    className={`radio-card ${modalPlanData.paymentType === "CONTADO" ? "active" : ""}`}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.3rem" }}>
-                      <input type="radio" checked={modalPlanData.paymentType === "CONTADO"} readOnly className="custom-checkbox" />
-                      <strong style={{ fontSize: "0.875rem" }}>Pago de contado</strong>
-                    </div>
-                    <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>
-                      El cliente liquidará el total en una sola exhibición.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* CAMPOS CONDICIONALES: Esquema de Pago */}
-              {modalPlanData.paymentType === "ESQUEMA" && (
-                <>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
-                    <div className="form-group">
-                      <label className="form-label">Enganche *</label>
-                      <div style={{ position: "relative" }}>
-                        <input
-                          type="number"
-                          value={modalPlanData.downPaymentPercentage}
-                          onChange={(e) => setModalPlanData({ ...modalPlanData, downPaymentPercentage: parseFloat(e.target.value) || 0 })}
-                          className="form-input"
-                          style={{ paddingRight: "1.5rem" }}
-                          required
-                        />
-                        <span style={{ position: "absolute", right: "8px", top: "8px", fontSize: "0.75rem", color: "var(--text-muted)" }}>%</span>
-                      </div>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Plazos</label>
-                      <input
-                        type="number"
-                        value={modalPlanData.installmentsCount}
-                        onChange={(e) => setModalPlanData({ ...modalPlanData, installmentsCount: parseInt(e.target.value) || 0 })}
-                        className="form-input"
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Periodicidad</label>
-                      <select
-                        value={modalPlanData.periodicity}
-                        onChange={(e) => setModalPlanData({ ...modalPlanData, periodicity: e.target.value })}
-                        className="form-select"
-                      >
-                        <option value="Semanal">Semanal</option>
-                        <option value="Quincenal">Quincenal</option>
-                        <option value="Mensual">Mensual</option>
-                        <option value="Bimestral">Bimestral</option>
-                        <option value="Trimestral">Trimestral</option>
-                        <option value="Semestral">Semestral</option>
-                        <option value="Anual">Anual</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Liquidación *</label>
-                      <div style={{ position: "relative" }}>
-                        <input
-                          type="number"
-                          value={modalPlanData.settlementPercentage}
-                          onChange={(e) => setModalPlanData({ ...modalPlanData, settlementPercentage: parseFloat(e.target.value) || 0 })}
-                          className="form-input"
-                          style={{ paddingRight: "1.5rem" }}
-                          required
-                        />
-                        <span style={{ position: "absolute", right: "8px", top: "8px", fontSize: "0.75rem", color: "var(--text-muted)" }}>%</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Barra Visual de Distribución Financiera 100% */}
-                  <div style={{ backgroundColor: "var(--bg-page)", padding: "0.85rem 1rem", borderRadius: "0.65rem", border: isPlanSumValid ? "1px solid var(--devio-neutral-1)" : "1px solid #FCA5A5", marginBottom: "1rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", marginBottom: "0.4rem" }}>
-                      <span style={{ fontWeight: 600, color: "var(--devio-neutral-4)" }}>
-                        Distribución: Enganche ({modalPlanData.downPaymentPercentage}%) + {modalPlanData.installmentsCount > 0 ? `${modalPlanData.installmentsCount} Mensualidades (${installmentsTotalPercentage}%)` : "Sin mensualidades"} + Liquidación ({modalPlanData.settlementPercentage}%)
-                      </span>
-                      <strong style={{ color: isPlanSumValid ? "var(--devio-green)" : "var(--devio-red)", display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                        {isPlanSumValid ? "✓ Total: 100%" : `⚠ Total: ${modalPlanData.downPaymentPercentage + installmentsTotalPercentage + modalPlanData.settlementPercentage}%`}
-                      </strong>
-                    </div>
-                    <div style={{ height: "8px", backgroundColor: "var(--devio-neutral-1)", borderRadius: "4px", display: "flex", overflow: "hidden" }}>
-                      <div style={{ width: `${Math.max(0, Math.min(100, modalPlanData.downPaymentPercentage))}%`, backgroundColor: "#2F80ED" }} title={`Enganche: ${modalPlanData.downPaymentPercentage}%`} />
-                      <div style={{ width: `${Math.max(0, Math.min(100, installmentsTotalPercentage))}%`, backgroundColor: "#F2C94C" }} title={`Parcialidades: ${installmentsTotalPercentage}%`} />
-                      <div style={{ width: `${Math.max(0, Math.min(100, modalPlanData.settlementPercentage))}%`, backgroundColor: "#00C48C" }} title={`Liquidación: ${modalPlanData.settlementPercentage}%`} />
-                    </div>
-                    {isPlanSumValid && modalPlanData.installmentsCount > 0 && installmentsTotalPercentage > 0 && (
-                      <p style={{ margin: "0.35rem 0 0", fontSize: "0.72rem", color: "var(--text-muted)" }}>
-                        Cada mensualidad será del {(installmentsTotalPercentage / modalPlanData.installmentsCount).toFixed(2)}% del valor del inmueble.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* ALERTA DE ERROR Y SUGERENCIAS DE CORRECCIÓN RÁPIDA (1-CLIC) */}
-                  {!planValidation.isValid && planValidation.errorMessage && (
-                    <div
-                      style={{
-                        backgroundColor: "#FEF2F2",
-                        border: "1px solid #F87171",
-                        borderRadius: "0.65rem",
-                        padding: "0.85rem 1rem",
-                        marginBottom: "1.2rem",
-                        animation: "fadeIn 0.2s ease-in-out",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem" }}>
-                        <AlertCircle size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: "2px" }} />
-                        <div style={{ flex: 1 }}>
-                          <h5 style={{ margin: "0 0 0.2rem", fontSize: "0.84rem", fontWeight: 700, color: "#991B1B" }}>
-                            {planValidation.errorTitle}
-                          </h5>
-                          <p style={{ margin: 0, fontSize: "0.78rem", color: "#B91C1C", lineHeight: 1.4 }}>
-                            {planValidation.errorMessage}
-                          </p>
-
-                          {planValidation.fixes.length > 0 && (
-                            <div style={{ marginTop: "0.6rem" }}>
-                              <span style={{ fontSize: "0.73rem", fontWeight: 700, color: "#7F1D1D", display: "block", marginBottom: "0.35rem" }}>
-                                💡 Sugerencias de corrección rápida (1-clic):
-                              </span>
-                              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-                                {planValidation.fixes.map((fix, idx) => (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onClick={fix.action}
-                                    style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "0.35rem",
-                                      backgroundColor: "#FFFFFF",
-                                      border: "1px solid #FCA5A5",
-                                      color: "#991B1B",
-                                      borderRadius: "6px",
-                                      padding: "0.35rem 0.65rem",
-                                      fontSize: "0.74rem",
-                                      fontWeight: 600,
-                                      cursor: "pointer",
-                                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                                      transition: "all 0.15s ease",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.backgroundColor = "#FEE2E2";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.backgroundColor = "#FFFFFF";
-                                    }}
-                                  >
-                                    <Sparkles size={13} color="#DC2626" />
-                                    {fix.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid-cols-2" style={{ marginBottom: "1rem" }}>
-                    <div className="form-group">
-                      <label className="form-label">Interés</label>
-                      <div style={{ position: "relative" }}>
-                        <input
-                          type="number"
-                          value={modalPlanData.interestPercentage}
-                          onChange={(e) => setModalPlanData({ ...modalPlanData, interestPercentage: parseFloat(e.target.value) || 0 })}
-                          className="form-input"
-                          style={{ paddingRight: "1.5rem" }}
-                        />
-                        <span style={{ position: "absolute", right: "8px", top: "8px", fontSize: "0.75rem", color: "var(--text-muted)" }}>%</span>
-                      </div>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Descuento</label>
-                      <div style={{ position: "relative" }}>
-                        <input
-                          type="number"
-                          value={modalPlanData.discountPercentage}
-                          onChange={(e) => setModalPlanData({ ...modalPlanData, discountPercentage: parseFloat(e.target.value) || 0 })}
-                          className="form-input"
-                          style={{ paddingRight: "1.5rem" }}
-                        />
-                        <span style={{ position: "absolute", right: "8px", top: "8px", fontSize: "0.75rem", color: "var(--text-muted)" }}>%</span>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* CAMPOS SI ES PAGO DE CONTADO */}
-              {modalPlanData.paymentType === "CONTADO" && (
-                <div className="form-group" style={{ marginBottom: "1rem" }}>
-                  <label className="form-label">Descuento por Pago de Contado (%)</label>
-                  <div style={{ position: "relative" }}>
-                    <input
-                      type="number"
-                      value={modalPlanData.discountPercentage}
-                      onChange={(e) => setModalPlanData({ ...modalPlanData, discountPercentage: parseFloat(e.target.value) || 0 })}
-                      placeholder="Ej. 10"
-                      className="form-input"
-                      style={{ paddingRight: "1.5rem" }}
-                    />
-                    <span style={{ position: "absolute", right: "8px", top: "8px", fontSize: "0.75rem", color: "var(--text-muted)" }}>%</span>
-                  </div>
-                  <span className="form-hint">El comprador liquida el 100% en una sola exhibición con este descuento.</span>
-                </div>
-              )}
-
-              <div className="form-group" style={{ marginBottom: "1.5rem" }}>
-                <label className="form-label">Notas Internas</label>
-                <textarea
-                  value={modalPlanData.internalNotes}
-                  onChange={(e) => setModalPlanData({ ...modalPlanData, internalNotes: e.target.value })}
-                  placeholder="Detalles sobre restricciones o aplicación de este plan..."
-                  className="form-textarea"
-                  rows={2}
-                />
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-                <button
-                  type="button"
-                  onClick={() => setIsPaymentPlanModalOpen(false)}
-                  className="btn btn-outline"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={!planValidation.isValid}
-                  style={{
-                    opacity: planValidation.isValid ? 1 : 0.45,
-                    cursor: planValidation.isValid ? "pointer" : "not-allowed",
-                  }}
-                  title={!planValidation.isValid ? (planValidation.errorMessage || "Completa la configuración correctamente") : ""}
-                >
-                  <Save size={16} /> Guardar en Biblioteca
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* MODAL: DOCUMENTO CON UPLOADER REAL FUNCIONAL */}
       {isDocModalOpen && (
