@@ -56,6 +56,7 @@ export interface ClientPaymentScheduleItem {
 
 export interface ClientProperty {
   id: string;
+  clientEmail?: string;
   developerName: string;
   developerLogo?: string;
   projectName: string;

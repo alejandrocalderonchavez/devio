@@ -69,13 +69,20 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const currentScreen = screenHistory[screenHistory.length - 1] || "main";
 
+  const userProperties = useMemo(() => {
+    if (!user) return [];
+    const cleanEmail = user.email.trim().toLowerCase();
+    const filtered = properties.filter((p) => !p.clientEmail || p.clientEmail.trim().toLowerCase() === cleanEmail);
+    return filtered.length > 0 ? filtered : properties;
+  }, [properties, user]);
+
   const selectedProperty: ClientProperty = useMemo(() => {
     return (
-      properties.find((p) => p.id === selectedPropertyId) ||
-      properties[0] ||
+      userProperties.find((p) => p.id === selectedPropertyId) ||
+      userProperties[0] ||
       INITIAL_CLIENT_PROPERTIES[0]!
     );
-  }, [properties, selectedPropertyId]);
+  }, [userProperties, selectedPropertyId]);
 
   const unreadNotificationsCount = useMemo(() => {
     return notifications.filter((n) => !n.read).length;
@@ -158,7 +165,7 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         currentScreen,
         navigateTo,
         goBack,
-        properties,
+        properties: userProperties,
         selectedPropertyId,
         selectedProperty,
         selectProperty,

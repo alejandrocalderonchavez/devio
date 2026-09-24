@@ -38,6 +38,7 @@ export const INITIAL_CLIENT_USER: ClientUser = CLIENT_USERS["inigo"]!;
 export const INITIAL_CLIENT_PROPERTIES: ClientProperty[] = [
   {
     id: "prop-campero-mainstreet-51",
+    clientEmail: "jaimepozospizano@gmail.com",
     developerName: "Desarrollos Campero",
     developerLogo: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1786129320528x689494565312590000/WhatsApp%20Image%202026-08-07%20at%201.01.25%20p.%C2%A0m..jpeg",
     projectName: "Mainstreet Valle Real",
@@ -208,6 +209,7 @@ export const INITIAL_CLIENT_PROPERTIES: ClientProperty[] = [
   },
   {
     id: "prop-castellana-1c",
+    clientEmail: "0242573@up.edu.mx",
     developerName: "Grupo VEQ",
     developerLogo: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg",
     projectName: "Castellana Residencial",
@@ -353,6 +355,7 @@ export const INITIAL_CLIENT_PROPERTIES: ClientProperty[] = [
   },
   {
     id: "prop-blackeleven-4b",
+    clientEmail: "0242573@up.edu.mx",
     developerName: "Desarrollos Black Eleven",
     developerLogo: "https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=300&auto=format&fit=crop&q=80",
     projectName: "Black Eleven Residencial",
