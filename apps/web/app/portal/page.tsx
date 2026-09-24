@@ -10,10 +10,7 @@ import {
   ArrowRight,
   ArrowLeft,
   Calendar,
-  Wrench,
   Building2,
-  Layers,
-  Sparkles,
   FileText,
   CreditCard,
   ShoppingBag,
@@ -21,44 +18,50 @@ import {
   ChevronUp,
   Download,
   CheckCircle2,
-  Trash2,
   AlertCircle,
   Clock,
-  ShieldCheck,
   X,
-  Lock,
-  Key,
   Phone,
   Mail,
   MapPin,
   Check,
   LogOut,
-  HelpCircle,
-  Globe,
-  FileCheck,
   Search,
   ExternalLink,
-  Eye,
   DollarSign,
   AlertTriangle,
   Loader2,
+  ShieldCheck,
+  Eye,
 } from "lucide-react";
 import { openReceiptInNewTab, openStatementInNewTab } from "../../lib/pdf-generator";
 
-interface PaymentItem {
+interface ScheduleInstallment {
   id: string;
   cuotaNumber: number;
   concept: string;
-  scheduledAmount: number;
-  scheduledDate: string;
-  paidAmount: number;
-  pendingAmount: number;
-  status: "PAGADO" | "PENDIENTE" | "ATRASADO";
-  paidDate?: string;
-  receiptNumber?: string;
-  paymentMethod?: string;
+  montoProgramado: number;
+  fechaProgramada: string;
+  montoPagado: number;
+  montoPendiente: number;
+  fechaPago: string;
+  planPago: string;
+  metodoPago: string;
+  status: "Pagado" | "Pendiente" | "Atrasado" | "Parcial";
+  interesMoratorio: number;
+}
+
+interface PaymentReceipt {
+  id: string;
+  fechaPago: string;
+  metodoPago: string;
+  monto: number;
+  unit: string;
+  reciboFolio: string;
   comprobanteUrl?: string;
-  comprobanteName?: string;
+  voucherName?: string;
+  notes?: string;
+  moratoryAmount?: number;
 }
 
 interface ClientProperty {
@@ -73,10 +76,11 @@ interface ClientProperty {
   totalPrice: number;
   paidAmount: number;
   pendingAmount: number;
+  overdueAmount: number;
   nextPaymentAmount: number;
   nextPaymentDueDate: string;
   nextPaymentDaysRemaining: number;
-  overdueAmount?: number;
+  nextPaymentConcept: string;
   constructionPct: number;
   lastProgressUpdateDate: string;
   estimatedDeliveryDate: string;
@@ -91,7 +95,8 @@ interface ClientProperty {
   specialtiesProgress: Array<{ id: string; name: string; percentage: number }>;
   constructionMilestones: Array<{ id: string; title: string; date: string; photo: string; description: string }>;
   documents: Array<{ id: string; title: string; category: string; fileSize: string; uploadDate: string; fileUrl?: string }>;
-  payments: PaymentItem[];
+  schedule: ScheduleInstallment[];
+  paymentsList: PaymentReceipt[];
   customAttributes: Array<{ label: string; value: string }>;
 }
 
@@ -119,15 +124,15 @@ export default function ClientPortalWeb() {
 
   // Modals & Viewers
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showVoucherPayment, setShowVoucherPayment] = useState<PaymentItem | null>(null);
+  const [selectedVoucherForView, setSelectedVoucherForView] = useState<PaymentReceipt | null>(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
 
   // Notifications State
-  const [notifications, setNotifications] = useState([
-    { id: "notif-1", title: "Aviso de Estado de Cuenta", body: "Tu estado de cuenta del periodo actual está actualizado.", time: "Hoy", read: false },
-    { id: "notif-2", title: "Nuevo Avance de Obra", body: "La desarrolladora ha publicado actualizaciones fotográficas en tu proyecto.", time: "Ayer", read: false },
-    { id: "notif-3", title: "Portal de Clientes Devio Activo", body: "Bienvenido a tu plataforma privada de seguimiento y pagos.", time: "Reciente", read: true },
+  const [notifications] = useState([
+    { id: "notif-1", title: "Estado de Cuenta Actualizado", body: "Tu calendario de pagos y amortización se encuentra sincronizado con el sistema.", time: "Hoy", read: false },
+    { id: "notif-2", title: "Avance de Obra en Desarrollo", body: "Nuevas fotografías y porcentajes por especialidad han sido cargados.", time: "Ayer", read: false },
+    { id: "notif-3", title: "Portal de Clientes Devio", body: "Bienvenido a tu plataforma privada de consulta, recibos oficiales y seguimiento de obra.", time: "Reciente", read: true },
   ]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -159,7 +164,6 @@ export default function ClientPortalWeb() {
       }
 
       if (!sessionEmail) {
-        // If not logged in, redirect to login page
         router.push("/login");
         return;
       }
@@ -220,25 +224,58 @@ export default function ClientPortalWeb() {
     );
   }, [selectedProp, docSearch]);
 
-  // Handle Official Receipt View/PDF
-  const handleOpenReceipt = (payment: PaymentItem) => {
+  // Open Official PDF Receipt
+  const handleOpenReceipt = (receipt: PaymentReceipt) => {
     if (!selectedProp) return;
     openReceiptInNewTab({
-      folio: payment.receiptNumber || `REC-${selectedProp.unitNumber}-001`,
+      folio: receipt.reciboFolio || `REC-${selectedProp.unitNumber}-001`,
       projectName: selectedProp.projectName,
       unitNumber: selectedProp.unitNumber,
       clientName: userName,
-      paymentMethod: payment.paymentMethod || "Transferencia SPEI",
-      totalAmount: payment.paidAmount || payment.scheduledAmount,
-      capitalAmount: payment.paidAmount || payment.scheduledAmount,
-      interestAmount: 0,
+      paymentMethod: receipt.metodoPago || "Transferencia SPEI",
+      totalAmount: receipt.monto,
+      capitalAmount: receipt.moratoryAmount ? Math.max(0, receipt.monto - receipt.moratoryAmount) : receipt.monto,
+      interestAmount: receipt.moratoryAmount || 0,
       planName: "Plan Personalizado",
-      emissionDate: payment.paidDate || payment.scheduledDate,
+      emissionDate: receipt.fechaPago,
       developerName: selectedProp.developerName,
       developerLogoUrl: selectedProp.developerLogo,
       projectLogoUrl: selectedProp.projectLogo,
     });
   };
+
+  // Compute Next Payment dynamically
+  const nextPaymentInfo = useMemo(() => {
+    if (!selectedProp) return null;
+    const pendingCuotas = (selectedProp.schedule || []).filter((s) => s.montoPendiente > 0);
+    if (pendingCuotas.length === 0) {
+      return {
+        amount: 0,
+        dueDate: "Al corriente",
+        daysRemaining: 0,
+        concept: "Sin pagos pendientes",
+        isAllPaid: true,
+        hasOverdue: false,
+        overdueAmount: 0,
+        cuotaStatus: "Pagado" as const,
+      };
+    }
+
+    const nextCuota = pendingCuotas[0]!;
+    const overdueCuotas = pendingCuotas.filter((s) => s.status === "Atrasado");
+    const totalOverdue = overdueCuotas.reduce((acc, s) => acc + s.montoPendiente, 0);
+
+    return {
+      amount: nextCuota.montoPendiente,
+      dueDate: nextCuota.fechaProgramada,
+      daysRemaining: selectedProp.nextPaymentDaysRemaining,
+      concept: nextCuota.concept,
+      isAllPaid: false,
+      hasOverdue: totalOverdue > 0,
+      overdueAmount: totalOverdue || selectedProp.overdueAmount,
+      cuotaStatus: nextCuota.status,
+    };
+  }, [selectedProp]);
 
   // Loading Screen
   if (isLoading) {
@@ -274,10 +311,10 @@ export default function ClientPortalWeb() {
           style={{
             backgroundColor: "#1F3652",
             color: "#FFFFFF",
-            paddingTop: "2.2rem",
-            paddingBottom: "1.4rem",
-            paddingLeft: "1.5rem",
-            paddingRight: "1.5rem",
+            paddingTop: "2rem",
+            paddingBottom: "1.35rem",
+            paddingLeft: "1.25rem",
+            paddingRight: "1.25rem",
             borderBottomLeftRadius: "1.5rem",
             borderBottomRightRadius: "1.5rem",
             boxShadow: "0 4px 16px rgba(31,54,82,0.18)",
@@ -307,7 +344,6 @@ export default function ClientPortalWeb() {
                       alignItems: "center",
                       justifyContent: "center",
                       cursor: "pointer",
-                      transition: "background 0.15s ease",
                     }}
                   >
                     <Bell size={18} color="#FFFFFF" />
@@ -421,92 +457,103 @@ export default function ClientPortalWeb() {
                   {screen === "main" && selectedProp && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
                       
-                      {/* Banner: Tu Próximo Pago (Clean Light Style) */}
-                      <div
-                        style={{
-                          backgroundColor: "#FFFFFF",
-                          borderRadius: "1.25rem",
-                          padding: "1.25rem 1.4rem",
-                          boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
-                          border: "1px solid #E2E8F0",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "0.6rem",
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span
-                            style={{
-                              fontSize: "0.72rem",
-                              fontWeight: 800,
-                              letterSpacing: "0.04em",
-                              color: "#1F3652",
-                              backgroundColor: "#FEF3C7",
-                              padding: "0.25rem 0.65rem",
-                              borderRadius: "99px",
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            Tu Próximo Pago
-                          </span>
-                          <span style={{ fontSize: "0.78rem", color: "#64748B", fontWeight: 600 }}>
-                            {selectedProp.nextPaymentDaysRemaining} días restantes
-                          </span>
-                        </div>
-
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "0.5rem" }}>
-                          <div>
-                            <div style={{ fontSize: "1.75rem", fontWeight: 900, color: "#1F3652", letterSpacing: "-0.02em" }}>
-                              {formatMoneyCompact(selectedProp.nextPaymentAmount)}
-                            </div>
-                            <div style={{ fontSize: "0.8rem", color: "#64748B", marginTop: "2px" }}>
-                              Vence el <strong>{selectedProp.nextPaymentDueDate}</strong> • {selectedProp.projectName} ({selectedProp.unitNumber})
-                            </div>
+                      {/* Banner: Tu Próximo Pago (Clean, dynamic & accurate) */}
+                      {nextPaymentInfo && (
+                        <div
+                          style={{
+                            backgroundColor: "#FFFFFF",
+                            borderRadius: "1.25rem",
+                            padding: "1.25rem 1.4rem",
+                            boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+                            border: "1px solid #E2E8F0",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.6rem",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span
+                              style={{
+                                fontSize: "0.72rem",
+                                fontWeight: 800,
+                                letterSpacing: "0.04em",
+                                color: nextPaymentInfo.isAllPaid ? "#065F46" : (nextPaymentInfo.cuotaStatus === "Atrasado" ? "#991B1B" : "#1F3652"),
+                                backgroundColor: nextPaymentInfo.isAllPaid ? "#D1FAE5" : (nextPaymentInfo.cuotaStatus === "Atrasado" ? "#FEE2E2" : "#FEF3C7"),
+                                padding: "0.25rem 0.65rem",
+                                borderRadius: "99px",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              {nextPaymentInfo.isAllPaid ? "✓ Al Corriente" : (nextPaymentInfo.cuotaStatus === "Atrasado" ? "⚠️ Cuota Vencida" : "Tu Próximo Pago")}
+                            </span>
+                            
+                            <span style={{ fontSize: "0.78rem", color: "#64748B", fontWeight: 600 }}>
+                              {nextPaymentInfo.isAllPaid
+                                ? "Sin adeudos"
+                                : nextPaymentInfo.daysRemaining < 0
+                                ? <span style={{ color: "#DC2626", fontWeight: 700 }}>{Math.abs(nextPaymentInfo.daysRemaining)} días vencido</span>
+                                : nextPaymentInfo.daysRemaining === 0
+                                ? <span style={{ color: "#D97706", fontWeight: 700 }}>Vence hoy</span>
+                                : `${nextPaymentInfo.daysRemaining} días restantes`}
+                            </span>
                           </div>
 
-                          <button
-                            onClick={() => {
-                              setSelectedPropId(selectedProp.id);
-                              setScreen("statement");
-                              setStatementSubTab("payments");
-                            }}
-                            style={{
-                              backgroundColor: "#1F3652",
-                              color: "#FFFFFF",
-                              padding: "0.55rem 1.1rem",
-                              borderRadius: "0.6rem",
-                              border: "none",
-                              fontSize: "0.78rem",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                            }}
-                          >
-                            Ver Pagos
-                          </button>
-                        </div>
-
-                        {selectedProp.overdueAmount ? (
-                          <div
-                            style={{
-                              marginTop: "0.4rem",
-                              backgroundColor: "#FEF2F2",
-                              border: "1px solid #FECACA",
-                              borderRadius: "0.6rem",
-                              padding: "0.6rem 0.85rem",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              fontSize: "0.78rem",
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "#DC2626", fontWeight: 700 }}>
-                              <AlertTriangle size={15} />
-                              <span>Saldo Vencido</span>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "0.5rem" }}>
+                            <div>
+                              <div style={{ fontSize: "1.75rem", fontWeight: 900, color: "#1F3652", letterSpacing: "-0.02em" }}>
+                                {formatMoney(nextPaymentInfo.amount)}
+                              </div>
+                              <div style={{ fontSize: "0.8rem", color: "#64748B", marginTop: "2px" }}>
+                                {nextPaymentInfo.isAllPaid
+                                  ? `${selectedProp.projectName} (${selectedProp.unitNumber}) - 100% Liquidado`
+                                  : `${nextPaymentInfo.concept} • Vence el ${nextPaymentInfo.dueDate} • ${selectedProp.projectName} (${selectedProp.unitNumber})`}
+                              </div>
                             </div>
-                            <span style={{ color: "#DC2626", fontWeight: 900 }}>{formatMoneyCompact(selectedProp.overdueAmount)}</span>
+
+                            <button
+                              onClick={() => {
+                                setSelectedPropId(selectedProp.id);
+                                setScreen("statement");
+                                setStatementSubTab("payments");
+                              }}
+                              style={{
+                                backgroundColor: "#1F3652",
+                                color: "#FFFFFF",
+                                padding: "0.55rem 1.1rem",
+                                borderRadius: "0.6rem",
+                                border: "none",
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Ver Pagos & Recibos
+                            </button>
                           </div>
-                        ) : null}
-                      </div>
+
+                          {nextPaymentInfo.hasOverdue && nextPaymentInfo.overdueAmount > 0 && (
+                            <div
+                              style={{
+                                marginTop: "0.4rem",
+                                backgroundColor: "#FEF2F2",
+                                border: "1px solid #FECACA",
+                                borderRadius: "0.6rem",
+                                padding: "0.6rem 0.85rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                fontSize: "0.78rem",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "#DC2626", fontWeight: 700 }}>
+                                <AlertTriangle size={15} />
+                                <span>Saldo Vencido Acumulado</span>
+                              </div>
+                              <span style={{ color: "#DC2626", fontWeight: 900 }}>{formatMoney(nextPaymentInfo.overdueAmount)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* List of Properties */}
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -648,39 +695,48 @@ export default function ClientPortalWeb() {
                       </div>
 
                       {/* Payment Pills & Balance Button */}
-                      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
-                        <div style={{ display: "flex", gap: "0.75rem", marginBottom: "0.85rem", flexWrap: "wrap" }}>
-                          <div style={{ flex: 1, minWidth: "140px", backgroundColor: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: "0.75rem", padding: "0.75rem 0.85rem" }}>
-                            <div style={{ fontSize: "0.7rem", color: "#92400E", fontWeight: 700 }}>Tu Próximo Pago</div>
-                            <div style={{ fontSize: "1.15rem", fontWeight: 900, color: "#78350F", marginTop: "2px" }}>
-                              {formatMoneyCompact(selectedProp.nextPaymentAmount)}
+                      {nextPaymentInfo && (
+                        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
+                          <div style={{ display: "flex", gap: "0.75rem", marginBottom: "0.85rem", flexWrap: "wrap" }}>
+                            <div style={{ flex: 1, minWidth: "140px", backgroundColor: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: "0.75rem", padding: "0.75rem 0.85rem" }}>
+                              <div style={{ fontSize: "0.7rem", color: "#92400E", fontWeight: 700 }}>Tu Próximo Pago</div>
+                              <div style={{ fontSize: "1.15rem", fontWeight: 900, color: "#78350F", marginTop: "2px" }}>
+                                {formatMoney(nextPaymentInfo.amount)}
+                              </div>
+                              <div style={{ fontSize: "0.68rem", color: "#92400E", marginTop: "2px" }}>
+                                {nextPaymentInfo.isAllPaid ? "Al corriente" : `Vence ${nextPaymentInfo.dueDate}`}
+                              </div>
+                            </div>
+                            
+                            <div style={{ flex: 1, minWidth: "140px", backgroundColor: "#FEE2E2", border: "1px solid #FECACA", borderRadius: "0.75rem", padding: "0.75rem 0.85rem" }}>
+                              <div style={{ fontSize: "0.7rem", color: "#991B1B", fontWeight: 700 }}>Saldo Vencido</div>
+                              <div style={{ fontSize: "1.15rem", fontWeight: 900, color: "#7F1D1D", marginTop: "2px" }}>
+                                {formatMoney(nextPaymentInfo.overdueAmount || 0)}
+                              </div>
+                              <div style={{ fontSize: "0.68rem", color: "#991B1B", marginTop: "2px" }}>
+                                {nextPaymentInfo.overdueAmount > 0 ? "Cuotas atrasadas" : "Sin adeudo vencido"}
+                              </div>
                             </div>
                           </div>
-                          <div style={{ flex: 1, minWidth: "140px", backgroundColor: "#FEE2E2", border: "1px solid #FECACA", borderRadius: "0.75rem", padding: "0.75rem 0.85rem" }}>
-                            <div style={{ fontSize: "0.7rem", color: "#991B1B", fontWeight: 700 }}>Saldo Vencido</div>
-                            <div style={{ fontSize: "1.15rem", fontWeight: 900, color: "#7F1D1D", marginTop: "2px" }}>
-                              {formatMoneyCompact(selectedProp.overdueAmount || 0)}
-                            </div>
-                          </div>
-                        </div>
 
-                        <button
-                          onClick={() => { setScreen("statement"); setStatementSubTab("payments"); }}
-                          style={{
-                            width: "100%",
-                            padding: "0.8rem",
-                            backgroundColor: "#1F3652",
-                            color: "#FFFFFF",
-                            border: "none",
-                            borderRadius: "0.65rem",
-                            fontWeight: 800,
-                            fontSize: "0.85rem",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Ver Saldo y Calendario de Pagos
-                        </button>
-                      </div>
+                          <button
+                            onClick={() => { setScreen("statement"); setStatementSubTab("statement"); }}
+                            style={{
+                              width: "100%",
+                              padding: "0.8rem",
+                              backgroundColor: "#1F3652",
+                              color: "#FFFFFF",
+                              border: "none",
+                              borderRadius: "0.65rem",
+                              fontWeight: 800,
+                              fontSize: "0.85rem",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Ver Saldo y Calendario de Pagos
+                          </button>
+                        </div>
+                      )}
 
                       {/* Avance de Obra Summary Card */}
                       <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
@@ -727,6 +783,12 @@ export default function ClientPortalWeb() {
                             <span style={{ color: "#64748B" }}>Saldo Pendiente por Liquidar:</span>
                             <strong style={{ color: "#B45309" }}>{formatMoney(selectedProp.pendingAmount)}</strong>
                           </div>
+                          {selectedProp.overdueAmount > 0 && (
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <span style={{ color: "#DC2626", fontWeight: 700 }}>Saldo Vencido Atrasado:</span>
+                              <strong style={{ color: "#DC2626" }}>{formatMoney(selectedProp.overdueAmount)}</strong>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -965,85 +1027,98 @@ export default function ClientPortalWeb() {
                     </div>
                   )}
 
-                  {/* PANTALLA 5: ESTADO DE CUENTA & PAGOS */}
+                  {/* PANTALLA 5: ESTADO DE CUENTA & PAGOS (IDÉNTICO AL BACK OFFICE DEVIO) */}
                   {screen === "statement" && selectedProp && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
                       
-                      {/* Financial 4-metric Grid */}
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0.75rem" }}>
-                        <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
-                          <div style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 700 }}>Precio de Venta Total</div>
+                      {/* 4 Financial KPI Summary Cards (Identical to Back Office) */}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem" }}>
+                        <div style={{ backgroundColor: "#FFFFFF", padding: "0.9rem 1rem", borderRadius: "1rem", border: "1px solid #E2E8F0", boxShadow: "0 1px 4px rgba(0,0,0,0.02)" }}>
+                          <div style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 700 }}>Total a Pagar</div>
                           <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#1F3652", marginTop: "3px" }}>
                             {formatMoney(selectedProp.totalPrice)}
                           </div>
                         </div>
-                        <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
-                          <div style={{ fontSize: "0.72rem", color: "#00875A", fontWeight: 700 }}>Total Cobrado / Pagado</div>
+
+                        <div style={{ backgroundColor: "#FFFFFF", padding: "0.9rem 1rem", borderRadius: "1rem", border: "1px solid #E2E8F0", boxShadow: "0 1px 4px rgba(0,0,0,0.02)" }}>
+                          <div style={{ fontSize: "0.72rem", color: "#00875A", fontWeight: 700 }}>Total Pagado</div>
                           <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#00875A", marginTop: "3px" }}>
                             {formatMoney(selectedProp.paidAmount)}
                           </div>
                         </div>
-                        <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
-                          <div style={{ fontSize: "0.72rem", color: "#B45309", fontWeight: 700 }}>Saldo Pendiente Total</div>
+
+                        <div style={{ backgroundColor: "#FFFFFF", padding: "0.9rem 1rem", borderRadius: "1rem", border: "1px solid #E2E8F0", boxShadow: "0 1px 4px rgba(0,0,0,0.02)" }}>
+                          <div style={{ fontSize: "0.72rem", color: "#B45309", fontWeight: 700 }}>Total Pendiente</div>
                           <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#B45309", marginTop: "3px" }}>
                             {formatMoney(selectedProp.pendingAmount)}
                           </div>
                         </div>
-                        <div style={{ backgroundColor: "#FFFFFF", padding: "1rem", borderRadius: "1rem", border: "1px solid #E2E8F0" }}>
-                          <div style={{ fontSize: "0.72rem", color: "#DC2626", fontWeight: 700 }}>Saldo Vencido</div>
-                          <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#DC2626", marginTop: "3px" }}>
+
+                        <div style={{ backgroundColor: "#FFFFFF", padding: "0.9rem 1rem", borderRadius: "1rem", border: "1px solid #E2E8F0", boxShadow: "0 1px 4px rgba(0,0,0,0.02)" }}>
+                          <div style={{ fontSize: "0.72rem", color: selectedProp.overdueAmount > 0 ? "#DC2626" : "#64748B", fontWeight: 700 }}>Saldo Atrasado</div>
+                          <div style={{ fontSize: "1.1rem", fontWeight: 900, color: selectedProp.overdueAmount > 0 ? "#DC2626" : "#1F3652", marginTop: "3px" }}>
                             {formatMoney(selectedProp.overdueAmount || 0)}
                           </div>
                         </div>
                       </div>
 
-                      {/* Subtabs: Estado de Cuenta | Pagos */}
-                      <div style={{ display: "flex", backgroundColor: "#E2E8F0", padding: "4px", borderRadius: "0.75rem" }}>
+                      {/* 2 Main Subtabs: Estado de Cuenta | Pagos Realizados */}
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
                         <button
+                          type="button"
                           onClick={() => setStatementSubTab("statement")}
                           style={{
-                            flex: 1,
-                            padding: "0.55rem",
-                            borderRadius: "0.55rem",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.45rem",
+                            padding: "0.55rem 1.25rem",
+                            borderRadius: "9999px",
+                            fontSize: "0.82rem",
+                            fontWeight: 700,
                             border: "none",
-                            fontSize: "0.78rem",
-                            fontWeight: 800,
-                            backgroundColor: statementSubTab === "statement" ? "#FFFFFF" : "transparent",
-                            color: statementSubTab === "statement" ? "#1F3652" : "#64748B",
                             cursor: "pointer",
-                            boxShadow: statementSubTab === "statement" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                            backgroundColor: statementSubTab === "statement" ? "#1B3047" : "#FFFFFF",
+                            color: statementSubTab === "statement" ? "#FFFFFF" : "#64748B",
+                            boxShadow: statementSubTab === "statement" ? "0 2px 6px rgba(27, 48, 71, 0.2)" : "0 1px 3px rgba(0,0,0,0.04)",
                           }}
                         >
-                          Resumen y Descarga
+                          <Calendar size={15} /> Estado de Cuenta
                         </button>
+
                         <button
+                          type="button"
                           onClick={() => setStatementSubTab("payments")}
                           style={{
-                            flex: 1,
-                            padding: "0.55rem",
-                            borderRadius: "0.55rem",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.45rem",
+                            padding: "0.55rem 1.25rem",
+                            borderRadius: "9999px",
+                            fontSize: "0.82rem",
+                            fontWeight: 700,
                             border: "none",
-                            fontSize: "0.78rem",
-                            fontWeight: 800,
-                            backgroundColor: statementSubTab === "payments" ? "#FFFFFF" : "transparent",
-                            color: statementSubTab === "payments" ? "#1F3652" : "#64748B",
                             cursor: "pointer",
-                            boxShadow: statementSubTab === "payments" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                            backgroundColor: statementSubTab === "payments" ? "#1B3047" : "#FFFFFF",
+                            color: statementSubTab === "payments" ? "#FFFFFF" : "#64748B",
+                            boxShadow: statementSubTab === "payments" ? "0 2px 6px rgba(27, 48, 71, 0.2)" : "0 1px 3px rgba(0,0,0,0.04)",
                           }}
                         >
-                          Calendario de Pagos y Comprobantes
+                          <CreditCard size={15} /> Pagos Realizados ({selectedProp.paymentsList?.length || 0})
                         </button>
                       </div>
 
+                      {/* TAB 1: ESTADO DE CUENTA (AMORTIZACIÓN PROGRAMADA) */}
                       {statementSubTab === "statement" && (
-                        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.3rem", border: "1px solid #E2E8F0", display: "flex", flexDirection: "column", gap: "1rem" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                          
+                          {/* Top Action Header */}
+                          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.1rem 1.3rem", border: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
                             <div>
                               <div style={{ fontSize: "1rem", fontWeight: 800, color: "#1F3652" }}>
-                                Estado de Cuenta Oficial
+                                Calendario de Amortización
                               </div>
                               <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                                Emisión formal certificada por {selectedProp.developerName}
+                                Cuotas pactadas y desglose de mensualidades de la unidad {selectedProp.unitNumber}
                               </div>
                             </div>
 
@@ -1061,12 +1136,12 @@ export default function ClientPortalWeb() {
                                   developerName: selectedProp.developerName,
                                   developerLogoUrl: selectedProp.developerLogo,
                                   projectLogoUrl: selectedProp.projectLogo,
-                                  installments: selectedProp.payments.map((p) => ({
-                                    concept: p.concept,
-                                    scheduledDate: p.scheduledDate,
-                                    amount: p.scheduledAmount,
-                                    paidAmount: p.paidAmount,
-                                    status: p.status,
+                                  installments: (selectedProp.schedule || []).map((s) => ({
+                                    concept: s.concept,
+                                    scheduledDate: s.fechaProgramada,
+                                    amount: s.montoProgramado,
+                                    paidAmount: s.montoPagado,
+                                    status: s.status,
                                   })),
                                 });
                               }}
@@ -1074,185 +1149,246 @@ export default function ClientPortalWeb() {
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "0.45rem",
-                                backgroundColor: "#1F3652",
+                                backgroundColor: "#1B3047",
                                 color: "#FFFFFF",
-                                padding: "0.6rem 1.1rem",
-                                borderRadius: "0.6rem",
+                                padding: "0.55rem 1.15rem",
+                                borderRadius: "9999px",
                                 border: "none",
-                                fontWeight: 800,
+                                fontWeight: 700,
                                 fontSize: "0.78rem",
                                 cursor: "pointer",
+                                boxShadow: "0 2px 6px rgba(27,48,71,0.15)",
                               }}
                             >
-                              <Download size={15} /> Descargar PDF
+                              <Download size={14} /> Descargar Estado de Cuenta PDF
                             </button>
                           </div>
 
-                          <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.8rem" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between" }}>
-                              <span style={{ color: "#64748B" }}>Titular de la Cuenta:</span>
-                              <strong style={{ color: "#1F3652" }}>{userName}</strong>
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between" }}>
-                              <span style={{ color: "#64748B" }}>RFC Registrado:</span>
-                              <strong style={{ color: "#1F3652" }}>{userRfc}</strong>
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between" }}>
-                              <span style={{ color: "#64748B" }}>Unidad Adquirida:</span>
-                              <strong style={{ color: "#1F3652" }}>{selectedProp.projectName} · #{selectedProp.unitNumber}</strong>
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between" }}>
-                              <span style={{ color: "#64748B" }}>Porcentaje Liquidado:</span>
-                              <strong style={{ color: "#00875A" }}>{((selectedProp.paidAmount / selectedProp.totalPrice) * 100).toFixed(1)}%</strong>
+                          {/* Tabla de Amortización Responsiva */}
+                          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", overflow: "hidden", border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+                            <div style={{ overflowX: "auto" }}>
+                              <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: "0.8rem", textAlign: "left", minWidth: "620px" }}>
+                                <thead>
+                                  <tr style={{ backgroundColor: "#1B3047", color: "#FFFFFF" }}>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700 }}>Concepto / Cuota</th>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700 }}>Fecha Programada</th>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700, textAlign: "right" }}>Monto Prog.</th>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700, textAlign: "right" }}>Monto Pagado</th>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700, textAlign: "right" }}>Monto Pendiente</th>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700, textAlign: "center" }}>Fecha Pago</th>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700, textAlign: "center" }}>Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(selectedProp.schedule || []).map((row, idx) => (
+                                    <tr
+                                      key={row.id ? `${row.id}-${idx}` : `inst-${idx}`}
+                                      style={{ borderBottom: "1px solid #F1F5F9" }}
+                                    >
+                                      {/* Concepto */}
+                                      <td style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>
+                                        {row.concept}
+                                      </td>
+
+                                      {/* Fecha programada */}
+                                      <td style={{ padding: "0.85rem 1rem", color: "#475569", whiteSpace: "nowrap" }}>
+                                        {row.fechaProgramada}
+                                      </td>
+
+                                      {/* Monto programado */}
+                                      <td style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652", textAlign: "right" }}>
+                                        {formatMoney(row.montoProgramado)}
+                                      </td>
+
+                                      {/* Monto pagado */}
+                                      <td style={{ padding: "0.85rem 1rem", fontWeight: 700, color: row.montoPagado > 0 ? "#00C48C" : "#64748B", textAlign: "right" }}>
+                                        {formatMoney(row.montoPagado)}
+                                      </td>
+
+                                      {/* Monto pendiente */}
+                                      <td style={{ padding: "0.85rem 1rem", fontWeight: 700, color: row.montoPendiente > 0 ? "#1F3652" : "#94A3B8", textAlign: "right" }}>
+                                        {formatMoney(row.montoPendiente)}
+                                      </td>
+
+                                      {/* Fecha pago */}
+                                      <td style={{ padding: "0.85rem 1rem", textAlign: "center", color: "#475569", fontSize: "0.75rem" }}>
+                                        {row.fechaPago === "Pendiente" ? (
+                                          <span style={{ backgroundColor: "#FEF3C7", color: "#92400E", padding: "0.2rem 0.55rem", borderRadius: "0.4rem", fontWeight: 600 }}>
+                                            Pendiente
+                                          </span>
+                                        ) : row.fechaPago === "Parcial" ? (
+                                          <span style={{ backgroundColor: "#EFF6FF", color: "#1E40AF", padding: "0.2rem 0.55rem", borderRadius: "0.4rem", fontWeight: 600 }}>
+                                            Parcial
+                                          </span>
+                                        ) : (
+                                          row.fechaPago
+                                        )}
+                                      </td>
+
+                                      {/* Status Badge */}
+                                      <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
+                                        <span
+                                          style={{
+                                            display: "inline-block",
+                                            padding: "0.22rem 0.65rem",
+                                            borderRadius: "99px",
+                                            fontSize: "0.7rem",
+                                            fontWeight: 700,
+                                            backgroundColor:
+                                              row.status === "Pagado"
+                                                ? "rgba(0, 196, 140, 0.12)"
+                                                : row.status === "Atrasado"
+                                                ? "#FEE2E2"
+                                                : "#F1F5F9",
+                                            color:
+                                              row.status === "Pagado"
+                                                ? "#00A877"
+                                                : row.status === "Atrasado"
+                                                ? "#DC2626"
+                                                : "#475569",
+                                            border:
+                                              row.status === "Pagado"
+                                                ? "1px solid rgba(0,196,140,0.3)"
+                                                : row.status === "Atrasado"
+                                                ? "1px solid #FECACA"
+                                                : "1px solid #CBD5E1",
+                                          }}
+                                        >
+                                          {row.status}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
                             </div>
                           </div>
                         </div>
                       )}
 
-                      {/* TABLA DE PAGOS ESTILO BACK OFFICE DEVIO */}
-                      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", overflow: "hidden", border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-                        <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div>
-                            <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652" }}>
-                              Desglose de Cuotas y Cobranza
+                      {/* TAB 2: PAGOS REALIZADOS (HISTORIAL DE TRANSACCIONES REALES) */}
+                      {statementSubTab === "payments" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                          
+                          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.1rem 1.3rem", border: "1px solid #E2E8F0" }}>
+                            <div style={{ fontSize: "1rem", fontWeight: 800, color: "#1F3652" }}>
+                              Historial de Pagos Realizados
                             </div>
-                            <div style={{ fontSize: "0.72rem", color: "#64748B" }}>
-                              Haz clic en los botones para descargar el Recibo Oficial Devio o consultar el Comprobante Bancario SPEI
+                            <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                              Transacciones y abonos registrados con comprobante bancario SPEI y recibo oficial ({selectedProp.paymentsList?.length || 0} operaciones)
                             </div>
                           </div>
-                        </div>
 
-                        <div style={{ overflowX: "auto" }}>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem", minWidth: "620px" }}>
-                            <thead>
-                              <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#64748B", textAlign: "left" }}>
-                                <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}># Cuota / Concepto</th>
-                                <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Fecha Vence</th>
-                                <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "right" }}>Monto Prog.</th>
-                                <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "right" }}>Pagado</th>
-                                <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "center" }}>Estatus</th>
-                                <th style={{ padding: "0.75rem 1rem", fontWeight: 700, textAlign: "center" }}>Recibo / Comprobante</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {selectedProp.payments.map((p) => {
-                                const isPaid = p.status === "PAGADO";
-                                const isOverdue = p.status === "ATRASADO";
-
-                                return (
-                                  <tr
-                                    key={p.id}
-                                    style={{
-                                      borderBottom: "1px solid #F1F5F9",
-                                      transition: "background 0.15s ease",
-                                    }}
-                                  >
-                                    {/* Concepto */}
-                                    <td style={{ padding: "0.85rem 1rem", color: "#1F3652" }}>
-                                      <div style={{ fontWeight: 700 }}>{p.concept}</div>
-                                      <div style={{ fontSize: "0.7rem", color: "#94A3B8" }}>
-                                        {p.paymentMethod || "Transferencia SPEI"}
-                                      </div>
-                                    </td>
-
-                                    {/* Fecha */}
-                                    <td style={{ padding: "0.85rem 1rem", color: "#475569", whiteSpace: "nowrap" }}>
-                                      {p.scheduledDate}
-                                    </td>
-
-                                    {/* Monto Programado */}
-                                    <td style={{ padding: "0.85rem 1rem", textAlign: "right", fontWeight: 700, color: "#1F3652" }}>
-                                      {formatMoney(p.scheduledAmount)}
-                                    </td>
-
-                                    {/* Monto Pagado */}
-                                    <td style={{ padding: "0.85rem 1rem", textAlign: "right", fontWeight: 800, color: isPaid ? "#00875A" : (p.paidAmount > 0 ? "#D97706" : "#64748B") }}>
-                                      {formatMoney(p.paidAmount)}
-                                    </td>
-
-                                    {/* Estatus Badge estilo Back Office */}
-                                    <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
-                                      <span
-                                        style={{
-                                          display: "inline-block",
-                                          padding: "0.22rem 0.65rem",
-                                          borderRadius: "99px",
-                                          fontSize: "0.7rem",
-                                          fontWeight: 800,
-                                          backgroundColor: isPaid ? "rgba(0,196,140,0.12)" : isOverdue ? "#FEE2E2" : "#FEF3C7",
-                                          color: isPaid ? "#00A877" : isOverdue ? "#DC2626" : "#D97706",
-                                          border: isPaid ? "1px solid rgba(0,196,140,0.25)" : isOverdue ? "1px solid #FECACA" : "1px solid #FDE68A",
-                                        }}
+                          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", overflow: "hidden", border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+                            <div style={{ overflowX: "auto" }}>
+                              <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: "0.8rem", textAlign: "left", minWidth: "620px" }}>
+                                <thead>
+                                  <tr style={{ backgroundColor: "#1B3047", color: "#FFFFFF" }}>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700 }}>Fecha Pago</th>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700 }}>Método de Pago</th>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700, textAlign: "right" }}>Monto</th>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700, textAlign: "center" }}>Unidad</th>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700, textAlign: "center" }}>Recibo Oficial</th>
+                                    <th style={{ padding: "0.8rem 1rem", fontWeight: 700, textAlign: "center" }}>Comprobante SPEI</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(!selectedProp.paymentsList || selectedProp.paymentsList.length === 0) ? (
+                                    <tr>
+                                      <td colSpan={6} style={{ padding: "3rem", textAlign: "center", color: "#94A3B8" }}>
+                                        No hay pagos registrados para esta unidad.
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    selectedProp.paymentsList.map((p, idx) => (
+                                      <tr
+                                        key={p.id ? `${p.id}-${idx}` : `pay-${idx}`}
+                                        style={{ borderBottom: "1px solid #F1F5F9" }}
                                       >
-                                        {p.status}
-                                      </span>
-                                    </td>
+                                        {/* Fecha pago */}
+                                        <td style={{ padding: "0.85rem 1rem", color: "#475569", whiteSpace: "nowrap" }}>
+                                          {p.fechaPago}
+                                        </td>
 
-                                    {/* Acciones: Recibo Devio + Comprobante Bancario */}
-                                    <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
-                                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap", justifyContent: "center" }}>
-                                        {/* Recibo Oficial PDF */}
-                                        {isPaid || p.paidAmount > 0 ? (
+                                        {/* Método de pago */}
+                                        <td style={{ padding: "0.85rem 1rem", color: "#1F3652", fontWeight: 600 }}>
+                                          {p.metodoPago}
+                                        </td>
+
+                                        {/* Monto */}
+                                        <td style={{ padding: "0.85rem 1rem", textAlign: "right", fontWeight: 800, color: "#1F3652" }}>
+                                          {formatMoney(p.monto)}
+                                        </td>
+
+                                        {/* Unidad */}
+                                        <td style={{ padding: "0.85rem 1rem", textAlign: "center", fontWeight: 700, color: "#1F3652" }}>
+                                          {p.unit || selectedProp.unitNumber}
+                                        </td>
+
+                                        {/* Recibo Oficial PDF -> [ Abrir Recibo ] */}
+                                        <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
                                           <button
                                             type="button"
                                             onClick={() => handleOpenReceipt(p)}
-                                            title="Abrir Recibo Oficial Devio en formato PDF"
                                             style={{
                                               display: "inline-flex",
                                               alignItems: "center",
-                                              gap: "0.3rem",
-                                              padding: "0.35rem 0.65rem",
-                                              backgroundColor: "rgba(0,196,140,0.12)",
-                                              color: "#00A877",
-                                              border: "1px solid rgba(0,196,140,0.3)",
-                                              borderRadius: "0.5rem",
-                                              fontSize: "0.72rem",
-                                              fontWeight: 800,
+                                              gap: "0.35rem",
+                                              backgroundColor: "#1B3047",
+                                              color: "#FFFFFF",
+                                              padding: "0.4rem 0.95rem",
+                                              borderRadius: "9999px",
+                                              fontSize: "0.75rem",
+                                              fontWeight: 600,
+                                              border: "none",
                                               cursor: "pointer",
+                                              whiteSpace: "nowrap",
                                             }}
+                                            title="Generar y abrir Recibo Oficial Devio en formato PDF"
                                           >
-                                            <FileText size={13} /> Recibo PDF
+                                            <ExternalLink size={13} /> Abrir Recibo PDF
                                           </button>
-                                        ) : null}
+                                        </td>
 
-                                        {/* Comprobante Bancario SPEI */}
-                                        {p.comprobanteUrl ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => setShowVoucherPayment(p)}
-                                            title="Ver comprobante de transferencia bancaria subido"
-                                            style={{
-                                              display: "inline-flex",
-                                              alignItems: "center",
-                                              gap: "0.3rem",
-                                              padding: "0.35rem 0.65rem",
-                                              backgroundColor: "rgba(31,54,82,0.08)",
-                                              color: "#1F3652",
-                                              border: "1px solid rgba(31,54,82,0.2)",
-                                              borderRadius: "0.5rem",
-                                              fontSize: "0.72rem",
-                                              fontWeight: 800,
-                                              cursor: "pointer",
-                                            }}
-                                          >
-                                            <ExternalLink size={13} /> Comprobante SPEI
-                                          </button>
-                                        ) : (
-                                          !isPaid && (
-                                            <span style={{ fontSize: "0.7rem", color: "#94A3B8" }}>
-                                              Sin comprobante
+                                        {/* Comprobante Bancario SPEI -> [ Abrir Comprobante ] */}
+                                        <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
+                                          {p.comprobanteUrl ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => setSelectedVoucherForView(p)}
+                                              style={{
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                gap: "0.35rem",
+                                                backgroundColor: "rgba(31,54,82,0.08)",
+                                                color: "#1F3652",
+                                                padding: "0.4rem 0.95rem",
+                                                borderRadius: "9999px",
+                                                fontSize: "0.75rem",
+                                                fontWeight: 700,
+                                                border: "1px solid rgba(31,54,82,0.2)",
+                                                cursor: "pointer",
+                                                whiteSpace: "nowrap",
+                                              }}
+                                              title="Ver comprobante bancario subido"
+                                            >
+                                              <Eye size={13} /> Comprobante SPEI
+                                            </button>
+                                          ) : (
+                                            <span style={{ fontSize: "0.72rem", color: "#94A3B8" }}>
+                                              Validado
                                             </span>
-                                          )
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    ))
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   )}
                 </>
@@ -1467,48 +1603,63 @@ export default function ClientPortalWeb() {
         )}
 
         {/* MODAL VISOR COMPROBANTE BANCARIO SPEI */}
-        {showVoucherPayment && (
+        {selectedVoucherForView && (
           <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15,23,42,0.7)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999, padding: "1rem" }}>
-            <div style={{ width: "100%", maxWidth: "480px", backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.3rem", display: "flex", flexDirection: "column", gap: "1rem", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.2)" }}>
+            <div style={{ width: "100%", maxWidth: "520px", backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.4rem", display: "flex", flexDirection: "column", gap: "1rem", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.2)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <strong style={{ fontSize: "1.05rem", color: "#1F3652" }}>Comprobante Bancario SPEI</strong>
-                <button onClick={() => setShowVoucherPayment(null)} style={{ background: "none", border: "none", cursor: "pointer" }}><X size={18} /></button>
+                <button onClick={() => setSelectedVoucherForView(null)} style={{ background: "none", border: "none", cursor: "pointer" }}><X size={18} /></button>
               </div>
 
-              <div style={{ backgroundColor: "#F8FAFC", borderRadius: "0.85rem", padding: "1rem", border: "1px solid #E2E8F0" }}>
-                <div style={{ fontSize: "0.75rem", color: "#64748B", fontWeight: 700 }}>ARCHIVO ADJUNTO</div>
-                <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652", margin: "0.3rem 0" }}>
-                  {showVoucherPayment.comprobanteName || "Comprobante_Pago.pdf"}
+              <div style={{ backgroundColor: "#F8FAFC", borderRadius: "0.85rem", padding: "1.1rem", border: "1px solid #E2E8F0" }}>
+                <div style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 700, textTransform: "uppercase" }}>Transacción Validada</div>
+                <div style={{ fontSize: "1.35rem", fontWeight: 900, color: "#1F3652", margin: "0.3rem 0" }}>
+                  {formatMoney(selectedVoucherForView.monto)}
                 </div>
-                <div style={{ fontSize: "0.78rem", color: "#475569" }}>{showVoucherPayment.concept} • {formatMoney(showVoucherPayment.paidAmount || showVoucherPayment.scheduledAmount)}</div>
-                <div style={{ fontSize: "0.72rem", color: "#94A3B8", marginTop: "3px" }}>Fecha de Pago: {showVoucherPayment.paidDate || showVoucherPayment.scheduledDate}</div>
+                <div style={{ fontSize: "0.8rem", color: "#475569" }}>
+                  Unidad {selectedVoucherForView.unit} • {selectedVoucherForView.metodoPago}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "4px" }}>
+                  Fecha de Aplicación: <strong>{selectedVoucherForView.fechaPago}</strong>
+                </div>
+                {selectedVoucherForView.reciboFolio && (
+                  <div style={{ fontSize: "0.72rem", color: "#00A877", fontWeight: 700, marginTop: "4px" }}>
+                    Folio de Recibo: {selectedVoucherForView.reciboFolio}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "flex", gap: "0.75rem" }}>
-                <a
-                  href={showVoucherPayment.comprobanteUrl || "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    flex: 1,
-                    padding: "0.75rem",
-                    backgroundColor: "#1F3652",
-                    color: "#FFFFFF",
-                    borderRadius: "0.6rem",
-                    fontWeight: 800,
-                    fontSize: "0.8rem",
-                    textDecoration: "none",
-                    textAlign: "center",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "0.4rem",
-                  }}
-                >
-                  <ExternalLink size={15} /> Abrir Comprobante
-                </a>
+                {selectedVoucherForView.comprobanteUrl ? (
+                  <a
+                    href={selectedVoucherForView.comprobanteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      flex: 1,
+                      padding: "0.75rem",
+                      backgroundColor: "#1B3047",
+                      color: "#FFFFFF",
+                      borderRadius: "0.6rem",
+                      fontWeight: 800,
+                      fontSize: "0.8rem",
+                      textDecoration: "none",
+                      textAlign: "center",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.4rem",
+                    }}
+                  >
+                    <ExternalLink size={15} /> Abrir Archivo Adjunto
+                  </a>
+                ) : (
+                  <div style={{ flex: 1, padding: "0.75rem", textAlign: "center", fontSize: "0.8rem", color: "#64748B" }}>
+                    Comprobante registrado en sistema
+                  </div>
+                )}
                 <button
-                  onClick={() => setShowVoucherPayment(null)}
+                  onClick={() => setSelectedVoucherForView(null)}
                   style={{
                     padding: "0.75rem 1.25rem",
                     backgroundColor: "#F1F5F9",
