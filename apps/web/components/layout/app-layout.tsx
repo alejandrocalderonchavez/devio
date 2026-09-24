@@ -60,7 +60,7 @@ export default function AppLayout({
   headerActions,
 }: AppLayoutProps) {
   const pathname = usePathname();
-  const { projects, currency, setCurrency, userName, userEmail, developerName, developerLogo, toast, hideToast, showToast, logout, hasPermission } = useProject();
+  const { projects, currency, setCurrency, banxicoRate, userName, userEmail, developerName, developerLogo, toast, hideToast, showToast, logout, hasPermission } = useProject();
 
   const [impersonation, setImpersonation] = React.useState<{
     active: boolean;
@@ -111,8 +111,6 @@ export default function AppLayout({
 
   const isAdminMode = Boolean(isAdmin || pathname.startsWith("/super-admin"));
   const currentAdminTab = adminSubTab || "overview";
-
-  const banxicoRate = 18.35;
 
   return (
     <div

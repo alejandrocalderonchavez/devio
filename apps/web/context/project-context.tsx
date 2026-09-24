@@ -94,6 +94,7 @@ interface ProjectContextType {
   projects: ProjectItem[];
   currency: Currency;
   setCurrency: (c: Currency) => void;
+  banxicoRate: number;
   formatMoney: (amount: number) => string;
   developerName: string;
   setDeveloperName: (name: string) => void;
@@ -217,8 +218,20 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [paymentPlans, setPaymentPlans] = useState<DeveloperPaymentPlan[]>([]);
   const [postventaIncidents, setPostventaIncidents] = useState<PostventaIncident[]>(INITIAL_INCIDENTS);
   const [toast, setToast] = useState<{ title: string; desc: string; type?: "success" | "info" | "warning" } | null>(null);
+  const [banxicoRate, setBanxicoRate] = useState<number>(18.35);
 
-  const banxicoRate = 18.35;
+  useEffect(() => {
+    fetch("/api/finance/exchange-rate")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.rate === "number" && data.rate > 0) {
+          setBanxicoRate(data.rate);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch live exchange rate, using default:", err);
+      });
+  }, []);
 
   const loadFromStorage = () => {
     if (typeof window === "undefined") return;
@@ -2297,6 +2310,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         projects,
         currency,
         setCurrency,
+        banxicoRate,
         formatMoney,
         developerName,
         setDeveloperName,

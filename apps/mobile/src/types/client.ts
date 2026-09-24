@@ -69,6 +69,16 @@ export interface ClientPaymentReceiptItem {
   unit?: string;
 }
 
+export interface ClientCoOwner {
+  id?: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  rfc?: string;
+  ownershipPct: number;
+  isMainContact?: boolean;
+}
+
 export interface ClientProperty {
   id: string;
   clientEmail?: string;
@@ -105,6 +115,9 @@ export interface ClientProperty {
   paymentsList: ClientPaymentReceiptItem[];
   payments: ClientPaymentScheduleItem[];
   customAttributes?: Array<{ key: string; label: string; value: string }>;
+  isCoOwnership?: boolean;
+  coOwners?: ClientCoOwner[];
+  myOwnershipPct?: number;
 }
 
 export interface PushNotificationItem {

@@ -35,11 +35,14 @@ import {
   Eye,
   Trash2,
   Lock,
+  Users,
+  Coins,
   Globe,
   HelpCircle,
   ChevronRight,
 } from "lucide-react";
 import { openReceiptInNewTab, openStatementInNewTab } from "../../lib/pdf-generator";
+import { CLIENT_TRANSLATIONS, ClientLanguage, ClientCurrency } from "../../lib/client-i18n";
 
 const round2 = (num: number) => Math.round((Number(num || 0) + Number.EPSILON) * 100) / 100;
 
@@ -156,6 +159,17 @@ interface ClientProperty {
   schedule: ScheduleInstallment[];
   paymentsList: PaymentReceipt[];
   customAttributes: Array<{ label: string; value: string }>;
+  isCoOwnership?: boolean;
+  coOwners?: Array<{
+    id?: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    rfc?: string;
+    ownershipPct: number;
+    isMainContact?: boolean;
+  }>;
+  myOwnershipPct?: number;
 }
 
 interface ClientNotification {
@@ -179,6 +193,50 @@ export default function ClientPortalWeb() {
   const [userAddress, setUserAddress] = useState("");
   const [userAvatar, setUserAvatar] = useState("");
 
+  // Language & Currency State
+  const [language, setLanguageState] = useState<ClientLanguage>("es");
+  const [currency, setCurrencyState] = useState<ClientCurrency>("MXN");
+  const [banxicoRate, setBanxicoRate] = useState<number>(18.35);
+
+  const t = useMemo(() => CLIENT_TRANSLATIONS[language] || CLIENT_TRANSLATIONS.es, [language]);
+
+  const setLanguage = (lang: ClientLanguage) => {
+    setLanguageState(lang);
+    try {
+      localStorage.setItem("@devio_client_lang", lang);
+    } catch (e) {}
+  };
+
+  const setCurrency = (curr: ClientCurrency) => {
+    setCurrencyState(curr);
+    try {
+      localStorage.setItem("@devio_client_curr", curr);
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    try {
+      const savedLang = localStorage.getItem("@devio_client_lang") as ClientLanguage;
+      if (savedLang === "es" || savedLang === "en") setLanguageState(savedLang);
+      const savedCurr = localStorage.getItem("@devio_client_curr") as ClientCurrency;
+      if (savedCurr === "MXN" || savedCurr === "USD") setCurrencyState(savedCurr);
+    } catch (e) {}
+
+    async function fetchBanxico() {
+      try {
+        const res = await fetch("/api/finance/exchange-rate");
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.rate === "number" && data.rate > 5) {
+            setBanxicoRate(data.rate);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch Banxico rate:", err);
+      }
+    }
+    fetchBanxico();
+  }, []);
   // Navigation State
   const [activeTab, setActiveTab] = useState<"properties" | "profile">("properties");
   const [screen, setScreen] = useState<"main" | "detail" | "construction" | "documents" | "statement">("main");
@@ -358,11 +416,39 @@ export default function ClientPortalWeb() {
     return properties.find((p) => p.id === selectedPropId) || properties[0] || null;
   }, [properties, selectedPropId]);
 
-  const formatMoney = (val: number) =>
-    new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }).format(val || 0);
+  const formatMoney = (val: number) => {
+    const num = Number(val) || 0;
+    if (currency === "USD") {
+      const converted = banxicoRate > 0 ? num / banxicoRate : num;
+      return new Intl.NumberFormat(language === "es" ? "es-MX" : "en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+      }).format(converted);
+    }
+    return new Intl.NumberFormat(language === "es" ? "es-MX" : "en-US", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+    }).format(num);
+  };
 
-  const formatMoneyCompact = (val: number) =>
-    new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0 }).format(val || 0);
+  const formatMoneyCompact = (val: number) => {
+    const num = Number(val) || 0;
+    if (currency === "USD") {
+      const converted = banxicoRate > 0 ? num / banxicoRate : num;
+      return new Intl.NumberFormat(language === "es" ? "es-MX" : "en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 0,
+      }).format(converted);
+    }
+    return new Intl.NumberFormat(language === "es" ? "es-MX" : "en-US", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 0,
+    }).format(num);
+  };
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
@@ -498,20 +584,133 @@ export default function ClientPortalWeb() {
         >
           {screen === "main" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
                 <img
                   src="/brand/logo-white.png"
                   alt="Devio"
                   style={{ height: "26px", width: "auto", objectFit: "contain", display: "block" }}
                 />
 
-                <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                {/* Header Switchers & Actions */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+                  {/* Banxico Live Rate Badge */}
+                  <div
+                    title={t.banxicoRate}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      backgroundColor: "rgba(255, 255, 255, 0.12)",
+                      padding: "0.22rem 0.55rem",
+                      borderRadius: "99px",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      color: "#FFFFFF",
+                      border: "1px solid rgba(255, 255, 255, 0.18)",
+                    }}
+                  >
+                    <Coins size={13} color="#00C48C" />
+                    <span>${banxicoRate.toFixed(2)} MXN</span>
+                  </div>
+
+                  {/* Currency Switcher [MXN | USD] */}
+                  <div
+                    style={{
+                      display: "flex",
+                      backgroundColor: "rgba(0, 0, 0, 0.22)",
+                      borderRadius: "99px",
+                      padding: "2px",
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setCurrency("MXN")}
+                      style={{
+                        padding: "0.18rem 0.45rem",
+                        borderRadius: "99px",
+                        border: "none",
+                        fontSize: "0.68rem",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        backgroundColor: currency === "MXN" ? "#FFFFFF" : "transparent",
+                        color: currency === "MXN" ? "#1F3652" : "rgba(255, 255, 255, 0.7)",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      MXN
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrency("USD")}
+                      style={{
+                        padding: "0.18rem 0.45rem",
+                        borderRadius: "99px",
+                        border: "none",
+                        fontSize: "0.68rem",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        backgroundColor: currency === "USD" ? "#FFFFFF" : "transparent",
+                        color: currency === "USD" ? "#1F3652" : "rgba(255, 255, 255, 0.7)",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      USD
+                    </button>
+                  </div>
+
+                  {/* Language Switcher [ES | EN] */}
+                  <div
+                    style={{
+                      display: "flex",
+                      backgroundColor: "rgba(0, 0, 0, 0.22)",
+                      borderRadius: "99px",
+                      padding: "2px",
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setLanguage("es")}
+                      style={{
+                        padding: "0.18rem 0.45rem",
+                        borderRadius: "99px",
+                        border: "none",
+                        fontSize: "0.68rem",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        backgroundColor: language === "es" ? "#FFFFFF" : "transparent",
+                        color: language === "es" ? "#1F3652" : "rgba(255, 255, 255, 0.7)",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      ES
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLanguage("en")}
+                      style={{
+                        padding: "0.18rem 0.45rem",
+                        borderRadius: "99px",
+                        border: "none",
+                        fontSize: "0.68rem",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        backgroundColor: language === "en" ? "#FFFFFF" : "transparent",
+                        color: language === "en" ? "#1F3652" : "rgba(255, 255, 255, 0.7)",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      EN
+                    </button>
+                  </div>
+
                   <button
                     onClick={() => setShowNotifications(true)}
                     style={{
                       position: "relative",
-                      width: "38px",
-                      height: "38px",
+                      width: "36px",
+                      height: "36px",
                       borderRadius: "50%",
                       backgroundColor: "rgba(255,255,255,0.15)",
                       border: "none",
@@ -521,7 +720,7 @@ export default function ClientPortalWeb() {
                       cursor: "pointer",
                     }}
                   >
-                    <Bell size={18} color="#FFFFFF" />
+                    <Bell size={17} color="#FFFFFF" />
                     {unreadCount > 0 && (
                       <span
                         style={{
@@ -549,8 +748,8 @@ export default function ClientPortalWeb() {
                   <button
                     onClick={() => { setActiveTab("profile"); setScreen("main"); }}
                     style={{
-                      width: "38px",
-                      height: "38px",
+                      width: "36px",
+                      height: "36px",
                       borderRadius: "50%",
                       overflow: "hidden",
                       border: "2px solid rgba(255,255,255,0.5)",
@@ -569,11 +768,11 @@ export default function ClientPortalWeb() {
 
               {activeTab === "properties" ? (
                 <div>
-                  <div style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.8)", fontWeight: 500 }}>Bienvenido de nuevo,</div>
+                  <div style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.8)", fontWeight: 500 }}>{t.welcomeBack}</div>
                   <div style={{ fontSize: "1.45rem", fontWeight: 800, letterSpacing: "-0.02em" }}>{userName}</div>
                 </div>
               ) : (
-                <div style={{ fontSize: "1.35rem", fontWeight: 800 }}>Mi Perfil de Cliente</div>
+                <div style={{ fontSize: "1.35rem", fontWeight: 800 }}>{t.clientProfileTitle}</div>
               )}
             </div>
           ) : (
@@ -958,29 +1157,137 @@ export default function ClientPortalWeb() {
                       {/* Resumen Financiero */}
                       <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
                         <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.85rem" }}>
-                          Resumen Financiero
+                          {t.financialSummary}
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem", fontSize: "0.82rem" }}>
                           <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <span style={{ color: "#64748B" }}>Precio Total de Venta:</span>
+                            <span style={{ color: "#64748B" }}>{t.totalSalePrice}:</span>
                             <strong style={{ color: "#1E293B" }}>{formatMoney(selectedProp.totalPrice)}</strong>
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <span style={{ color: "#64748B" }}>Total Pagado a la Fecha:</span>
+                            <span style={{ color: "#64748B" }}>{t.totalPaidToDate}:</span>
                             <strong style={{ color: "#00875A" }}>{formatMoney(selectedProp.paidAmount)}</strong>
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <span style={{ color: "#64748B" }}>Saldo Pendiente por Liquidar:</span>
+                            <span style={{ color: "#64748B" }}>{t.pendingBalance}:</span>
                             <strong style={{ color: "#B45309" }}>{formatMoney(selectedProp.pendingAmount)}</strong>
                           </div>
                           {selectedProp.overdueAmount > 0 && (
                             <div style={{ display: "flex", justifyContent: "space-between" }}>
-                              <span style={{ color: "#DC2626", fontWeight: 700 }}>Saldo Vencido Atrasado:</span>
+                              <span style={{ color: "#DC2626", fontWeight: 700 }}>{t.overdueBalance}:</span>
                               <strong style={{ color: "#DC2626" }}>{formatMoney(selectedProp.overdueAmount)}</strong>
                             </div>
                           )}
                         </div>
                       </div>
+
+                      {/* RÉGIMEN DE COPROPIEDAD (Only shown when property is a co-ownership) */}
+                      {selectedProp.isCoOwnership && selectedProp.coOwners && selectedProp.coOwners.length > 0 && (
+                        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.25rem 1.4rem", border: "1.5px solid rgba(31, 54, 82, 0.15)", boxShadow: "0 4px 20px rgba(31, 54, 82, 0.05)", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                              <div style={{ width: "38px", height: "38px", borderRadius: "12px", backgroundColor: "rgba(31, 54, 82, 0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <Users size={20} color="#1F3652" />
+                              </div>
+                              <div>
+                                <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "#1F3652" }}>
+                                  {t.coOwnershipTitle}
+                                </h4>
+                                <span style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                                  {selectedProp.coOwners.length} {t.registeredCoOwners}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#065F46", backgroundColor: "#D1FAE5", padding: "0.25rem 0.65rem", borderRadius: "99px", border: "1px solid #A7F3D0" }}>
+                                {t.yourShare}: {selectedProp.myOwnershipPct || 100}%
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Distribution Segmented Progress Bar */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                              <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                {t.ownershipDistribution}
+                              </span>
+                              <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#1F3652" }}>
+                                100% Total
+                              </span>
+                            </div>
+                            <div style={{ height: "10px", width: "100%", backgroundColor: "#F1F5F9", borderRadius: "99px", overflow: "hidden", display: "flex" }}>
+                              {selectedProp.coOwners.map((owner, oIdx) => {
+                                const colors = ["#1F3652", "#00C48C", "#6366F1", "#F59E0B", "#EC4899", "#14B8A6"];
+                                const barColor = colors[oIdx % colors.length];
+                                return (
+                                  <div
+                                    key={oIdx}
+                                    title={`${owner.name}: ${owner.ownershipPct}%`}
+                                    style={{
+                                      width: `${owner.ownershipPct}%`,
+                                      height: "100%",
+                                      backgroundColor: barColor,
+                                      borderRight: oIdx < selectedProp.coOwners!.length - 1 ? "1.5px solid #FFFFFF" : "none",
+                                    }}
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Co-owners List Grid */}
+                          <div style={{ display: "grid", gridTemplateColumns: selectedProp.coOwners.length > 1 ? "repeat(auto-fit, minmax(220px, 1fr))" : "1fr", gap: "0.75rem" }}>
+                            {selectedProp.coOwners.map((owner, oIdx) => {
+                              const isMe = (owner.email || "").toLowerCase() === userEmail.toLowerCase();
+                              const colors = ["#1F3652", "#00C48C", "#6366F1", "#F59E0B", "#EC4899", "#14B8A6"];
+                              const accentColor = colors[oIdx % colors.length];
+                              return (
+                                <div
+                                  key={oIdx}
+                                  style={{
+                                    padding: "0.85rem",
+                                    borderRadius: "0.85rem",
+                                    backgroundColor: isMe ? "rgba(31, 54, 82, 0.04)" : "#F8FAFC",
+                                    border: isMe ? "1.5px solid rgba(31, 54, 82, 0.25)" : "1px solid #E2E8F0",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "0.4rem",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                      <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: accentColor }} />
+                                      <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#1F3652" }}>
+                                        {owner.name} {isMe && <span style={{ color: "#00875A", fontSize: "0.72rem", fontWeight: 700 }}>({language === "es" ? "Tú" : "You"})</span>}
+                                      </span>
+                                    </div>
+                                    <span style={{ fontSize: "0.82rem", fontWeight: 900, color: accentColor }}>
+                                      {owner.ownershipPct}%
+                                    </span>
+                                  </div>
+
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", color: "#64748B" }}>
+                                    <span>{owner.isMainContact ? t.primaryOwner : t.coOwner}</span>
+                                    {owner.phone && (
+                                      <a href={`tel:${owner.phone}`} style={{ color: "#1F3652", textDecoration: "none", fontWeight: 600 }}>
+                                        {owner.phone}
+                                      </a>
+                                    )}
+                                  </div>
+
+                                  {isMe && (
+                                    <div style={{ marginTop: "0.2rem", paddingTop: "0.4rem", borderTop: "1px dashed #CBD5E1", display: "flex", justifyContent: "space-between", fontSize: "0.72rem" }}>
+                                      <span style={{ color: "#64748B" }}>{t.myShareOfValue}:</span>
+                                      <strong style={{ color: "#1F3652" }}>{formatMoney((selectedProp.totalPrice * owner.ownershipPct) / 100)}</strong>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Acciones Rápidas */}
                       <div style={{ display: "flex", gap: "0.75rem" }}>
@@ -1825,43 +2132,154 @@ export default function ClientPortalWeb() {
                   <ChevronRight size={18} color="#94A3B8" />
                 </a>
 
-                {/* 5. Idioma */}
-                <button
-                  type="button"
-                  onClick={() => alert("Idioma de la plataforma: Español (México)")}
+                {/* 5. Moneda y Banxico */}
+                <div
                   style={{
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "space-between",
                     backgroundColor: "#FFFFFF",
                     borderRadius: "1.1rem",
-                    padding: "1rem 1.15rem",
+                    padding: "0.85rem 1.15rem",
                     border: "1px solid #E2E8F0",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    gap: "0.85rem",
                     boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
                   }}
                 >
-                  <div
-                    style={{
-                      width: "38px",
-                      height: "38px",
-                      borderRadius: "50%",
-                      backgroundColor: "#EFF6FF",
-                      color: "#2563EB",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Globe size={18} />
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                    <div
+                      style={{
+                        width: "38px",
+                        height: "38px",
+                        borderRadius: "50%",
+                        backgroundColor: "#ECFDF5",
+                        color: "#059669",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Coins size={18} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#1F3652" }}>
+                        {t.currency}
+                      </div>
+                      <div style={{ fontSize: "0.72rem", color: "#64748B" }}>
+                        FIX: ${banxicoRate.toFixed(2)} MXN
+                      </div>
+                    </div>
                   </div>
-                  <span style={{ flex: 1, fontSize: "0.9rem", fontWeight: 700, color: "#1F3652" }}>
-                    Idioma
-                  </span>
-                  <ChevronRight size={18} color="#94A3B8" />
-                </button>
+
+                  <div style={{ display: "flex", backgroundColor: "#F1F5F9", borderRadius: "99px", padding: "3px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setCurrency("MXN")}
+                      style={{
+                        padding: "0.3rem 0.65rem",
+                        borderRadius: "99px",
+                        border: "none",
+                        fontSize: "0.75rem",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        backgroundColor: currency === "MXN" ? "#1F3652" : "transparent",
+                        color: currency === "MXN" ? "#FFFFFF" : "#64748B",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      MXN
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrency("USD")}
+                      style={{
+                        padding: "0.3rem 0.65rem",
+                        borderRadius: "99px",
+                        border: "none",
+                        fontSize: "0.75rem",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        backgroundColor: currency === "USD" ? "#1F3652" : "transparent",
+                        color: currency === "USD" ? "#FFFFFF" : "#64748B",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      USD
+                    </button>
+                  </div>
+                </div>
+
+                {/* 6. Idioma */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "1.1rem",
+                    padding: "0.85rem 1.15rem",
+                    border: "1px solid #E2E8F0",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+                    <div
+                      style={{
+                        width: "38px",
+                        height: "38px",
+                        borderRadius: "50%",
+                        backgroundColor: "#EFF6FF",
+                        color: "#2563EB",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Globe size={18} />
+                    </div>
+                    <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "#1F3652" }}>
+                      {t.language}
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", backgroundColor: "#F1F5F9", borderRadius: "99px", padding: "3px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setLanguage("es")}
+                      style={{
+                        padding: "0.3rem 0.65rem",
+                        borderRadius: "99px",
+                        border: "none",
+                        fontSize: "0.75rem",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        backgroundColor: language === "es" ? "#1F3652" : "transparent",
+                        color: language === "es" ? "#FFFFFF" : "#64748B",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      ES
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLanguage("en")}
+                      style={{
+                        padding: "0.3rem 0.65rem",
+                        borderRadius: "99px",
+                        border: "none",
+                        fontSize: "0.75rem",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        backgroundColor: language === "en" ? "#1F3652" : "transparent",
+                        color: language === "en" ? "#FFFFFF" : "#64748B",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      EN
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Cerrar Sesión */}
@@ -1887,7 +2305,7 @@ export default function ClientPortalWeb() {
                 }}
               >
                 <LogOut size={18} color="#EF4444" />
-                <span>Cerrar sesión</span>
+                <span>{t.signOut}</span>
               </button>
             </div>
           )}
@@ -1945,7 +2363,7 @@ export default function ClientPortalWeb() {
             }}>
               <Home size={19} color={activeTab === "properties" ? "#FFFFFF" : "rgba(255, 255, 255, 0.55)"} strokeWidth={activeTab === "properties" ? 2.5 : 2} />
             </div>
-            <span style={{ fontSize: "0.68rem", fontWeight: activeTab === "properties" ? 800 : 600 }}>Mis Propiedades</span>
+            <span style={{ fontSize: "0.68rem", fontWeight: activeTab === "properties" ? 800 : 600 }}>{t.tabProperties}</span>
           </button>
 
           <button
@@ -1976,7 +2394,7 @@ export default function ClientPortalWeb() {
             }}>
               <User size={19} color={activeTab === "profile" ? "#FFFFFF" : "rgba(255, 255, 255, 0.55)"} strokeWidth={activeTab === "profile" ? 2.5 : 2} />
             </div>
-            <span style={{ fontSize: "0.68rem", fontWeight: activeTab === "profile" ? 800 : 600 }}>Mi Perfil</span>
+            <span style={{ fontSize: "0.68rem", fontWeight: activeTab === "profile" ? 800 : 600 }}>{t.tabProfile}</span>
           </button>
         </div>
 

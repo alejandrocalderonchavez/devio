@@ -12,7 +12,7 @@ import { Home, User } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
 
 export const BottomTabs: React.FC = () => {
-  const { activeTab, setActiveTab } = useClientApp();
+  const { activeTab, setActiveTab, t } = useClientApp();
 
   const handleTabPress = (tab: "properties" | "profile") => {
     if (Platform.OS === "ios") {
@@ -56,7 +56,7 @@ export const BottomTabs: React.FC = () => {
                 activeTab === "properties" && styles.tabLabelActive,
               ]}
             >
-              Mis Propiedades
+              {t.tabProperties}
             </Text>
           </TouchableOpacity>
 
@@ -87,7 +87,7 @@ export const BottomTabs: React.FC = () => {
                 activeTab === "profile" && styles.tabLabelActive,
               ]}
             >
-              Mi Perfil
+              {t.tabProfile}
             </Text>
           </TouchableOpacity>
         </BlurView>

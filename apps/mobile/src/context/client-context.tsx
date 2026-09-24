@@ -9,6 +9,11 @@ import {
 } from "../types/client";
 import { resolveClientPropertiesLocal } from "../data/real-data-resolver";
 import { appStorage } from "../utils/storage";
+import {
+  CLIENT_TRANSLATIONS,
+  ClientLanguage,
+  ClientCurrency,
+} from "../utils/client-i18n";
 
 export const navigationRef = createNavigationContainerRef<any>();
 
@@ -51,6 +56,12 @@ interface ClientContextType {
   changePassword: (oldPass: string, newPass: string) => boolean;
   login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
+  language: ClientLanguage;
+  setLanguage: (lang: ClientLanguage) => void;
+  currency: ClientCurrency;
+  setCurrency: (curr: ClientCurrency) => void;
+  banxicoRate: number;
+  t: (typeof CLIENT_TRANSLATIONS)["es"];
   formatMoney: (amount: number) => string;
   formatDateDisplay: (dateStr: string) => string;
 }
@@ -111,8 +122,49 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [showChangePasswordModal, setShowChangePasswordModal] = useState<boolean>(false);
   const [dismissedNotifIds, setDismissedNotifIds] = useState<string[]>([]);
 
-  // Restore Persisted Session on Startup (Stay Logged In)
+  // Language & Currency State
+  const [language, setLanguageState] = useState<ClientLanguage>("es");
+  const [currency, setCurrencyState] = useState<ClientCurrency>("MXN");
+  const [banxicoRate, setBanxicoRate] = useState<number>(18.35);
+
+  const t = useMemo(() => CLIENT_TRANSLATIONS[language] || CLIENT_TRANSLATIONS.es, [language]);
+
+  const setLanguage = (lang: ClientLanguage) => {
+    setLanguageState(lang);
+    appStorage.setItem("@devio_client_lang", lang).catch(() => {});
+  };
+
+  const setCurrency = (curr: ClientCurrency) => {
+    setCurrencyState(curr);
+    appStorage.setItem("@devio_client_curr", curr).catch(() => {});
+  };
+
+  const fetchBanxicoRate = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/finance/exchange-rate`);
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.rate === "number" && data.rate > 5) {
+          setBanxicoRate(data.rate);
+        }
+      }
+    } catch (e) {
+      console.log("Banxico rate fetch fallback:", e);
+    }
+  };
+
+  // Restore Persisted Session & Settings on Startup
   useEffect(() => {
+    fetchBanxicoRate();
+
+    appStorage.getItem("@devio_client_lang").then((savedLang) => {
+      if (savedLang === "es" || savedLang === "en") setLanguageState(savedLang);
+    }).catch(() => {});
+
+    appStorage.getItem("@devio_client_curr").then((savedCurr) => {
+      if (savedCurr === "MXN" || savedCurr === "USD") setCurrencyState(savedCurr);
+    }).catch(() => {});
+
     async function restorePersistedSession() {
       try {
         const stored = await appStorage.getItem("@devio_client_session");
@@ -222,11 +274,20 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const formatMoney = (val: number): string => {
-    return new Intl.NumberFormat("es-MX", {
+    const num = Number(val) || 0;
+    if (currency === "USD") {
+      const converted = banxicoRate > 0 ? num / banxicoRate : num;
+      return new Intl.NumberFormat(language === "es" ? "es-MX" : "en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+      }).format(converted);
+    }
+    return new Intl.NumberFormat(language === "es" ? "es-MX" : "en-US", {
       style: "currency",
       currency: "MXN",
       minimumFractionDigits: 2,
-    }).format(val || 0);
+    }).format(num);
   };
 
   const generateNotifications = (propsList: ClientProperty[]) => {
@@ -501,6 +562,12 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         changePassword,
         login,
         logout,
+        language,
+        setLanguage,
+        currency,
+        setCurrency,
+        banxicoRate,
+        t,
         formatMoney,
         formatDateDisplay,
       }}

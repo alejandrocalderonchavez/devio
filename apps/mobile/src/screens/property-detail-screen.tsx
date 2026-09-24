@@ -14,14 +14,16 @@ import {
   CreditCard,
   ChevronDown,
   ChevronUp,
+  Users,
 } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
 import { ClientHeader } from "../components/client-header";
 
 export const PropertyDetailScreen: React.FC = () => {
-  const { selectedProperty, navigateTo, formatMoney, formatDateDisplay, goBack } = useClientApp();
+  const { selectedProperty, navigateTo, formatMoney, formatDateDisplay, goBack, t } = useClientApp();
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isUnitInfoExpanded, setIsUnitInfoExpanded] = useState(true);
+
 
   if (!selectedProperty) return null;
 
@@ -258,6 +260,82 @@ export const PropertyDetailScreen: React.FC = () => {
             </View>
           )}
         </View>
+        {/* 7. Copropiedad Card (only when isCoOwnership is true) */}
+        {selectedProperty.isCoOwnership && (selectedProperty.coOwners?.length ?? 0) > 0 && (
+          <View style={styles.card}>
+            <View style={styles.cardHeaderBetween}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Users size={18} color="#7C3AED" />
+                <Text style={[styles.cardTitle, { color: "#7C3AED" }]}>
+                  {t.coOwnershipTitle || "Copropiedad"}
+                </Text>
+              </View>
+              <View style={{ backgroundColor: "#EDE9FE", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 }}>
+                <Text style={{ color: "#7C3AED", fontSize: 11, fontWeight: "800" }}>
+                  {selectedProperty.coOwners!.length} {t.coOwners || "Copropietarios"}
+                </Text>
+              </View>
+            </View>
+
+            {/* Segmented Progress Bar */}
+            <View style={{ flexDirection: "row", height: 8, borderRadius: 99, overflow: "hidden", gap: 2 }}>
+              {selectedProperty.coOwners!.map((owner, idx) => {
+                const colors = ["#7C3AED", "#2563EB", "#059669", "#D97706", "#DC2626"];
+                return (
+                  <View
+                    key={owner.email || idx}
+                    style={{
+                      flex: owner.ownershipPct,
+                      backgroundColor: colors[idx % colors.length],
+                    }}
+                  />
+                );
+              })}
+            </View>
+
+            {/* Owner Tags */}
+            <View style={{ gap: 8 }}>
+              {selectedProperty.coOwners!.map((owner, idx) => {
+                const colors = ["#7C3AED", "#2563EB", "#059669", "#D97706", "#DC2626"];
+                const bgColors = ["#EDE9FE", "#EFF6FF", "#ECFDF5", "#FFFBEB", "#FEF2F2"];
+                const color = colors[idx % colors.length];
+                const bg = bgColors[idx % bgColors.length];
+                return (
+                  <View
+                    key={owner.email || idx}
+                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: bg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color }} />
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: "#1F3652" }}>{owner.name}</Text>
+                        {owner.email ? <Text style={{ fontSize: 11, color: "#64748B" }}>{owner.email}</Text> : null}
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 14, fontWeight: "900", color }}>{owner.ownershipPct}%</Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* My participation */}
+            {(selectedProperty.myOwnershipPct ?? 0) > 0 && (
+              <View style={{ backgroundColor: "#F8FAFC", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "700", marginBottom: 4 }}>
+                  {t.myParticipation || "Mi Participación"}
+                </Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={{ fontSize: 15, fontWeight: "800", color: "#7C3AED" }}>
+                    {selectedProperty.myOwnershipPct}%
+                  </Text>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#1F3652" }}>
+                    {formatMoney(selectedProperty.totalPrice * (selectedProperty.myOwnershipPct! / 100))}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
     </View>
   );

@@ -88,18 +88,103 @@ export async function GET(request: Request) {
         // 1. Check in sales
         for (const sale of proj.sales || []) {
           const saleEmail = (sale.clientEmail || "").toLowerCase().trim();
-          if (saleEmail === targetEmail) {
+          const unitInv = (proj.unitsInventory || []).find((u: any) => u.unit === sale.unit);
+          const rawCoOwners: any[] = sale.coOwners || unitInv?.coOwners || [];
+          
+          const hasMatchingCoOwner = rawCoOwners.some(
+            (c: any) => (c.email || "").toLowerCase().trim() === targetEmail
+          );
+          const isClientMatched = saleEmail === targetEmail || hasMatchingCoOwner;
+
+          if (isClientMatched) {
+            // Find who is logged in (could be primary client or co-owner)
+            const matchedCoOwner = rawCoOwners.find(
+              (c: any) => (c.email || "").toLowerCase().trim() === targetEmail
+            );
+
             if (!clientInfo) {
+              const currentName = matchedCoOwner?.name || sale.clientName || "Cliente Devio";
+              const currentEmail = matchedCoOwner?.email || sale.clientEmail || targetEmail;
+              const currentPhone = matchedCoOwner?.phone || sale.clientPhone || "+52 33 0000 0000";
+              const currentRfc = matchedCoOwner?.rfc || sale.clientRfc || "XAXX010101000";
+
               clientInfo = {
-                id: sale.clientId || `cli-${Date.now()}`,
-                name: sale.clientName || "Cliente Devio",
-                email: sale.clientEmail || targetEmail,
-                phone: sale.clientPhone || "+52 33 0000 0000",
-                rfc: sale.clientRfc || "XAXX010101000",
+                id: matchedCoOwner?.id || sale.clientId || `cli-${Date.now()}`,
+                name: currentName,
+                email: currentEmail,
+                phone: currentPhone,
+                rfc: currentRfc,
                 address: sale.clientAddress || projAddress,
-                avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(sale.clientName || "Cliente")}&background=1F3652&color=fff&bold=true`,
+                avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(currentName)}&background=1F3652&color=fff&bold=true`,
                 preferredLanguage: "es",
               };
+            }
+
+            // Determine Co-Ownership Structure
+            const isCoOwnership = Boolean(
+              sale.isCoOwnership ||
+              rawCoOwners.length > 1 ||
+              (rawCoOwners.length >= 1 && (sale.clientEmail || sale.clientName))
+            );
+
+            let allOwnersList: Array<{
+              id?: string;
+              name: string;
+              email?: string;
+              phone?: string;
+              rfc?: string;
+              ownershipPct: number;
+              isMainContact?: boolean;
+            }> = [];
+
+            if (isCoOwnership) {
+              if (rawCoOwners.length > 0 && rawCoOwners.some((c: any) => (c.email || "").toLowerCase().trim() === saleEmail)) {
+                // rawCoOwners already contains all co-owners including primary
+                allOwnersList = rawCoOwners.map((c: any, cIdx: number) => ({
+                  id: c.id || `co-${cIdx}`,
+                  name: c.name || `Copropietario ${cIdx + 1}`,
+                  email: c.email || "",
+                  phone: c.phone || "",
+                  rfc: c.rfc || "",
+                  ownershipPct: Number(c.ownershipPct ?? c.pct ?? (100 / rawCoOwners.length)),
+                  isMainContact: Boolean(c.isMainContact || cIdx === 0),
+                }));
+              } else {
+                // Primary owner + secondary coOwners
+                const secondaryPctSum = rawCoOwners.reduce((acc: number, c: any) => acc + Number(c.ownershipPct ?? c.pct ?? 0), 0);
+                const primaryPct = Math.max(0, 100 - secondaryPctSum) || (rawCoOwners.length > 0 ? Math.round(100 / (1 + rawCoOwners.length)) : 100);
+                
+                allOwnersList = [
+                  {
+                    id: sale.clientId || "owner-primary",
+                    name: sale.clientName || "Titular Principal",
+                    email: sale.clientEmail || "",
+                    phone: sale.clientPhone || "",
+                    rfc: sale.clientRfc || "",
+                    ownershipPct: primaryPct,
+                    isMainContact: true,
+                  },
+                  ...rawCoOwners.map((c: any, cIdx: number) => ({
+                    id: c.id || `co-${cIdx}`,
+                    name: c.name || `Copropietario ${cIdx + 1}`,
+                    email: c.email || "",
+                    phone: c.phone || "",
+                    rfc: c.rfc || "",
+                    ownershipPct: Number(c.ownershipPct ?? c.pct ?? ((100 - primaryPct) / rawCoOwners.length)),
+                    isMainContact: false,
+                  })),
+                ];
+              }
+            }
+
+            let myOwnershipPct = 100;
+            if (isCoOwnership && allOwnersList.length > 0) {
+              const myOwner = allOwnersList.find((o) => (o.email || "").toLowerCase() === targetEmail);
+              if (myOwner) {
+                myOwnershipPct = myOwner.ownershipPct;
+              } else {
+                myOwnershipPct = allOwnersList[0]?.ownershipPct || 100;
+              }
             }
 
             // Find matching unit
@@ -299,6 +384,9 @@ export async function GET(request: Request) {
               schedule: scheduleList,
               paymentsList: paymentsList,
               customAttributes: unitInv?.customAttributes || [],
+              isCoOwnership: isCoOwnership,
+              coOwners: allOwnersList,
+              myOwnershipPct: myOwnershipPct,
             });
           }
         }
