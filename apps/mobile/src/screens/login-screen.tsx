@@ -12,6 +12,7 @@ import {
   Image,
   ActivityIndicator,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { Mail, Lock, ArrowRight, ShieldCheck, Eye, EyeOff } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
 
@@ -22,6 +23,10 @@ export const LoginScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
+    if (Platform.OS === "ios") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+
     if (!email.trim() || !password.trim()) {
       Alert.alert("Campos requeridos", "Por favor ingresa tu correo y contraseña.");
       return;
@@ -29,7 +34,14 @@ export const LoginScreen: React.FC = () => {
 
     const res = await login(email.trim(), password.trim());
     if (!res.success) {
+      if (Platform.OS === "ios") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
       Alert.alert("Error de Acceso", res.error || "No se pudo iniciar sesión.");
+    } else {
+      if (Platform.OS === "ios") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
     }
   };
 
@@ -39,10 +51,10 @@ export const LoginScreen: React.FC = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.inner}
       >
-        {/* Top Logo Section */}
+        {/* Top Logo Section with Devio Sidebar Brand Logo */}
         <View style={styles.logoSection}>
           <Image
-            source={require("../../assets/logo-horizontal-light.png")}
+            source={require("../../assets/13.png")}
             style={styles.officialBrandLogo}
           />
           <Text style={styles.brandSubtitle}>
@@ -50,7 +62,7 @@ export const LoginScreen: React.FC = () => {
           </Text>
         </View>
 
-        {/* Login Form Card */}
+        {/* Login Form Apple Glass Card */}
         <View style={styles.card}>
           <Text style={styles.formTitle}>Iniciar Sesión</Text>
           <Text style={styles.formSubtitle}>
@@ -89,7 +101,10 @@ export const LoginScreen: React.FC = () => {
                 secureTextEntry={!showPassword}
                 editable={!isLoading}
               />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 {showPassword ? (
                   <EyeOff size={18} color="#94A3B8" />
                 ) : (
@@ -99,7 +114,7 @@ export const LoginScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Login Button */}
+          {/* Login Button with Apple Haptics */}
           <TouchableOpacity
             style={[styles.loginBtn, isLoading && { opacity: 0.7 }]}
             onPress={handleLogin}
@@ -137,34 +152,36 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
     justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
   },
   logoSection: {
     alignItems: "center",
-    marginTop: 20,
+    marginTop: 16,
   },
   officialBrandLogo: {
-    height: 44,
-    width: 180,
+    height: 46,
+    width: 170,
     resizeMode: "contain",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   brandSubtitle: {
     color: "rgba(255, 255, 255, 0.75)",
     fontSize: 13,
-    marginTop: 4,
+    marginTop: 2,
     textAlign: "center",
   },
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
+    backgroundColor: "rgba(255, 255, 255, 0.96)",
+    borderRadius: 26,
     padding: 24,
     gap: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.8)",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
     elevation: 8,
   },
   formTitle: {
@@ -208,9 +225,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#1F3652",
     borderRadius: 99,
-    paddingVertical: 14,
+    paddingVertical: 15,
     gap: 8,
     marginTop: 6,
+    shadowColor: "#1F3652",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   loginBtnText: {
     color: "#FFFFFF",
@@ -222,7 +244,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    marginBottom: 10,
+    marginBottom: 6,
   },
   footerText: {
     fontSize: 11,

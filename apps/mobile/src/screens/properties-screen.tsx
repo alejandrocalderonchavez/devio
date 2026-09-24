@@ -6,7 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  Platform,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { AlertTriangle, Building2 } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
 import { ClientHeader } from "../components/client-header";
@@ -103,7 +105,12 @@ export const PropertiesScreen: React.FC = () => {
 
                   <TouchableOpacity
                     style={styles.actionBtn}
-                    onPress={() => navigateTo("account-statement", primaryProp.id)}
+                    onPress={() => {
+                      if (Platform.OS === "ios") {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }
+                      navigateTo("account-statement", primaryProp.id);
+                    }}
                     activeOpacity={0.85}
                   >
                     <Text style={styles.actionBtnText}>Ver Pagos & Recibos</Text>
@@ -136,7 +143,12 @@ export const PropertiesScreen: React.FC = () => {
                 <TouchableOpacity
                   key={prop.id}
                   style={styles.propertyCard}
-                  onPress={() => navigateTo("property-detail", prop.id)}
+                  onPress={() => {
+                    if (Platform.OS === "ios") {
+                      Haptics.selectionAsync();
+                    }
+                    navigateTo("property-detail", prop.id);
+                  }}
                   activeOpacity={0.9}
                 >
                   {/* Hero Image with Badges */}
@@ -215,7 +227,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 36,
+    paddingBottom: 110,
     gap: 16,
   },
   emptyCard: {

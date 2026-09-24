@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Platform,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import {
   User,
   HelpCircle,
@@ -28,7 +30,16 @@ export const ProfileScreen: React.FC = () => {
     setShowChangePasswordModal,
   } = useClientApp();
 
+  const triggerHaptic = () => {
+    if (Platform.OS === "ios") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
   const handleLogout = () => {
+    if (Platform.OS === "ios") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    }
     Alert.alert(
       "Cerrar Sesión",
       "¿Estás seguro de que deseas cerrar tu sesión en Devio Cliente?",
@@ -40,6 +51,7 @@ export const ProfileScreen: React.FC = () => {
   };
 
   const handleLegal = () => {
+    triggerHaptic();
     Alert.alert(
       "Aviso Legal & Privacidad",
       "Devio protege tus datos personales y contratos con encriptación de grado bancario según la LFPDPPP y estándares internacionales.",
@@ -48,6 +60,7 @@ export const ProfileScreen: React.FC = () => {
   };
 
   const handleSupport = () => {
+    triggerHaptic();
     Alert.alert(
       "Soporte y Atención a Clientes",
       "Comunícate directamente con tu asesor inmobiliario o al canal oficial de atención Devio:\n\nWhatsApp: +52 (33) 2256 7499\nEmail: soporte@deviomx.com",
@@ -56,6 +69,7 @@ export const ProfileScreen: React.FC = () => {
   };
 
   const handleLanguage = () => {
+    triggerHaptic();
     Alert.alert(
       "Idioma de la Plataforma",
       "Actualmente configurado en: Español (México)",
@@ -108,7 +122,10 @@ export const ProfileScreen: React.FC = () => {
           {/* 1. Información Personal */}
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => setShowEditProfileModal(true)}
+            onPress={() => {
+              triggerHaptic();
+              setShowEditProfileModal(true);
+            }}
             activeOpacity={0.8}
           >
             <View style={styles.iconCircle}>
@@ -121,7 +138,10 @@ export const ProfileScreen: React.FC = () => {
           {/* 2. Seguridad & Cambiar Contraseña */}
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => setShowChangePasswordModal(true)}
+            onPress={() => {
+              triggerHaptic();
+              setShowChangePasswordModal(true);
+            }}
             activeOpacity={0.8}
           >
             <View style={[styles.iconCircle, { backgroundColor: "#DCFCE7" }]}>
@@ -193,7 +213,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 36,
+    paddingBottom: 110,
     gap: 16,
   },
   profileCard: {

@@ -6,7 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  Platform,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import {
   FileText,
   CreditCard,
@@ -24,6 +26,12 @@ export const PropertyDetailScreen: React.FC = () => {
   if (!selectedProperty) return null;
 
   const isPast = selectedProperty.nextPaymentDaysRemaining < 0;
+
+  const triggerHaptic = () => {
+    if (Platform.OS === "ios") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -58,7 +66,10 @@ export const PropertyDetailScreen: React.FC = () => {
               {selectedProperty.images.map((img, idx) => (
                 <TouchableOpacity
                   key={idx}
-                  onPress={() => setSelectedImageIndex(idx)}
+                  onPress={() => {
+                    triggerHaptic();
+                    setSelectedImageIndex(idx);
+                  }}
                   style={[
                     styles.thumbnailWrap,
                     selectedImageIndex === idx && styles.thumbnailWrapActive,
@@ -103,7 +114,10 @@ export const PropertyDetailScreen: React.FC = () => {
 
             <TouchableOpacity
               style={styles.primaryActionBtn}
-              onPress={() => navigateTo("account-statement", selectedProperty.id)}
+              onPress={() => {
+                triggerHaptic();
+                navigateTo("account-statement", selectedProperty.id);
+              }}
               activeOpacity={0.85}
             >
               <Text style={styles.primaryActionBtnText}>
@@ -122,7 +136,10 @@ export const PropertyDetailScreen: React.FC = () => {
             </View>
             <TouchableOpacity
               style={styles.secondaryActionBtn}
-              onPress={() => navigateTo("construction", selectedProperty.id)}
+              onPress={() => {
+                triggerHaptic();
+                navigateTo("construction", selectedProperty.id);
+              }}
               activeOpacity={0.8}
             >
               <Text style={styles.secondaryActionBtnText}>Ver Avances y Fotos</Text>
@@ -169,7 +186,10 @@ export const PropertyDetailScreen: React.FC = () => {
         <View style={styles.quickActionsRow}>
           <TouchableOpacity
             style={styles.quickActionBtn}
-            onPress={() => navigateTo("documents", selectedProperty.id)}
+            onPress={() => {
+              triggerHaptic();
+              navigateTo("documents", selectedProperty.id);
+            }}
             activeOpacity={0.8}
           >
             <FileText size={20} color="#1F3652" />
@@ -178,7 +198,10 @@ export const PropertyDetailScreen: React.FC = () => {
 
           <TouchableOpacity
             style={styles.quickActionBtn}
-            onPress={() => navigateTo("account-statement", selectedProperty.id)}
+            onPress={() => {
+              triggerHaptic();
+              navigateTo("account-statement", selectedProperty.id);
+            }}
             activeOpacity={0.8}
           >
             <CreditCard size={20} color="#1F3652" />
@@ -190,7 +213,10 @@ export const PropertyDetailScreen: React.FC = () => {
         <View style={styles.card}>
           <TouchableOpacity
             style={styles.collapsibleHeader}
-            onPress={() => setIsUnitInfoExpanded(!isUnitInfoExpanded)}
+            onPress={() => {
+              triggerHaptic();
+              setIsUnitInfoExpanded(!isUnitInfoExpanded);
+            }}
             activeOpacity={0.7}
           >
             <Text style={styles.cardTitle}>Información Técnica de la Unidad</Text>
@@ -245,7 +271,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 36,
+    paddingBottom: 40,
     gap: 16,
   },
   galleryCard: {
@@ -357,9 +383,14 @@ const styles = StyleSheet.create({
   },
   primaryActionBtn: {
     backgroundColor: "#1F3652",
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderRadius: 12,
     alignItems: "center",
+    shadowColor: "#1F3652",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
   primaryActionBtnText: {
     color: "#FFFFFF",
@@ -397,6 +428,11 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
   },
   quickActionBtnText: {
     fontSize: 12,

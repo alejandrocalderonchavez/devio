@@ -1,5 +1,13 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Platform,
+} from "react-native";
+import * as Haptics from "expo-haptics";
 import { Bell, ArrowLeft } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
 
@@ -38,6 +46,31 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({
     return name.slice(0, 2).toUpperCase();
   };
 
+  const handleBackPress = () => {
+    if (Platform.OS === "ios") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    if (onBack) {
+      onBack();
+    } else {
+      goBack();
+    }
+  };
+
+  const handleBellPress = () => {
+    if (Platform.OS === "ios") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setShowNotificationsModal(true);
+  };
+
+  const handleProfilePress = () => {
+    if (Platform.OS === "ios") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setActiveTab("profile");
+  };
+
   return (
     <View style={styles.headerContainer}>
       {isSubscreen ? (
@@ -45,7 +78,7 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({
         <View style={styles.subscreenRow}>
           <TouchableOpacity
             style={styles.subscreenBackBtn}
-            onPress={onBack || goBack}
+            onPress={handleBackPress}
             activeOpacity={0.7}
           >
             <ArrowLeft size={20} color="#FFFFFF" />
@@ -63,12 +96,12 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({
           <View style={styles.subscreenSpacer} />
         </View>
       ) : (
-        /* Main Screen Header */
+        /* Main Screen Header with Devio Sidebar Logo */
         <View style={styles.mainHeaderCol}>
           <View style={styles.topRow}>
-            {/* Devio Official Logo */}
+            {/* Devio Official Brand Logo (from /dashboard sidebar) */}
             <Image
-              source={require("../../assets/logo-horizontal-light.png")}
+              source={require("../../assets/13.png")}
               style={styles.officialLogo}
             />
 
@@ -76,7 +109,7 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({
             <View style={styles.actionsRow}>
               <TouchableOpacity
                 style={styles.bellButton}
-                onPress={() => setShowNotificationsModal(true)}
+                onPress={handleBellPress}
                 activeOpacity={0.7}
               >
                 <Bell size={18} color="#FFFFFF" />
@@ -89,7 +122,7 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({
 
               <TouchableOpacity
                 style={styles.avatarButton}
-                onPress={() => setActiveTab("profile")}
+                onPress={handleProfilePress}
                 activeOpacity={0.7}
               >
                 {user?.avatarUrl ? (
@@ -127,15 +160,15 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({
 const styles = StyleSheet.create({
   headerContainer: {
     backgroundColor: "#1F3652",
-    paddingTop: 54,
+    paddingTop: Platform.OS === "ios" ? 54 : 40,
     paddingBottom: 22,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     shadowColor: "#1F3652",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
     elevation: 8,
     zIndex: 10,
   },
@@ -148,8 +181,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   officialLogo: {
-    height: 28,
-    width: 110,
+    height: 32,
+    width: 120,
     resizeMode: "contain",
   },
   actionsRow: {
@@ -161,7 +194,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(255, 255, 255, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.25)",
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
@@ -191,7 +226,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     overflow: "hidden",
     borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.5)",
+    borderColor: "rgba(255, 255, 255, 0.5)",
   },
   avatarImage: {
     width: "100%",
@@ -213,7 +248,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   greetingEyebrow: {
-    color: "rgba(255,255,255,0.8)",
+    color: "rgba(255, 255, 255, 0.8)",
     fontSize: 13,
     fontWeight: "500",
   },
@@ -233,7 +268,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.25)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -245,7 +282,7 @@ const styles = StyleSheet.create({
   },
   subscreenSubtitle: {
     fontSize: 11,
-    color: "rgba(255,255,255,0.8)",
+    color: "rgba(255, 255, 255, 0.8)",
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.5,

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useMemo, ReactNode } from "react";
+import React, { createContext, useContext, useState, useMemo, useEffect, ReactNode } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createNavigationContainerRef } from "@react-navigation/native";
 import {
   ClientUser,
@@ -98,7 +99,7 @@ const ClientContext = createContext<ClientContextType | undefined>(undefined);
 export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<ClientUser | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<ClientAppTab>("properties");
   const [screenHistory, setScreenHistory] = useState<ClientAppScreen[]>(["main"]);
   const [properties, setProperties] = useState<ClientProperty[]>([]);
@@ -109,6 +110,30 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [showEditProfileModal, setShowEditProfileModal] = useState<boolean>(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState<boolean>(false);
   const [dismissedNotifIds, setDismissedNotifIds] = useState<string[]>([]);
+
+  // Restore Persisted Session on Startup (Stay Logged In)
+  useEffect(() => {
+    async function restorePersistedSession() {
+      try {
+        const stored = await AsyncStorage.getItem("@devio_client_session");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.user && Array.isArray(parsed.properties) && parsed.properties.length > 0) {
+            setUser(parsed.user);
+            setProperties(parsed.properties);
+            setSelectedPropertyId(parsed.selectedPropertyId || parsed.properties[0]?.id || "");
+            setIsLoggedIn(true);
+            generateNotifications(parsed.properties);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to restore session from AsyncStorage:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    restorePersistedSession();
+  }, []);
 
   const currentScreen = screenHistory[screenHistory.length - 1] || "main";
 
@@ -178,7 +203,18 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const updateProfile = (data: Partial<ClientUser>) => {
-    setUser((prev) => (prev ? { ...prev, ...data } : null));
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...data };
+      AsyncStorage.getItem("@devio_client_session").then((stored) => {
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          parsed.user = updated;
+          AsyncStorage.setItem("@devio_client_session", JSON.stringify(parsed)).catch(() => {});
+        }
+      }).catch(() => {});
+      return updated;
+    });
   };
 
   const changePassword = (_oldPass: string, _newPass: string): boolean => {
@@ -397,6 +433,20 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setActiveTab("properties");
       setIsLoading(false);
 
+      // Save persistent session for subsequent app launches
+      try {
+        await AsyncStorage.setItem(
+          "@devio_client_session",
+          JSON.stringify({
+            user: activeUser,
+            properties: mappedProperties,
+            selectedPropertyId: mappedProperties[0]?.id || "",
+          })
+        );
+      } catch (saveErr) {
+        console.warn("Failed to persist session to AsyncStorage:", saveErr);
+      }
+
       return { success: true };
     } catch (err: any) {
       console.error("Login execution error:", err);
@@ -406,6 +456,7 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const logout = () => {
+    AsyncStorage.removeItem("@devio_client_session").catch(() => {});
     setIsLoggedIn(false);
     setUser(null);
     setProperties([]);
