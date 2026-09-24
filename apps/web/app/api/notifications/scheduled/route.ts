@@ -31,6 +31,9 @@ export async function GET() {
     const obligations = await prisma.scheduledObligation.findMany({
       where: {
         status: { in: ["PENDING", "PARTIALLY_PAID", "OVERDUE"] },
+        sale: {
+          status: "ACTIVE",
+        },
       },
       include: {
         sale: {

@@ -680,6 +680,20 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
     saveProjects(updated);
     showToast("Unidad Actualizada", `Los cambios en la unidad ${unitNumber} fueron guardados.`);
+
+    // Persist to Prisma DB
+    fetch("/api/units", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        unitNumber,
+        status: updatedFields.status,
+        price: updatedFields.price,
+        areaM2: updatedFields.areaM2,
+        floor: updatedFields.floor,
+      }),
+    }).catch((err) => console.warn("Could not sync unit update with backend:", err));
   };
 
   const updateMultipleUnits = (projectId: string, updatedUnits: UnitItem[]) => {
@@ -733,6 +747,22 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
 
     saveProjects(updated);
+
+    // Persist bulk unit updates to backend
+    updatedUnits.forEach((u) => {
+      fetch("/api/units", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          unitNumber: u.unit,
+          status: u.status,
+          price: u.price,
+          areaM2: u.areaM2,
+          floor: u.floor,
+        }),
+      }).catch(() => {});
+    });
   };
 
   const updateBulkPrices = (projectId: string, pctIncrease: number, unitNumbers?: string[]) => {

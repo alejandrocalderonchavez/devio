@@ -84,6 +84,7 @@ export async function POST(request: Request) {
     const primaryPhone = client?.phone ? String(client.phone).trim() : null;
     const primaryRfc = client?.rfc ? String(client.rfc).trim() : null;
 
+    let isNewUser = false;
     let primaryUser = null;
     if (primaryEmail) {
       primaryUser = await prisma.user.findUnique({
@@ -91,6 +92,7 @@ export async function POST(request: Request) {
       });
 
       if (!primaryUser) {
+        isNewUser = true;
         primaryUser = await prisma.user.create({
           data: {
             authUserId: crypto.randomUUID(),
@@ -327,8 +329,8 @@ export async function POST(request: Request) {
       }).catch((err: any) => console.warn("Could not create payment receipt:", err));
     }
 
-    // 10. Send Credentials / Welcome Email to Client via Postmark (if email provided)
-    if (primaryEmail) {
+    // 10. Send Credentials / Welcome Email to Client via Postmark (ONLY IF BRAND NEW USER)
+    if (primaryEmail && isNewUser) {
       const postmarkToken = process.env.POSTMARK_SERVER_TOKEN || "ec9d2701-f4ec-4433-8135-a0e64a59244d";
       fetch("https://api.postmarkapp.com/email/withTemplate", {
         method: "POST",

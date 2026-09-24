@@ -72,8 +72,10 @@ export async function GET(request: Request) {
       });
 
       const mappedUnits = (p.units || []).map((u: any, idx: number) => {
-        const matchingSale = mappedSales.find((s: any) => s.unit === u.unitNumber || s.unitId === u.id);
-        const clientName = matchingSale ? matchingSale.clientName : "-";
+        const matchingSale = mappedSales.find(
+          (s: any) => (s.unit === u.unitNumber || s.unitId === u.id) && s.status !== "CANCELADA"
+        );
+        const clientName = (u.status !== "AVAILABLE" && matchingSale) ? matchingSale.clientName : "-";
 
         return {
           id: u.id,
@@ -83,18 +85,18 @@ export async function GET(request: Request) {
           areaM2: Number(u.totalAreaM2) || 85,
           floor: u.level || 1,
           status:
-            u.status === "SOLD" || matchingSale
-              ? "VENDIDA"
-              : u.status === "AVAILABLE"
+            u.status === "AVAILABLE"
               ? "DISPONIBLE"
+              : (u.status === "SOLD" || matchingSale)
+              ? "VENDIDA"
               : "BLOQUEADA",
           client: clientName,
-          saleFolio: matchingSale?.folio,
-          saleDate: matchingSale?.saleDate,
-          salePlanName: matchingSale?.paymentPlan,
-          salePaidAmount: matchingSale?.paidAmount,
-          salePendingAmount: matchingSale?.pendingAmount,
-          coOwners: matchingSale?.coOwners || [],
+          saleFolio: u.status !== "AVAILABLE" ? matchingSale?.folio : undefined,
+          saleDate: u.status !== "AVAILABLE" ? matchingSale?.saleDate : undefined,
+          salePlanName: u.status !== "AVAILABLE" ? matchingSale?.paymentPlan : undefined,
+          salePaidAmount: u.status !== "AVAILABLE" ? matchingSale?.paidAmount : undefined,
+          salePendingAmount: u.status !== "AVAILABLE" ? matchingSale?.pendingAmount : undefined,
+          coOwners: u.status !== "AVAILABLE" ? (matchingSale?.coOwners || []) : [],
         };
       });
 

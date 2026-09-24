@@ -1205,6 +1205,14 @@ export default function CreateSaleWizardModal({
       // ----------------------------------------------------------------------
       allOwnersCombined.forEach(async (owner) => {
         if (!owner.email) return;
+        const ownerEmailKey = owner.email.toLowerCase().trim();
+        const clientsDict = (existingClients || {}) as Record<string, any>;
+        const isExistingUser = Boolean(
+          clientsDict[ownerEmailKey] ||
+          (owner.name && clientsDict[owner.name.toLowerCase().trim()]) ||
+          (owner as any).isExisting
+        );
+
         const tempPassword = `Devio-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
         const loginLink = typeof window !== "undefined" ? `${window.location.origin}/login` : "https://devio.lat/login";
         const projName = currentProject?.name || "Proyecto Inmobiliario";
@@ -1217,28 +1225,30 @@ export default function CreateSaleWizardModal({
         const devLogo =
           "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
 
-        // 1. Envío obligatorio de credenciales de acceso al portal de clientes
-        sendAndLogNotification({
-          to: owner.email,
-          templateAlias: "bienvenida-cliente",
-          templateModel: {
-            nombre: owner.name,
-            correo: owner.email,
-            password_temporal: tempPassword,
-            login_link: loginLink,
-            proyecto: projName,
-            unidad: selectedUnitNumber,
-            desarrolladora: devName,
-            logo_proyecto: projLogo,
-            logo_desarrolladora: devLogo,
-            año: new Date().getFullYear().toString(),
-          },
-          triggerKey: "auth.welcome_client",
-          triggerName: "Bienvenida y Credenciales Portal Cliente",
-          recipientName: owner.name,
-          developerName: devName,
-          channel: "POSTMARK",
-        });
+        // 1. Envío obligatorio de credenciales de acceso SOLO SI ES USUARIO NUEVO
+        if (!isExistingUser) {
+          sendAndLogNotification({
+            to: owner.email,
+            templateAlias: "bienvenida-cliente",
+            templateModel: {
+              nombre: owner.name,
+              correo: owner.email,
+              password_temporal: tempPassword,
+              login_link: loginLink,
+              proyecto: projName,
+              unidad: selectedUnitNumber,
+              desarrolladora: devName,
+              logo_proyecto: projLogo,
+              logo_desarrolladora: devLogo,
+              año: new Date().getFullYear().toString(),
+            },
+            triggerKey: "auth.welcome_client",
+            triggerName: "Bienvenida y Credenciales Portal Cliente",
+            recipientName: owner.name,
+            developerName: devName,
+            channel: "POSTMARK",
+          });
+        }
 
         // 2. Envío de confirmación de venta y asignación de unidad
         if (sendSaleConfirmationEmail) {
