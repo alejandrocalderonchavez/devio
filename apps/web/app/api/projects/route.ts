@@ -17,6 +17,9 @@ export async function GET(request: Request) {
         units: true,
         sales: {
           include: {
+            primaryClient: true,
+            unit: true,
+            paymentPlan: true,
             coOwners: {
               include: {
                 client: true,
@@ -34,43 +37,71 @@ export async function GET(request: Request) {
     });
 
     const mappedProjects = projects.map((p: any) => {
-      const mappedUnits = (p.units || []).map((u: any, idx: number) => ({
-        id: u.id,
-        unit: u.unitNumber || `U-${idx + 1}`,
-        type: u.category === "HOUSE" ? "Casa" : "Departamento",
-        price: Number(u.basePrice) || 3500000,
-        areaM2: Number(u.totalAreaM2) || 85,
-        floor: u.level || 1,
-        status:
-          u.status === "SOLD"
-            ? "VENDIDA"
-            : u.status === "AVAILABLE"
-            ? "DISPONIBLE"
-            : "BLOQUEADA",
-        client: "-",
-      }));
-
-      const totalUnits = mappedUnits.length;
-      const soldUnits = mappedUnits.filter((u: any) => u.status === "VENDIDA").length;
-      const availableUnits = mappedUnits.filter((u: any) => u.status === "DISPONIBLE").length;
-
-      const mappedSales = (p.sales || []).map((s: any) => ({
-        id: s.id,
-        unit: s.unitId,
-        client: s.primaryClientId,
-        status: s.status === "LIQUIDATED" ? "LIQUIDADA" : s.status === "CANCELLED" ? "CANCELADA" : "ACTIVA",
-        salePrice: Number(s.finalPrice) || Number(s.agreedPrice) || 0,
-        paidAmount: (s.paymentReceipts || []).reduce((acc: number, r: any) => acc + (Number(r.amount) || 0), 0),
-        folio: s.contractNumber || `VTA-${s.id.slice(0, 6)}`,
-        coOwners: (s.coOwners || []).map((co: any) => ({
-          id: co.id,
-          name: co.client?.name || "",
+      const mappedSales = (p.sales || []).map((s: any) => {
+        const coOwnersList = (s.coOwners || []).map((co: any) => ({
+          id: co.clientId || co.id,
+          name: co.client?.fullName || "Copropietario",
           email: co.client?.email || "",
           phone: co.client?.phone || "",
           rfc: co.client?.taxId || "",
           ownershipPct: Number(co.ownershipPercentage) || 0,
-        })),
-      }));
+        }));
+
+        const paidFromReceipts = (s.paymentReceipts || []).reduce((acc: number, r: any) => acc + (Number(r.amount) || 0), 0);
+        const paidAmount = paidFromReceipts > 0 ? paidFromReceipts : (s.scheduledObligations || []).reduce((acc: number, o: any) => acc + (Number(o.paidAmount) || 0), 0);
+        const totalPrice = Number(s.finalPrice) || Number(s.agreedPrice) || 0;
+        const pendingAmount = Math.max(0, totalPrice - paidAmount);
+
+        return {
+          id: s.id,
+          folio: s.contractNumber || `VTA-${s.id.slice(0, 6).toUpperCase()}`,
+          clientId: s.primaryClientId,
+          clientName: s.primaryClient?.fullName || "Cliente Devio",
+          clientEmail: s.primaryClient?.email || "",
+          clientPhone: s.primaryClient?.phone || "",
+          clientRfc: s.primaryClient?.taxId || "",
+          unit: s.unit?.unitNumber || "U-01",
+          paymentPlan: s.paymentPlan?.notes || "Plan Tradicional",
+          totalPrice,
+          paidAmount,
+          pendingAmount,
+          saleDate: s.reservationDate ? s.reservationDate.toISOString().slice(0, 10) : s.createdAt.toISOString().slice(0, 10),
+          status: s.status === "LIQUIDATED" ? "LIQUIDADA" : s.status === "CANCELLED" ? "CANCELADA" : "ACTIVA",
+          coOwners: coOwnersList,
+        };
+      });
+
+      const mappedUnits = (p.units || []).map((u: any, idx: number) => {
+        const matchingSale = mappedSales.find((s: any) => s.unit === u.unitNumber || s.unitId === u.id);
+        const clientName = matchingSale ? matchingSale.clientName : "-";
+
+        return {
+          id: u.id,
+          unit: u.unitNumber || `U-${idx + 1}`,
+          type: u.category === "HOUSE" ? "Casa" : "Departamento",
+          price: Number(u.basePrice) || 3500000,
+          areaM2: Number(u.totalAreaM2) || 85,
+          floor: u.level || 1,
+          status:
+            u.status === "SOLD" || matchingSale
+              ? "VENDIDA"
+              : u.status === "AVAILABLE"
+              ? "DISPONIBLE"
+              : "BLOQUEADA",
+          client: clientName,
+          saleFolio: matchingSale?.folio,
+          saleDate: matchingSale?.saleDate,
+          salePlanName: matchingSale?.paymentPlan,
+          salePaidAmount: matchingSale?.paidAmount,
+          salePendingAmount: matchingSale?.pendingAmount,
+          coOwners: matchingSale?.coOwners || [],
+        };
+      });
+
+      const totalUnits = mappedUnits.length;
+      const soldUnits = mappedUnits.filter((u: any) => u.status === "VENDIDA").length;
+      const availableUnits = mappedUnits.filter((u: any) => u.status === "DISPONIBLE").length;
+      const blockedUnits = Math.max(0, totalUnits - soldUnits - availableUnits);
 
       return {
         id: p.id,
@@ -82,7 +113,7 @@ export async function GET(request: Request) {
         totalUnits,
         soldUnits,
         availableUnits,
-        blockedUnits: Math.max(0, totalUnits - soldUnits - availableUnits),
+        blockedUnits,
         unitsInventory: mappedUnits,
         sales: mappedSales,
         additionals: (p.additionals || []).map((a: any) => ({

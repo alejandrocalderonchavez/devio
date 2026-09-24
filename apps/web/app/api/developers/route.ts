@@ -7,21 +7,89 @@ const DEFAULT_COVER_IMAGE =
   "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80";
 
 function mapProjectFromDb(p: any, devLogo?: string | null) {
-  const mappedUnits = (p.units || []).map((u: any, idx: number) => ({
-    id: u.id,
-    unit: u.unitNumber || `U-${idx + 1}`,
-    type: u.category === "HOUSE" ? "Casa" : "Departamento",
-    price: Number(u.basePrice) || 3500000,
-    areaM2: Number(u.totalAreaM2) || 85,
-    floor: u.level || 1,
-    status:
-      u.status === "SOLD"
-        ? "VENDIDA"
-        : u.status === "AVAILABLE"
-        ? "DISPONIBLE"
-        : "BLOQUEADA",
-    client: "-",
-  }));
+  const mappedSales = (p.sales || []).map((s: any) => {
+    const coOwnersList = (s.coOwners || []).map((co: any) => ({
+      id: co.clientId,
+      name: co.client?.fullName || "Copropietario",
+      email: co.client?.email || "",
+      phone: co.client?.phone || "",
+      rfc: co.client?.taxId || "",
+      ownershipPct: Number(co.ownershipPercentage || 0),
+      isPrimary: co.isMainContact || false,
+    }));
+
+    const paidFromReceipts = (s.paymentReceipts || []).reduce((acc: number, r: any) => acc + Number(r.amount || 0), 0);
+    const paidAmount = paidFromReceipts > 0 ? paidFromReceipts : (s.scheduledObligations || []).reduce((acc: number, o: any) => acc + Number(o.paidAmount || 0), 0);
+    const totalPrice = Number(s.finalPrice || s.agreedPrice || 0);
+    const pendingAmount = Math.max(0, totalPrice - paidAmount);
+
+    return {
+      id: s.id,
+      folio: s.contractNumber || `VTA-${s.id.slice(0, 6).toUpperCase()}`,
+      clientId: s.primaryClientId,
+      clientName: s.primaryClient?.fullName || "Cliente Devio",
+      clientEmail: s.primaryClient?.email || "",
+      clientPhone: s.primaryClient?.phone || "",
+      clientRfc: s.primaryClient?.taxId || "",
+      unit: s.unit?.unitNumber || "U-01",
+      paymentPlan: s.paymentPlan?.notes || "Plan Tradicional",
+      totalPrice,
+      paidAmount,
+      pendingAmount,
+      saleDate: s.reservationDate ? s.reservationDate.toISOString().slice(0, 10) : s.createdAt.toISOString().slice(0, 10),
+      status: s.status === "ACTIVE" ? "ACTIVA" : s.status === "RESERVED" ? "RESERVADA" : s.status === "LIQUIDATED" ? "LIQUIDADA" : "CANCELADA",
+      coOwners: coOwnersList,
+      additionals: [],
+      schedule: (s.scheduledObligations || []).map((o: any) => ({
+        id: o.id,
+        concept: o.title,
+        scheduledDate: o.dueDate.toISOString().slice(0, 10),
+        scheduledAmount: Number(o.originalAmount || 0),
+        paidAmount: Number(o.paidAmount || 0),
+        pendingAmount: Number(o.pendingAmount || 0),
+        status: o.status === "PAID" ? "Pagado" : o.status === "PARTIALLY_PAID" ? "Parcial" : "Pendiente",
+      })),
+      payments: (s.paymentReceipts || []).map((r: any) => ({
+        id: r.id,
+        receiptFolio: r.receiptFolio,
+        paymentDate: r.paymentDate.toISOString().slice(0, 10),
+        amount: Number(r.amount),
+        paymentMethod: r.paymentMethod,
+        unit: s.unit?.unitNumber || "U-01",
+        reference: r.transactionReference || r.receiptFolio,
+        notes: r.notes,
+      })),
+    };
+  });
+
+  const mappedUnits = (p.units || []).map((u: any, idx: number) => {
+    const matchingSale = mappedSales.find((s: any) => s.unit === u.unitNumber || s.unitId === u.id);
+    const clientName = matchingSale ? matchingSale.clientName : "-";
+
+    return {
+      id: u.id,
+      unit: u.unitNumber || `U-${idx + 1}`,
+      type: u.category === "HOUSE" ? "Casa" : "Departamento",
+      price: Number(u.basePrice) || 3500000,
+      areaM2: Number(u.totalAreaM2) || 85,
+      floor: u.level || 1,
+      status:
+        u.status === "SOLD" || matchingSale
+          ? "VENDIDA"
+          : u.status === "RESERVED"
+          ? "APARTADA"
+          : u.status === "AVAILABLE"
+          ? "DISPONIBLE"
+          : "BLOQUEADA",
+      client: clientName,
+      saleFolio: matchingSale?.folio,
+      saleDate: matchingSale?.saleDate,
+      salePlanName: matchingSale?.paymentPlan,
+      salePaidAmount: matchingSale?.paidAmount,
+      salePendingAmount: matchingSale?.pendingAmount,
+      coOwners: matchingSale?.coOwners || [],
+    };
+  });
 
   const totalUnits = mappedUnits.length;
   const soldUnits = mappedUnits.filter((u: any) => u.status === "VENDIDA").length;
@@ -33,6 +101,11 @@ function mapProjectFromDb(p: any, devLogo?: string | null) {
     rawImage && (rawImage.startsWith("http") || rawImage.startsWith("data:") || rawImage.startsWith("/"))
       ? rawImage
       : DEFAULT_COVER_IMAGE;
+
+  const valorComercialTotal = mappedUnits.reduce((acc: number, u: any) => acc + (u.price || 0), 0);
+  const valorComercialVendido = mappedUnits.filter((u: any) => u.status === "VENDIDA").reduce((acc: number, u: any) => acc + (u.price || 0), 0);
+  const totalCobrado = mappedSales.reduce((acc: number, s: any) => acc + (s.paidAmount || 0), 0);
+  const porCobrar = Math.max(0, valorComercialVendido - totalCobrado);
 
   return {
     id: p.id,
@@ -49,24 +122,24 @@ function mapProjectFromDb(p: any, devLogo?: string | null) {
     availableUnits,
     blockedUnits,
     metrics: {
-      totalCobrado: 0,
-      porCobrar: 0,
+      totalCobrado,
+      porCobrar,
       pagosAtrasados: 0,
       avanceVentasPct: totalUnits > 0 ? Math.round((soldUnits / totalUnits) * 100) : 0,
       unidadesVendidasCount: soldUnits,
       unidadesTotalesCount: totalUnits,
       porVenderUnidades: availableUnits,
-      valorComercialVendido: 0,
-      valorComercialTotal: mappedUnits.reduce((acc: number, u: any) => acc + (u.price || 0), 0),
-      porVenderMonto: 0,
-      flujoFuturoMonto: 0,
-      precioPromedio: totalUnits > 0 ? Math.round(mappedUnits.reduce((acc: number, u: any) => acc + (u.price || 0), 0) / totalUnits) : 0,
-      inventarioMonetarioPct: 0,
-      totalFacturado: 0,
+      valorComercialVendido,
+      valorComercialTotal,
+      porVenderMonto: Math.max(0, valorComercialTotal - valorComercialVendido),
+      flujoFuturoMonto: totalCobrado + porCobrar,
+      precioPromedio: totalUnits > 0 ? Math.round(valorComercialTotal / totalUnits) : 0,
+      inventarioMonetarioPct: valorComercialTotal > 0 ? Math.round((valorComercialVendido / valorComercialTotal) * 100) : 0,
+      totalFacturado: valorComercialVendido,
       distribucionPct: 0,
     },
     unitsInventory: mappedUnits,
-    sales: p.sales || [],
+    sales: mappedSales,
     monthlyBilling: [],
     overdueClients: [],
     paymentPlans: [],
@@ -81,6 +154,21 @@ export async function GET(request: Request) {
     const email = searchParams.get("email");
     const id = searchParams.get("id");
 
+    const salesIncludeClause = {
+      include: {
+        primaryClient: true,
+        unit: true,
+        paymentPlan: true,
+        scheduledObligations: true,
+        paymentReceipts: true,
+        coOwners: {
+          include: {
+            client: true,
+          },
+        },
+      },
+    };
+
     // 1. If looking up by email or id from DB
     if (email || id) {
       try {
@@ -94,7 +182,7 @@ export async function GET(request: Request) {
             projects: {
               include: {
                 units: true,
-                sales: true,
+                sales: salesIncludeClause,
                 documents: true,
                 additionals: true,
               },
@@ -129,7 +217,7 @@ export async function GET(request: Request) {
           projects: {
             include: {
               units: true,
-              sales: true,
+              sales: salesIncludeClause,
               documents: true,
               additionals: true,
             },

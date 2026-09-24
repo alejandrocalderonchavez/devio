@@ -1075,6 +1075,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         client: salePayload.client,
         coOwners,
         financials: salePayload.financials,
+        schedule: salePayload.schedule,
         initialPayment: salePayload.initialPayment,
         folio: saleFolio,
       }),

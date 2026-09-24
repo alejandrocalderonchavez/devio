@@ -121,7 +121,7 @@ export default function ProjectSalesPage() {
     // 1. Process from real project.sales
     if (project.sales && project.sales.length > 0) {
       const activeSales = project.sales
-        .filter((s) => s.status !== "CANCELADA" && soldUnitsMap.has(s.unit))
+        .filter((s) => s.status !== "CANCELADA")
         .map((s) => {
           const matchingAddons =
             s.additionals && s.additionals.length > 0
@@ -129,6 +129,10 @@ export default function ProjectSalesPage() {
               : (project.additionals || []).filter((a) => a.assignedToUnit === s.unit);
           return {
             ...s,
+            clientName: s.clientName || (s.coOwners && s.coOwners.length > 0 ? s.coOwners[0]?.name || "Cliente Comprador" : "Cliente Comprador"),
+            clientEmail: s.clientEmail || s.coOwners?.[0]?.email || "-",
+            clientPhone: s.clientPhone || s.coOwners?.[0]?.phone || "-",
+            clientRfc: s.clientRfc || s.coOwners?.[0]?.rfc || "-",
             additionals: matchingAddons,
           };
         });
