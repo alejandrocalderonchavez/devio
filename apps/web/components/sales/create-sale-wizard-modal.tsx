@@ -1578,54 +1578,105 @@ export default function CreateSaleWizardModal({
                 </p>
               </div>
 
-              {/* Copropiedad Toggle Switch Card */}
-              <div
-                style={{
-                  backgroundColor: isCoOwnership ? "rgba(47, 128, 237, 0.06)" : "#F8FAFC",
-                  border: isCoOwnership ? "1.5px solid var(--devio-blue)" : "1px solid var(--devio-neutral-1)",
-                  borderRadius: "0.85rem",
-                  padding: "0.85rem 1.25rem",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              {/* Selector UI/UX Claro: Propietario Único vs Copropiedad */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+                {/* Card 1: Propietario Único */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleCoOwnership(false)}
+                  style={{
+                    padding: "1rem 1.15rem",
+                    borderRadius: "0.85rem",
+                    border: !isCoOwnership ? "2px solid #2F80ED" : "1.5px solid var(--devio-neutral-1)",
+                    backgroundColor: !isCoOwnership ? "rgba(47, 128, 237, 0.05)" : "#FFFFFF",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "0.85rem",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
                   <div
                     style={{
-                      width: "34px",
-                      height: "34px",
+                      width: "38px",
+                      height: "38px",
                       borderRadius: "8px",
-                      backgroundColor: isCoOwnership ? "var(--devio-blue)" : "rgba(31, 54, 82, 0.08)",
+                      backgroundColor: !isCoOwnership ? "var(--devio-blue)" : "rgba(31, 54, 82, 0.08)",
+                      color: !isCoOwnership ? "#FFFFFF" : "var(--devio-blue-dark)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <User size={20} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <strong style={{ fontSize: "0.92rem", color: "var(--devio-blue-dark)" }}>
+                        Propietario Único
+                      </strong>
+                      {!isCoOwnership && (
+                        <span style={{ width: "18px", height: "18px", borderRadius: "50%", backgroundColor: "var(--devio-blue)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800 }}>
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: "0.76rem", color: "var(--devio-neutral-3)", margin: "0.25rem 0 0", lineHeight: 1.35 }}>
+                      Venta individual asignada a un solo titular (100% de propiedad).
+                    </p>
+                  </div>
+                </button>
+
+                {/* Card 2: Copropiedad */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleCoOwnership(true)}
+                  style={{
+                    padding: "1rem 1.15rem",
+                    borderRadius: "0.85rem",
+                    border: isCoOwnership ? "2px solid #00C48C" : "1.5px solid var(--devio-neutral-1)",
+                    backgroundColor: isCoOwnership ? "rgba(0, 196, 140, 0.06)" : "#FFFFFF",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "0.85rem",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      borderRadius: "8px",
+                      backgroundColor: isCoOwnership ? "var(--devio-green)" : "rgba(31, 54, 82, 0.08)",
                       color: isCoOwnership ? "#FFFFFF" : "var(--devio-blue-dark)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
+                      flexShrink: 0,
                     }}
                   >
-                    <Users size={18} />
+                    <Users size={20} />
                   </div>
-                  <div>
-                    <strong style={{ fontSize: "0.9rem", color: "var(--devio-blue-dark)", display: "block" }}>
-                      ¿Es una compra en Copropiedad (Varios Dueños)?
-                    </strong>
-                    <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)" }}>
-                      Permite registrar dos o más copropietarios con porcentajes que sumen el 100%.
-                    </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <strong style={{ fontSize: "0.92rem", color: "var(--devio-blue-dark)" }}>
+                        Copropiedad (Varios Titulares)
+                      </strong>
+                      {isCoOwnership && (
+                        <span style={{ width: "18px", height: "18px", borderRadius: "50%", backgroundColor: "var(--devio-green)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800 }}>
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: "0.76rem", color: "var(--devio-neutral-3)", margin: "0.25rem 0 0", lineHeight: 1.35 }}>
+                      Venta compartida entre 2 o más compradores con porcentajes que sumen 100%.
+                    </p>
                   </div>
-                </div>
-
-                <label style={{ display: "flex", alignItems: "center", cursor: "pointer", gap: "0.5rem" }}>
-                  <input
-                    type="checkbox"
-                    checked={isCoOwnership}
-                    onChange={(e) => handleToggleCoOwnership(e.target.checked)}
-                    style={{ width: "20px", height: "20px", accentColor: "var(--devio-blue)" }}
-                  />
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
-                    {isCoOwnership ? "Activada" : "Individual"}
-                  </span>
-                </label>
+                </button>
               </div>
 
               {/* Ownership Visual Distribution Bar (When Copropiedad is active) */}
