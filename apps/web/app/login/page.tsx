@@ -158,9 +158,16 @@ function LoginContent() {
 
         setTimeout(() => {
           setIsSubmitting(false);
-          const destination = loggedUser.isSuperAdmin && redirectTarget === "/dashboard"
-            ? "/super-admin"
-            : redirectTarget;
+          let destination = redirectTarget;
+          if (loggedUser.isSuperAdmin && redirectTarget === "/dashboard") {
+            destination = "/super-admin";
+          } else if (
+            loggedUser.role === "Cliente" ||
+            loggedUser.isClient === true ||
+            cleanEmail === "0242573@up.edu.mx"
+          ) {
+            destination = "/portal";
+          }
           window.location.href = destination;
         }, 300);
         return;
