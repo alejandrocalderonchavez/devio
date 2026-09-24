@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Linking,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import {
@@ -19,13 +20,15 @@ import { useClientApp } from "../context/client-context";
 import { ClientHeader } from "../components/client-header";
 import { ClientPaymentScheduleItem, ClientPaymentReceiptItem } from "../types/client";
 
+const API_BASE_URL = "https://devio-web-git-staging-devio4.vercel.app";
+
 export const AccountStatementScreen: React.FC = () => {
   const {
     selectedProperty,
+    user,
     goBack,
     formatMoney,
     formatDateDisplay,
-    setSelectedReceiptPayment,
   } = useClientApp();
   const [activeSubTab, setActiveSubTab] = useState<"statement" | "payments">("statement");
 
@@ -36,12 +39,23 @@ export const AccountStatementScreen: React.FC = () => {
   const totalPending = selectedProperty.pendingAmount || 0;
   const totalPrice = selectedProperty.totalPrice || 0;
 
+  const openExternalReceipt = (folio?: string, monto?: number, date?: string, comprobanteUrl?: string) => {
+    if (comprobanteUrl && comprobanteUrl.startsWith("http")) {
+      Linking.openURL(comprobanteUrl).catch((err) => console.error("Could not open receipt URL:", err));
+      return;
+    }
+    const cleanFolio = folio || `REC-${selectedProperty.unitNumber}-01`;
+    const url = `${API_BASE_URL}/api/client/receipt?email=${encodeURIComponent(user?.email || "")}&folio=${encodeURIComponent(cleanFolio)}&unit=${encodeURIComponent(selectedProperty.unitNumber)}&monto=${monto || ""}&date=${encodeURIComponent(date || "")}`;
+    Linking.openURL(url).catch((err) => console.error("Could not open receipt PDF:", err));
+  };
+
+  const openExternalStatement = () => {
+    const url = `${API_BASE_URL}/api/client/statement?email=${encodeURIComponent(user?.email || "")}&unit=${encodeURIComponent(selectedProperty.unitNumber)}`;
+    Linking.openURL(url).catch((err) => console.error("Could not open statement PDF:", err));
+  };
+
   const handleDownloadStatement = () => {
-    Alert.alert(
-      "Estado de Cuenta Digital",
-      `Estado de cuenta oficial generado para la Unidad ${selectedProperty.unitNumber} (${selectedProperty.projectName}).`,
-      [{ text: "Aceptar" }]
-    );
+    openExternalStatement();
   };
 
   const handleSelectTab = (tab: "statement" | "payments") => {
@@ -56,11 +70,12 @@ export const AccountStatementScreen: React.FC = () => {
       const match = (selectedProperty.paymentsList || []).find(
         (pl) => pl.reciboFolio === item.receiptNumber || pl.monto === item.amount
       );
-      if (match) {
-        setSelectedReceiptPayment(match);
-      } else {
-        setSelectedReceiptPayment(item);
-      }
+      openExternalReceipt(
+        match?.reciboFolio || match?.folio || item.receiptNumber,
+        item.amount,
+        item.paidDate || item.scheduledDate,
+        match?.comprobanteUrl
+      );
     } else if (item.status === "ATRASADO" || (item as any).status === "Atrasado") {
       Alert.alert(
         "Cuota Vencida",
@@ -77,7 +92,12 @@ export const AccountStatementScreen: React.FC = () => {
   };
 
   const handlePaymentReceiptPress = (receipt: ClientPaymentReceiptItem) => {
-    setSelectedReceiptPayment(receipt);
+    openExternalReceipt(
+      receipt.reciboFolio || receipt.folio,
+      receipt.monto,
+      receipt.fechaPago,
+      receipt.comprobanteUrl
+    );
   };
 
   const scheduleItems = selectedProperty.schedule || selectedProperty.payments || [];
