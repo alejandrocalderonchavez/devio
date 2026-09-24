@@ -355,6 +355,26 @@ export default function DeveloperOnboardingPage() {
         localStorage.setItem("devio_user_session", JSON.stringify(initialUser));
         sessionStorage.setItem("devio_user_session", JSON.stringify(initialUser));
       }
+
+      // Persistir inmediatamente en Supabase (Prisma)
+      fetch("/api/developers", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tradeName: formData.name,
+          legalName: formData.legalName,
+          rfc: formData.taxId,
+          addressStreet: formData.addressLine1,
+          addressCol: formData.neighborhood,
+          city: formData.city,
+          state: formData.state,
+          zipCode: formData.postalCode,
+          phone: formData.phoneNumber,
+          contactEmail: formData.email,
+          logoUrl: formData.logoUrl,
+          teamMembers: teamMembers,
+        }),
+      }).catch((err) => console.warn("Could not persist onboarding developer:", err));
     }
 
     setTimeout(() => {

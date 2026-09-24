@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@devio/database";
 import migratedDevelopers from "@/data/migrated-developers.json";
+import crypto from "crypto";
 
 export async function GET(request: Request) {
   try {
@@ -12,7 +13,7 @@ export async function GET(request: Request) {
     if (email || id) {
       try {
         const whereClause: any = {};
-        if (id) whereClause.id = id;
+        if (id && id.length > 10 && !id.startsWith("dev-")) whereClause.id = id;
         if (email) whereClause.email = email.toLowerCase().trim();
 
         const dev = await prisma.developer.findFirst({
@@ -98,10 +99,7 @@ export async function PUT(request: Request) {
       contactEmail,
       logoUrl,
       logoPath,
-      bankName,
-      bankAccountName,
-      clabe,
-      taxRegime,
+      teamMembers,
     } = body;
 
     const devName = tradeName || name || businessName || "Mi Desarrolladora";
@@ -127,9 +125,26 @@ export async function PUT(request: Request) {
       }).catch(() => null);
     }
 
-    if (devRecord) {
+    if (!devRecord) {
+      // Create new developer
+      devRecord = await prisma.developer.create({
+        data: {
+          name: devName,
+          legalName: devLegal,
+          taxId: devRfc || null,
+          email: devEmail || null,
+          phone: phone || null,
+          addressLine1: devStreet || null,
+          neighborhood: devCol || null,
+          city: devCity || null,
+          state: devState || null,
+          postalCode: devZip || null,
+          logoPath: devLogo,
+        },
+      });
+    } else {
       // Update existing
-      const updated = await prisma.developer.update({
+      devRecord = await prisma.developer.update({
         where: { id: devRecord.id },
         data: {
           name: devName,
@@ -145,28 +160,52 @@ export async function PUT(request: Request) {
           logoPath: devLogo,
         },
       });
-
-      return NextResponse.json({ success: true, developer: updated });
-    } else {
-      // Create new
-      const created = await prisma.developer.create({
-        data: {
-          name: devName,
-          legalName: devLegal,
-          taxId: devRfc || null,
-          email: devEmail || null,
-          phone: phone || null,
-          addressLine1: devStreet || null,
-          neighborhood: devCol || null,
-          city: devCity || null,
-          state: devState || null,
-          postalCode: devZip || null,
-          logoPath: devLogo,
-        },
-      });
-
-      return NextResponse.json({ success: true, developer: created });
     }
+
+    // 2. Persist team members and users in Supabase
+    if (Array.isArray(teamMembers) && teamMembers.length > 0) {
+      for (const tm of teamMembers) {
+        if (tm.email) {
+          const tmEmail = tm.email.toLowerCase().trim();
+          let user = await prisma.user.findUnique({ where: { email: tmEmail } }).catch(() => null);
+          if (!user) {
+            user = await prisma.user.create({
+              data: {
+                authUserId: crypto.randomUUID(),
+                email: tmEmail,
+                fullName: tm.fullName || tm.name || "Miembro del Equipo",
+                phone: tm.phone || null,
+              },
+            }).catch(() => null);
+          }
+
+          if (user) {
+            const roleEnum = tm.role?.toLowerCase().includes("super")
+              ? "SUPER_ADMIN"
+              : tm.role?.toLowerCase().includes("director") || tm.role?.toLowerCase().includes("admin")
+              ? "ADMIN"
+              : "COMMERCIAL";
+
+            await prisma.membership.upsert({
+              where: {
+                userId_developerId: {
+                  userId: user.id,
+                  developerId: devRecord.id,
+                },
+              },
+              update: { role: roleEnum as any },
+              create: {
+                userId: user.id,
+                developerId: devRecord.id,
+                role: roleEnum as any,
+              },
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({ success: true, developer: devRecord });
   } catch (error: any) {
     console.error("Error in /api/developers PUT:", error);
     return NextResponse.json(

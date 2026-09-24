@@ -1380,6 +1380,18 @@ export default function ProjectOnboardingPage() {
       }
 
       window.dispatchEvent(new Event("devio_projects_updated"));
+
+      // Persistir inmediatamente en Supabase (Prisma)
+      fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newProject.name,
+          type: newProject.type,
+          image: newProject.image,
+          unitsInventory: newProject.unitsInventory,
+        }),
+      }).catch((err) => console.warn("Could not persist onboarding project:", err));
     }
 
     setCreatedProjectId(newProjectId);
