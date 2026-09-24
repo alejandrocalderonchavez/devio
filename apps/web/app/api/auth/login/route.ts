@@ -88,18 +88,58 @@ export async function POST(request: Request) {
       matchedMembership?.user?.password,
     ].filter(Boolean);
 
-    // Client / Buyer Login Validation (e.g. 0242573@up.edu.mx or registered client)
-    if (cleanEmail === "0242573@up.edu.mx" || cleanEmail.includes("@cliente") || cleanEmail.includes("inigo")) {
+    // Client / Buyer Login Validation (e.g. jaimepozospizano@gmail.com, 0242573@up.edu.mx, bgv2021@gmail.com, etc.)
+    let matchedClientSale: any = null;
+    let matchedClientDev: any = null;
+
+    if (!isSuperAdmin) {
+      for (const dev of developersList) {
+        for (const proj of dev.projects || []) {
+          const s = (proj.sales || []).find(
+            (sale: any) => (sale.clientEmail || "").toLowerCase().trim() === cleanEmail
+          );
+          if (s) {
+            matchedClientSale = s;
+            matchedClientDev = dev;
+            break;
+          }
+          const u = (proj.unitsInventory || []).find(
+            (unit: any) => (unit.clientEmail || "").toLowerCase().trim() === cleanEmail
+          );
+          if (u) {
+            matchedClientSale = {
+              clientName: u.client,
+              clientEmail: u.clientEmail,
+              clientPhone: u.clientPhone,
+              clientId: `cli-${Date.now()}`,
+              unit: u.unit,
+            };
+            matchedClientDev = dev;
+            break;
+          }
+        }
+        if (matchedClientSale) break;
+      }
+    }
+
+    if (
+      cleanEmail === "0242573@up.edu.mx" ||
+      cleanEmail.includes("@cliente") ||
+      cleanEmail.includes("inigo") ||
+      matchedClientSale
+    ) {
       const clientUser = {
-        id: "cli-inigo-01",
-        fullName: "Iñigo Heredia Horner",
+        id: matchedClientSale?.clientId || "cli-user-01",
+        fullName:
+          matchedClientSale?.clientName ||
+          (cleanEmail === "0242573@up.edu.mx" ? "Iñigo Heredia Horner" : "Cliente Propietario"),
         email: cleanEmail,
-        phone: "+52 33 1892 4490",
+        phone: matchedClientSale?.clientPhone || "+52 33 1892 4490",
         role: "Cliente",
         roleTitle: "Propietario / Inversionista",
         isClient: true,
         permissions: ["client_portal"],
-        activeDeveloper: "Grupo VEQ",
+        activeDeveloper: matchedClientDev?.name || "Desarrollos Campero",
       };
 
       const token = `devio_token_cli_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;

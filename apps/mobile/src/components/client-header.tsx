@@ -13,14 +13,11 @@ export const ClientHeader: React.FC<ClientHeaderProps> = ({ showGreeting = true 
   return (
     <View style={styles.headerContainer}>
       <View style={styles.topRow}>
-        {/* Devio Logo */}
-        <View style={styles.logoWrapper}>
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoD}>D</Text>
-            <View style={styles.logoBar} />
-          </View>
-          <Text style={styles.logoText}>devio</Text>
-        </View>
+        {/* Devio Official Logo */}
+        <Image
+          source={require("../../assets/logo-horizontal-light.png")}
+          style={styles.officialLogo}
+        />
 
         {/* Action Icons: Notification Bell & Profile Avatar */}
         <View style={styles.actionsRow}>
@@ -85,40 +82,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  logoWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  logoBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  logoD: {
-    color: "#1F3652",
-    fontSize: 24,
-    fontWeight: "900",
-    lineHeight: 28,
-  },
-  logoBar: {
-    position: "absolute",
-    right: 8,
-    top: 8,
-    bottom: 8,
-    width: 3,
-    backgroundColor: "#1F3652",
-    borderRadius: 2,
-  },
-  logoText: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "800",
-    letterSpacing: -0.5,
+  officialLogo: {
+    height: 28,
+    width: 110,
+    resizeMode: "contain",
   },
   actionsRow: {
     flexDirection: "row",

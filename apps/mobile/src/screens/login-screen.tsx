@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
 } from "react-native";
 import { Mail, Lock, ArrowRight, ShieldCheck, Sparkles } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
@@ -34,11 +35,10 @@ export const LoginScreen: React.FC = () => {
       >
         {/* Top Logo Section */}
         <View style={styles.logoSection}>
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoD}>D</Text>
-            <View style={styles.logoBar} />
-          </View>
-          <Text style={styles.brandTitle}>DEVIO CLIENTE</Text>
+          <Image
+            source={require("../../assets/logo-horizontal-light.png")}
+            style={styles.officialBrandLogo}
+          />
           <Text style={styles.brandSubtitle}>
             Portal exclusivo para propietarios e inversionistas
           </Text>
@@ -138,40 +138,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 20,
   },
-  logoBadge: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  logoD: {
-    color: "#1F3652",
-    fontSize: 38,
-    fontWeight: "900",
-    lineHeight: 44,
-  },
-  logoBar: {
-    position: "absolute",
-    right: 12,
-    top: 12,
-    bottom: 12,
-    width: 5,
-    backgroundColor: "#1F3652",
-    borderRadius: 3,
-  },
-  brandTitle: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "900",
-    letterSpacing: 2,
+  officialBrandLogo: {
+    height: 42,
+    width: 170,
+    resizeMode: "contain",
+    marginBottom: 8,
   },
   brandSubtitle: {
     color: "rgba(255, 255, 255, 0.75)",
