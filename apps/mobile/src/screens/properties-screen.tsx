@@ -9,7 +9,7 @@ import {
   Platform,
 } from "react-native";
 import * as Haptics from "expo-haptics";
-import { AlertTriangle, Building2 } from "lucide-react-native";
+import { AlertTriangle, Building2, CheckCircle2 } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
 import { ClientHeader } from "../components/client-header";
 
@@ -55,6 +55,11 @@ export const PropertiesScreen: React.FC = () => {
                         : styles.statusPillUpcoming,
                     ]}
                   >
+                    {isAllPaid ? (
+                      <CheckCircle2 size={12} color="#065F46" />
+                    ) : isPast ? (
+                      <AlertTriangle size={12} color="#991B1B" />
+                    ) : null}
                     <Text
                       style={[
                         styles.statusPillText,
@@ -66,9 +71,9 @@ export const PropertiesScreen: React.FC = () => {
                       ]}
                     >
                       {isAllPaid
-                        ? "✓ AL CORRIENTE"
+                        ? "AL CORRIENTE"
                         : isPast
-                        ? "⚠️ CUOTA VENCIDA"
+                        ? "CUOTA VENCIDA"
                         : "TU PRÓXIMO PAGO"}
                     </Text>
                   </View>
@@ -270,6 +275,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 99,

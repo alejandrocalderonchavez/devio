@@ -459,19 +459,19 @@ export default function ClientPortalWeb() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#F8FAFC", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "0", boxSizing: "border-box" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "#F8FAFC", width: "100%", display: "flex", flexDirection: "column", alignItems: "stretch", padding: "0", boxSizing: "border-box" }}>
       
-      {/* Responsive Container */}
+      {/* Responsive Container - Full Width Graceful Desktop Layout */}
       <div
         style={{
           width: "100%",
-          maxWidth: "880px",
+          maxWidth: "1440px",
+          margin: "0 auto",
           minHeight: "100vh",
           backgroundColor: "#F8FAFC",
           display: "flex",
           flexDirection: "column",
           position: "relative",
-          boxShadow: "0 4px 25px rgba(0,0,0,0.06)",
           boxSizing: "border-box",
         }}
       >
@@ -484,8 +484,8 @@ export default function ClientPortalWeb() {
             color: "#FFFFFF",
             paddingTop: "2rem",
             paddingBottom: "1.35rem",
-            paddingLeft: "1.25rem",
-            paddingRight: "1.25rem",
+            paddingLeft: "clamp(1.25rem, 3.5vw, 2.5rem)",
+            paddingRight: "clamp(1.25rem, 3.5vw, 2.5rem)",
             borderBottomLeftRadius: "1.5rem",
             borderBottomRightRadius: "1.5rem",
             border: "1px solid rgba(255, 255, 255, 0.12)",
@@ -610,7 +610,7 @@ export default function ClientPortalWeb() {
         </div>
 
         {/* SCROLLABLE BODY */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem", paddingBottom: "6rem" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "clamp(1.25rem, 3.5vw, 2.5rem)", paddingBottom: "6.5rem" }}>
           
           {/* TAB 1: PROPIEDADES */}
           {activeTab === "properties" && (
@@ -657,9 +657,24 @@ export default function ClientPortalWeb() {
                                 padding: "0.25rem 0.65rem",
                                 borderRadius: "99px",
                                 textTransform: "uppercase",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
                               }}
                             >
-                              {nextPaymentInfo.isAllPaid ? "✓ Al Corriente" : (nextPaymentInfo.cuotaStatus === "Atrasado" ? "⚠️ Cuota Vencida" : "Tu Próximo Pago")}
+                              {nextPaymentInfo.isAllPaid ? (
+                                <>
+                                  <CheckCircle2 size={12} />
+                                  <span>Al Corriente</span>
+                                </>
+                              ) : nextPaymentInfo.cuotaStatus === "Atrasado" ? (
+                                <>
+                                  <AlertTriangle size={12} />
+                                  <span>Cuota Vencida</span>
+                                </>
+                              ) : (
+                                <span>Tu Próximo Pago</span>
+                              )}
                             </span>
                             
                             <span style={{ fontSize: "0.78rem", color: "#64748B", fontWeight: 600 }}>
@@ -737,7 +752,7 @@ export default function ClientPortalWeb() {
                         </span>
                       </div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: properties.length > 1 ? "repeat(auto-fit, minmax(320px, 1fr))" : "1fr", gap: "1rem" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: properties.length > 1 ? "repeat(auto-fill, minmax(360px, 1fr))" : "1fr", gap: "1.25rem" }}>
                         {properties.map((prop) => (
                           <div
                             key={prop.id}

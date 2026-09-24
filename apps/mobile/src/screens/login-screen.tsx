@@ -57,9 +57,6 @@ export const LoginScreen: React.FC = () => {
             source={require("../../assets/logo-white.png")}
             style={styles.officialBrandLogo}
           />
-          <Text style={styles.brandSubtitle}>
-            Portal exclusivo para propietarios e inversionistas
-          </Text>
         </View>
 
         {/* Login Form Apple Glass Card */}
@@ -157,19 +154,13 @@ const styles = StyleSheet.create({
   },
   logoSection: {
     alignItems: "center",
-    marginTop: 16,
+    marginTop: 20,
+    marginBottom: 8,
   },
   officialBrandLogo: {
-    height: 46,
-    width: 170,
+    height: 58,
+    width: 210,
     resizeMode: "contain",
-    marginBottom: 6,
-  },
-  brandSubtitle: {
-    color: "rgba(255, 255, 255, 0.75)",
-    fontSize: 13,
-    marginTop: 2,
-    textAlign: "center",
   },
   card: {
     backgroundColor: "rgba(255, 255, 255, 0.96)",

@@ -4,23 +4,31 @@
     "slug": "devio-cliente",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/devio-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "devio",
+    "splash": {
+      "image": "./assets/logo-white.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1F3652"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "lat.devio.cliente"
+      "bundleIdentifier": "lat.devio.cliente",
+      "icon": "./assets/devio-icon.png"
     },
     "android": {
       "package": "lat.devio.cliente",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/devio-icon.png",
         "backgroundColor": "#1F3652"
       }
     },
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/devio-icon.png"
     }
   }
 }

@@ -202,9 +202,9 @@ function LoginContent() {
         <div>
           <Link href="/" style={{ textDecoration: "none", display: "inline-block", marginBottom: "4rem" }}>
             <img
-              src="/brand/14.png"
+              src="/brand/logo-white.png"
               alt="Devio"
-              style={{ height: "38px", width: "auto", objectFit: "contain" }}
+              style={{ height: "48px", width: "auto", objectFit: "contain" }}
             />
           </Link>
 
@@ -258,9 +258,9 @@ function LoginContent() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2.5rem" }}>
             <Link href="/" style={{ textDecoration: "none", display: "flex", alignItems: "center" }}>
               <img
-                src="/brand/13.png"
+                src="/brand/logo-horizontal-dark.png"
                 alt="Devio"
-                style={{ height: "32px", width: "auto", objectFit: "contain" }}
+                style={{ height: "38px", width: "auto", objectFit: "contain" }}
               />
             </Link>
 
