@@ -1857,7 +1857,7 @@ export default function ClientPortalWeb() {
 
         </div>
 
-        {/* BOTTOM FIXED TABS - Apple Glass Floating Dock */}
+        {/* BOTTOM FIXED TABS - Devio Blue Glass Floating Dock */}
         <div
           style={{
             position: "fixed",
@@ -1865,18 +1865,18 @@ export default function ClientPortalWeb() {
             left: "50%",
             transform: "translateX(-50%)",
             width: "calc(100% - 32px)",
-            maxWidth: "420px",
+            maxWidth: "380px",
             height: "64px",
-            backgroundColor: "rgba(22, 36, 56, 0.85)",
+            backgroundColor: "rgba(31, 54, 82, 0.92)",
             backdropFilter: "blur(25px) saturate(180%)",
             WebkitBackdropFilter: "blur(25px) saturate(180%)",
-            borderRadius: "32px",
-            border: "1px solid rgba(255, 255, 255, 0.15)",
+            borderRadius: "36px",
+            border: "1.5px solid rgba(255, 255, 255, 0.2)",
             display: "flex",
             justifyContent: "space-around",
             alignItems: "center",
             padding: "0 12px",
-            boxShadow: "0 12px 36px rgba(0, 0, 0, 0.35)",
+            boxShadow: "0 12px 36px rgba(31, 54, 82, 0.35), 0 2px 8px rgba(0, 0, 0, 0.12)",
             zIndex: 30,
           }}
         >
@@ -1892,20 +1892,20 @@ export default function ClientPortalWeb() {
               justifyContent: "center",
               gap: "3px",
               cursor: "pointer",
-              color: activeTab === "properties" ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)",
+              color: activeTab === "properties" ? "#FFFFFF" : "rgba(255, 255, 255, 0.65)",
               transition: "all 0.2s ease",
             }}
           >
             <div style={{
-              width: "42px",
-              height: "26px",
-              borderRadius: "13px",
-              backgroundColor: activeTab === "properties" ? "rgba(255, 255, 255, 0.2)" : "transparent",
+              width: "44px",
+              height: "28px",
+              borderRadius: "14px",
+              backgroundColor: activeTab === "properties" ? "rgba(255, 255, 255, 0.18)" : "transparent",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
             }}>
-              <Home size={18} color={activeTab === "properties" ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)"} />
+              <Home size={19} color={activeTab === "properties" ? "#FFFFFF" : "rgba(255, 255, 255, 0.55)"} strokeWidth={activeTab === "properties" ? 2.5 : 2} />
             </div>
             <span style={{ fontSize: "0.68rem", fontWeight: activeTab === "properties" ? 800 : 600 }}>Mis Propiedades</span>
           </button>
@@ -1922,20 +1922,20 @@ export default function ClientPortalWeb() {
               justifyContent: "center",
               gap: "3px",
               cursor: "pointer",
-              color: activeTab === "profile" ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)",
+              color: activeTab === "profile" ? "#FFFFFF" : "rgba(255, 255, 255, 0.65)",
               transition: "all 0.2s ease",
             }}
           >
             <div style={{
-              width: "42px",
-              height: "26px",
-              borderRadius: "13px",
-              backgroundColor: activeTab === "profile" ? "rgba(255, 255, 255, 0.2)" : "transparent",
+              width: "44px",
+              height: "28px",
+              borderRadius: "14px",
+              backgroundColor: activeTab === "profile" ? "rgba(255, 255, 255, 0.18)" : "transparent",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
             }}>
-              <User size={18} color={activeTab === "profile" ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)"} />
+              <User size={19} color={activeTab === "profile" ? "#FFFFFF" : "rgba(255, 255, 255, 0.55)"} strokeWidth={activeTab === "profile" ? 2.5 : 2} />
             </div>
             <span style={{ fontSize: "0.68rem", fontWeight: activeTab === "profile" ? 800 : 600 }}>Mi Perfil</span>
           </button>

@@ -208,17 +208,19 @@ Para garantizar una experiencia visual prémium, táctil y coherente en todo el 
 2. **Logotipo Oficial:**
    - Usar el logotipo en blanco nítido (`logo-white.png`) para asegurar contraste óptimo y legibilidad contra fondos oscuros y translúcidos.
 
-### 13.2 Dock de Navegación Inferior Flotante (Floating Glass Dock / Lippu Style)
+### 13.2 Dock de Navegación Inferior Flotante (Devio Blue Frosted Glass / Lippu & Apple Material)
 1. **Morfología Cápsula Flotante:**
    - No utilizar barras de navegación rectangulares pegadas al borde.
-   - Usar una cápsula flotante centrada (`borderRadius: 32px`, `height: 64px`, `maxWidth: 420px`), separada del borde inferior (`bottom: 16px` o `bottom: 24px` con Safe Area Insets).
-2. **Material Glass:**
-   - Fondo translúcido `rgba(22, 36, 56, 0.85)` con blur de 25px (`expo-blur` en mobile / `backdrop-filter` en web).
-   - Borde sutil reflectante: `1px solid rgba(255, 255, 255, 0.15)`.
-   - Sombra profunda difuminada: `0 12px 36px rgba(0, 0, 0, 0.35)`.
-3. **Distribución de Íconos y Feedback:**
-   - Disposición vertical (ícono arriba dentro de una píldora translúcida activa, texto abajo).
-   - Feedback táctil (`expo-haptics`) al alternar pestañas en aplicaciones móviles.
+   - Usar una cápsula flotante centrada (`borderRadius: 36px`, `height: 64px`, `maxWidth: 380px`), separada del borde inferior (`bottom: 16px` o `bottom: 26px` con Safe Area Insets).
+2. **Material Glass Azul Devio (Apple Frosted Glass):**
+   - **Fondo:** Translúcido en Azul Devio `rgba(31, 54, 82, 0.92)` con blur de 25px (`expo-blur` `tint="dark"` en Mobile; `backdrop-filter: blur(25px) saturate(180%)` en Web).
+   - **Borde de Cristal:** Borde reflectante sutil `1.5px solid rgba(255, 255, 255, 0.2)`.
+   - **Sombra Difusa:** `0 12px 36px rgba(31, 54, 82, 0.35), 0 2px 8px rgba(0, 0, 0, 0.12)`.
+3. **Distribución de Íconos y Acentos:**
+   - Disposición vertical (ícono arriba, texto abajo).
+   - **Pestaña Activa:** Píldora de soporte translúcida `rgba(255, 255, 255, 0.18)`, ícono y texto en **Blanco Nítido (`#FFFFFF`)** con `fontWeight: 800`.
+   - **Pestaña Inactiva:** Ícono en blanco translúcido `rgba(255, 255, 255, 0.55)`, texto en `rgba(255, 255, 255, 0.65)` con `fontWeight: 600`.
+   - **Feedback Táctil:** `expo-haptics` (`impactAsync(Light)`) al alternar pestañas en iOS.
 
 ### 13.3 Controles Segmentados Nativos iOS (Segmented Controls)
 1. **Estructura:**
