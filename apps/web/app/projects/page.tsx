@@ -19,9 +19,18 @@ export default function ProjectsPage() {
   const router = useRouter();
   const { projects } = useProject();
 
-  const totalUnitsAll = projects.reduce((acc, p) => acc + p.totalUnits, 0);
-  const soldUnitsAll = projects.reduce((acc, p) => acc + p.soldUnits, 0);
-  const availableUnitsAll = projects.reduce((acc, p) => acc + p.availableUnits, 0);
+  const totalUnitsAll = projects.reduce(
+    (acc, p) => acc + (Number(p.totalUnits) || (p.unitsInventory?.length || 0)),
+    0
+  );
+  const soldUnitsAll = projects.reduce(
+    (acc, p) => acc + (Number(p.soldUnits) || (p.unitsInventory?.filter((u) => u.status === "VENDIDA").length || 0)),
+    0
+  );
+  const availableUnitsAll = projects.reduce(
+    (acc, p) => acc + (Number(p.availableUnits) || (p.unitsInventory?.filter((u) => u.status === "DISPONIBLE").length || 0)),
+    0
+  );
 
   return (
     <AppLayout>
@@ -174,10 +183,17 @@ export default function ProjectsPage() {
                 }}
               >
                 {/* Foto de Portada con Logo del Proyecto flotante */}
-                <div style={{ width: "100%", height: "150px", position: "relative", overflow: "hidden" }}>
+                <div style={{ width: "100%", height: "150px", position: "relative", overflow: "hidden", backgroundColor: "#E2E8F0" }}>
                   <img
-                    src={project.image}
+                    src={
+                      project.image && (project.image.startsWith("http") || project.image.startsWith("data:") || project.image.startsWith("/"))
+                        ? project.image
+                        : "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80"
+                    }
                     alt={project.name}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80";
+                    }}
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
                   {(project.logoFileName || (project as any).logo || (project as any).logoUrl) && (

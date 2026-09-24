@@ -1,11 +1,11 @@
 /**
  * Supabase Storage Client Helper
  * Handles uploading and retrieving files from `devio-assets` (public)
- * and `devio-documents` (private) buckets.
+ * and `devio-documents` (private) buckets in Supabase.
  */
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://your-supabase-project.supabase.co";
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const SUPABASE_PROJECT_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://icgcictanniptpexanmp.supabase.co";
 
 export interface UploadResult {
   success: boolean;
@@ -15,38 +15,36 @@ export interface UploadResult {
 }
 
 /**
- * Upload a file (image, logo, render, blueprint) to `devio-assets` bucket
+ * Upload a file (image, logo, render, blueprint) to `devio-assets` bucket via Next.js /api/upload
  */
 export async function uploadProjectAsset(
   projectId: string,
   file: File | Blob,
   fileName: string,
-  folder: "renders" | "logos" | "floorplans" | "advances" = "renders"
+  folder: "renders" | "logos" | "floorplans" | "advances" | "covers" = "covers"
 ): Promise<UploadResult> {
-  const cleanPath = `${projectId}/${folder}/${Date.now()}-${fileName.replace(/\s+/g, "_")}`;
-  const uploadEndpoint = `${SUPABASE_URL}/storage/v1/object/devio-assets/${cleanPath}`;
-
   try {
-    const res = await fetch(uploadEndpoint, {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("bucket", "devio-assets");
+    formData.append("folder", `${projectId}/${folder}`);
+    formData.append("fileName", fileName);
+
+    const res = await fetch("/api/upload", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        apikey: SUPABASE_ANON_KEY,
-        "Content-Type": file.type || "application/octet-stream",
-      },
-      body: file,
+      body: formData,
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      return { success: false, error: errText };
+      const err = await res.json().catch(() => ({ error: "Error al subir imagen" }));
+      return { success: false, error: err.error };
     }
 
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/devio-assets/${cleanPath}`;
+    const data = await res.json();
     return {
       success: true,
-      publicUrl,
-      path: cleanPath,
+      publicUrl: data.publicUrl,
+      path: data.path,
     };
   } catch (error: any) {
     console.error("Error uploading project asset:", error);
@@ -66,30 +64,28 @@ export async function uploadProjectDocument(
   fileName: string,
   folder: "contracts" | "quotes" | "receipts" | "kyc" = "contracts"
 ): Promise<UploadResult> {
-  const cleanPath = `${projectId}/${folder}/${Date.now()}-${fileName.replace(/\s+/g, "_")}`;
-  const uploadEndpoint = `${SUPABASE_URL}/storage/v1/object/devio-documents/${cleanPath}`;
-
   try {
-    const res = await fetch(uploadEndpoint, {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("bucket", "devio-documents");
+    formData.append("folder", `${projectId}/${folder}`);
+    formData.append("fileName", fileName);
+
+    const res = await fetch("/api/upload", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        apikey: SUPABASE_ANON_KEY,
-        "Content-Type": file.type || "application/pdf",
-      },
-      body: file,
+      body: formData,
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      return { success: false, error: errText };
+      const err = await res.json().catch(() => ({ error: "Error al subir documento" }));
+      return { success: false, error: err.error };
     }
 
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/devio-documents/${cleanPath}`;
+    const data = await res.json();
     return {
       success: true,
-      publicUrl,
-      path: cleanPath,
+      publicUrl: data.publicUrl,
+      path: data.path,
     };
   } catch (error: any) {
     console.error("Error uploading project document:", error);

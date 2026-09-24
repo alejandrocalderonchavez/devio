@@ -89,6 +89,8 @@ export default function ProjectUnitsPage() {
     }
   };
 
+  const unitsList = project?.unitsInventory || [];
+
   if (!project) return null;
 
   if (!hasPermission("units.view")) {
@@ -140,7 +142,7 @@ export default function ProjectUnitsPage() {
                 Total de Unidades
               </span>
               <h3 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652", margin: 0, lineHeight: 1 }}>
-                {project.unitsInventory.length}
+                {unitsList.length}
               </h3>
             </div>
             <div
@@ -177,7 +179,7 @@ export default function ProjectUnitsPage() {
                 Unidades Disponibles
               </span>
               <h3 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652", margin: 0, lineHeight: 1 }}>
-                {project.unitsInventory.filter((u) => u.status === "DISPONIBLE").length}
+                {unitsList.filter((u) => u.status === "DISPONIBLE").length}
               </h3>
             </div>
             <div
@@ -214,7 +216,7 @@ export default function ProjectUnitsPage() {
                 Unidades Vendidas
               </span>
               <h3 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652", margin: 0, lineHeight: 1 }}>
-                {project.unitsInventory.filter((u) => u.status === "VENDIDA").length}
+                {unitsList.filter((u) => u.status === "VENDIDA").length}
               </h3>
             </div>
             <div
@@ -251,7 +253,7 @@ export default function ProjectUnitsPage() {
                 Unidades bloqueadas
               </span>
               <h3 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652", margin: 0, lineHeight: 1 }}>
-                {project.unitsInventory.filter((u) => u.status === "BLOQUEADA").length}
+                {unitsList.filter((u) => u.status === "BLOQUEADA").length}
               </h3>
             </div>
             <div
@@ -544,7 +546,7 @@ export default function ProjectUnitsPage() {
               </tr>
             </thead>
             <tbody>
-              {project.unitsInventory
+              {unitsList
                 .filter((u) => {
                   if (unitStatusFilter !== "ALL" && u.status !== unitStatusFilter) return false;
                   if (!unitSearchQuery.trim()) return true;
@@ -732,7 +734,7 @@ export default function ProjectUnitsPage() {
         <BulkPriceModal
           isOpen={showBulkPriceModal}
           onClose={() => setShowBulkPriceModal(false)}
-          units={project.unitsInventory}
+          units={unitsList}
           currency={currency}
           onApplyAdjustment={handleApplyPriceAdjustment}
         />
@@ -742,7 +744,7 @@ export default function ProjectUnitsPage() {
         <EditInventoryGridModal
           isOpen={showEditInventoryModal}
           onClose={() => setShowEditInventoryModal(false)}
-          initialUnits={project.unitsInventory}
+          initialUnits={unitsList}
           currency={currency}
           onSaveUnits={handleSaveInventoryGrid}
         />
@@ -808,7 +810,7 @@ export default function ProjectUnitsPage() {
         <DownloadExportModal
           isOpen={showDownloadModal}
           onClose={() => setShowDownloadModal(false)}
-          units={project.unitsInventory}
+          units={unitsList}
           projectName={project.name}
           currency={currency}
         />

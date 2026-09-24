@@ -356,11 +356,28 @@ export default function DeveloperOnboardingPage() {
         sessionStorage.setItem("devio_user_session", JSON.stringify(initialUser));
       }
 
+      let existingDevId = "";
+      let userEmail = "";
+      try {
+        const parsedU = existingUser ? JSON.parse(existingUser) : null;
+        userEmail = parsedU?.email || "";
+        existingDevId = parsedU?.developer?.id || "";
+      } catch (e) {}
+
+      if (!existingDevId) {
+        try {
+          const rawDev = localStorage.getItem("devio_developer_onboarding");
+          if (rawDev) existingDevId = JSON.parse(rawDev)?.id || "";
+        } catch (e) {}
+      }
+
       // Persistir inmediatamente en Supabase (Prisma)
       fetch("/api/developers", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: existingDevId || undefined,
+          userEmail: userEmail || undefined,
           tradeName: formData.name,
           legalName: formData.legalName,
           rfc: formData.taxId,
