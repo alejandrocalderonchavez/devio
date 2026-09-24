@@ -4,10 +4,16 @@ import pg from "pg";
 
 export * from "@prisma/client";
 
-const connectionString =
-  process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/devio?schema=public";
+const DEFAULT_SUPABASE_URL =
+  "postgresql://postgres.icgcictanniptpexanmp:Acalderon1%3Fdevio@aws-0-us-east-1.pooler.supabase.com:5432/postgres";
 
-const isRemote = connectionString.includes("supabase.com") || connectionString.includes("pooler");
+const connectionString =
+  process.env.DATABASE_URL || process.env.DIRECT_URL || DEFAULT_SUPABASE_URL;
+
+const isRemote =
+  connectionString.includes("supabase.com") ||
+  connectionString.includes("pooler") ||
+  connectionString.includes("aws-0");
 
 const pool = new pg.Pool({
   connectionString,

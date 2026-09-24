@@ -121,7 +121,7 @@ function RegisterContent() {
 
     // 1. Enviar registro a /api/auth/register para persistir en Supabase (Prisma)
     try {
-      await fetch("/api/auth/register", {
+      const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -134,55 +134,60 @@ function RegisterContent() {
           inviteToken: activeInvite?.token,
         }),
       });
-    } catch (e) {
-      console.warn("Could not register in database API:", e);
-    }
 
-    // 2. Guardar información del usuario superadmin en sesión local para el flujo de onboarding
-    const userSession = {
-      fullName,
-      email: cleanEmail,
-      phone: phoneFull,
-      roleTitle,
-      password,
-      registeredAt: new Date().toISOString(),
-      inviteToken: activeInvite?.token,
-    };
+      const data = await res.json();
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("devio_user_session", JSON.stringify(userSession));
-      sessionStorage.setItem("devio_user_session", JSON.stringify(userSession));
-      localStorage.setItem("devio_is_new_user", "true");
-      sessionStorage.setItem("devio_is_new_user", "true");
-      localStorage.removeItem("devio_projects_state");
-      sessionStorage.removeItem("devio_projects_state");
-      localStorage.removeItem("devio_developer_onboarding");
-      sessionStorage.removeItem("devio_developer_onboarding");
-      
-      // Guardar en catálogo de usuarios registrados
-      try {
-        const rawRegistered = localStorage.getItem("devio_registered_users");
-        let list = rawRegistered ? JSON.parse(rawRegistered) : [];
-        if (!list.some((u: any) => u.email === cleanEmail)) {
-          list.push(userSession);
-          localStorage.setItem("devio_registered_users", JSON.stringify(list));
-        }
-      } catch (e) {}
-
-      // Cookie de autenticación para Middleware
-      document.cookie = `devio_auth_token=devio_session_${Date.now()}; path=/; max-age=604800; SameSite=Lax`;
-
-      if (activeInvite) {
-        localStorage.setItem("devio_custom_pricing", JSON.stringify(activeInvite));
-        sessionStorage.setItem("devio_custom_pricing", JSON.stringify(activeInvite));
+      if (!res.ok || !data.success) {
+        setIsSubmitting(false);
+        setErrorMessage(data.error || "Error al registrar la cuenta en la base de datos.");
+        return;
       }
-    }
 
-    setTimeout(() => {
+      // 2. Guardar información del usuario superadmin en sesión local para el flujo de onboarding
+      const userSession = {
+        id: data.user?.id,
+        fullName: data.user?.fullName || fullName,
+        email: cleanEmail,
+        phone: phoneFull,
+        roleTitle,
+        password,
+        registeredAt: new Date().toISOString(),
+        inviteToken: activeInvite?.token,
+        developer: data.developer,
+      };
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("devio_user_session", JSON.stringify(userSession));
+        sessionStorage.setItem("devio_user_session", JSON.stringify(userSession));
+        localStorage.setItem("devio_is_new_user", "true");
+        sessionStorage.setItem("devio_is_new_user", "true");
+        localStorage.removeItem("devio_projects_state");
+        sessionStorage.removeItem("devio_projects_state");
+        localStorage.removeItem("devio_developer_onboarding");
+        sessionStorage.removeItem("devio_developer_onboarding");
+
+        if (data.developer) {
+          localStorage.setItem("devio_developer_onboarding", JSON.stringify(data.developer));
+          sessionStorage.setItem("devio_developer_onboarding", JSON.stringify(data.developer));
+        }
+
+        // Cookie de autenticación para Middleware
+        document.cookie = `devio_auth_token=devio_session_${Date.now()}; path=/; max-age=604800; SameSite=Lax`;
+
+        if (activeInvite) {
+          localStorage.setItem("devio_custom_pricing", JSON.stringify(activeInvite));
+          sessionStorage.setItem("devio_custom_pricing", JSON.stringify(activeInvite));
+        }
+      }
+
       setIsSubmitting(false);
       // Redirigir al Onboarding de Desarrolladora
       router.push("/onboarding/developer");
-    }, 500);
+    } catch (e: any) {
+      console.error("Error al registrarse en el servidor:", e);
+      setIsSubmitting(false);
+      setErrorMessage(e.message || "Error de conexión al registrar la cuenta en el servidor.");
+    }
   };
 
   return (
