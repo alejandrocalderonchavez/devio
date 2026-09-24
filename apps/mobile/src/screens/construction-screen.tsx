@@ -38,11 +38,17 @@ export const ConstructionScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Title Header */}
-        <View style={styles.headerBlock}>
-          <Text style={styles.projectTitle}>{selectedProperty.projectName}</Text>
-          <View style={styles.unitBadge}>
-            <Text style={styles.unitBadgeText}>Unidad {selectedProperty.unitNumber}</Text>
+        {/* Navigation & Title Header */}
+        <View style={styles.navHeaderRow}>
+          <TouchableOpacity onPress={goBack} style={styles.backBtn} activeOpacity={0.7}>
+            <ArrowLeft size={18} color="#1F3652" />
+            <Text style={styles.backBtnText}>Volver</Text>
+          </TouchableOpacity>
+
+          <View style={styles.projectPillBadge}>
+            <Text style={styles.projectPillText}>
+              {selectedProperty.projectName} · Unidad {selectedProperty.unitNumber}
+            </Text>
           </View>
         </View>
 
@@ -135,7 +141,7 @@ export const ConstructionScreen: React.FC = () => {
         {/* Back Button */}
         <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.8}>
           <ArrowLeft size={18} color="#1F3652" />
-          <Text style={styles.backButtonText}>Volver</Text>
+          <Text style={styles.backButtonText}>Volver a la Propiedad</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -148,33 +154,44 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: 40,
-    gap: 16,
+    gap: 14,
   },
-  headerBlock: {
-    gap: 8,
+  navHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  projectTitle: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: "#1F3652",
-    letterSpacing: -0.5,
-  },
-  unitBadge: {
+  backBtn: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#FFFFFF",
-    alignSelf: "flex-start",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 99,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#C59B62",
+    borderColor: "#E2E8F0",
+    gap: 6,
   },
-  unitBadgeText: {
+  backBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1F3652",
+  },
+  projectPillBadge: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  projectPillText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#C59B62",
+    color: "#1F3652",
   },
   summaryCard: {
     backgroundColor: "#FFFFFF",

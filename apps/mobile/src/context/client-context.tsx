@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useMemo, ReactNode } from "react";
+import { createNavigationContainerRef } from "@react-navigation/native";
 import {
   ClientUser,
   ClientProperty,
@@ -7,6 +8,8 @@ import {
   ClientPaymentReceiptItem,
 } from "../types/client";
 import { resolveClientPropertiesLocal } from "../data/real-data-resolver";
+
+export const navigationRef = createNavigationContainerRef<any>();
 
 export type ClientAppScreen =
   | "main"
@@ -123,10 +126,34 @@ export const ClientProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setSelectedPropertyId(propertyId);
     }
     setScreenHistory((prev) => [...prev, screen]);
+
+    if (navigationRef.isReady()) {
+      switch (screen) {
+        case "property-detail":
+          navigationRef.navigate("PropertyDetail", { propertyId });
+          break;
+        case "account-statement":
+          navigationRef.navigate("AccountStatement", { propertyId });
+          break;
+        case "construction":
+          navigationRef.navigate("Construction", { propertyId });
+          break;
+        case "documents":
+          navigationRef.navigate("Documents", { propertyId });
+          break;
+        case "main":
+        default:
+          navigationRef.navigate("Main");
+          break;
+      }
+    }
   };
 
   const goBack = () => {
     setScreenHistory((prev) => (prev.length > 1 ? prev.slice(0, -1) : ["main"]));
+    if (navigationRef.isReady() && navigationRef.canGoBack()) {
+      navigationRef.goBack();
+    }
   };
 
   const selectProperty = (id: string) => {

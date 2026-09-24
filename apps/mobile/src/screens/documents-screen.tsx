@@ -47,7 +47,21 @@ export const DocumentsScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.screenTitle}>Documentos</Text>
+        {/* Navigation & Title Header */}
+        <View style={styles.navHeaderRow}>
+          <TouchableOpacity onPress={goBack} style={styles.backBtn} activeOpacity={0.7}>
+            <ArrowLeft size={18} color="#1F3652" />
+            <Text style={styles.backBtnText}>Volver</Text>
+          </TouchableOpacity>
+
+          <View style={styles.projectPillBadge}>
+            <Text style={styles.projectPillText}>
+              {selectedProperty.projectName} · Unidad {selectedProperty.unitNumber}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.screenTitle}>Documentación Oficial</Text>
 
         {/* Search Bar */}
         <View style={styles.searchBar}>
@@ -122,10 +136,44 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: 40,
-    gap: 16,
+    gap: 14,
+  },
+  navHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  backBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 6,
+  },
+  backBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1F3652",
+  },
+  projectPillBadge: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  projectPillText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#1F3652",
   },
   screenTitle: {
     fontSize: 24,

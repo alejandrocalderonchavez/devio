@@ -1,5 +1,6 @@
 import React from "react";
-import { View, StyleSheet, SafeAreaView, Platform } from "react-native";
+import { View, StyleSheet, Platform } from "react-native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useClientApp } from "../context/client-context";
 import { PropertiesScreen } from "../screens/properties-screen";
 import { PropertyDetailScreen } from "../screens/property-detail-screen";
@@ -14,41 +15,48 @@ import { ReceiptPdfModal } from "../components/receipt-pdf-modal";
 import { EditProfileModal } from "../screens/edit-profile-modal";
 import { ChangePasswordModal } from "../screens/change-password-modal";
 
+const Stack = createNativeStackNavigator();
+
+function MainTabScreen() {
+  const { activeTab } = useClientApp();
+  return (
+    <View style={styles.mainTabWrapper}>
+      <View style={styles.tabContent}>
+        {activeTab === "properties" ? <PropertiesScreen /> : <ProfileScreen />}
+      </View>
+      <BottomTabs />
+    </View>
+  );
+}
+
 export const RootNavigator: React.FC = () => {
-  const { isLoggedIn, currentScreen, activeTab } = useClientApp();
-
-  if (!isLoggedIn) {
-    return <LoginScreen />;
-  }
-
-  const renderCurrentScreen = () => {
-    switch (currentScreen) {
-      case "property-detail":
-        return <PropertyDetailScreen />;
-      case "construction":
-        return <ConstructionScreen />;
-      case "documents":
-        return <DocumentsScreen />;
-      case "account-statement":
-        return <AccountStatementScreen />;
-      case "main":
-      default:
-        return activeTab === "properties" ? (
-          <PropertiesScreen />
-        ) : (
-          <ProfileScreen />
-        );
-    }
-  };
+  const { isLoggedIn } = useClientApp();
 
   return (
     <View style={styles.container}>
-      <View style={styles.screenWrapper}>{renderCurrentScreen()}</View>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          animation: "slide_from_right",
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
+          contentStyle: { backgroundColor: "#F1F5F9" },
+        }}
+      >
+        {!isLoggedIn ? (
+          <Stack.Screen name="Login" component={LoginScreen} options={{ animation: "fade" }} />
+        ) : (
+          <>
+            <Stack.Screen name="Main" component={MainTabScreen} />
+            <Stack.Screen name="PropertyDetail" component={PropertyDetailScreen} />
+            <Stack.Screen name="AccountStatement" component={AccountStatementScreen} />
+            <Stack.Screen name="Construction" component={ConstructionScreen} />
+            <Stack.Screen name="Documents" component={DocumentsScreen} />
+          </>
+        )}
+      </Stack.Navigator>
 
-      {/* Bottom Navigation Tabs (Shown on main home & profile) */}
-      {currentScreen === "main" && <BottomTabs />}
-
-      {/* Global Modals & Drawers */}
+      {/* Global Modals */}
       <NotificationsModal />
       <ReceiptPdfModal />
       <EditProfileModal />
@@ -60,17 +68,16 @@ export const RootNavigator: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#1F3652",
     width: "100%",
     maxWidth: Platform.OS === "web" ? 540 : undefined,
     alignSelf: "center",
-    shadowColor: Platform.OS === "web" ? "rgba(0,0,0,0.12)" : undefined,
-    shadowOffset: Platform.OS === "web" ? { width: 0, height: 0 } : undefined,
-    shadowOpacity: Platform.OS === "web" ? 1 : undefined,
-    shadowRadius: Platform.OS === "web" ? 24 : undefined,
-    minHeight: Platform.OS === "web" ? "100%" as any : undefined,
   },
-  screenWrapper: {
+  mainTabWrapper: {
+    flex: 1,
+    backgroundColor: "#F1F5F9",
+  },
+  tabContent: {
     flex: 1,
   },
 });
