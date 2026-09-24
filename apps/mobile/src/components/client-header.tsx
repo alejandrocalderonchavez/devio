@@ -1,62 +1,123 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
-import { Bell } from "lucide-react-native";
+import { Bell, ArrowLeft } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
 
 interface ClientHeaderProps {
   showGreeting?: boolean;
+  isSubscreen?: boolean;
+  screenTitle?: string;
+  screenSubtitle?: string;
+  onBack?: () => void;
 }
 
-export const ClientHeader: React.FC<ClientHeaderProps> = ({ showGreeting = true }) => {
-  const { user, unreadNotificationsCount, setShowNotificationsModal, setActiveTab } = useClientApp();
+export const ClientHeader: React.FC<ClientHeaderProps> = ({
+  showGreeting = true,
+  isSubscreen = false,
+  screenTitle,
+  screenSubtitle,
+  onBack,
+}) => {
+  const {
+    user,
+    unreadNotificationsCount,
+    setShowNotificationsModal,
+    setActiveTab,
+    activeTab,
+    goBack,
+  } = useClientApp();
+
+  const getInitials = (name?: string) => {
+    if (!name) return "EE";
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      const first = parts[0][0] || "";
+      const second = parts[1][0] || "";
+      return (first + second).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
 
   return (
     <View style={styles.headerContainer}>
-      <View style={styles.topRow}>
-        {/* Devio Official Logo */}
-        <Image
-          source={require("../../assets/logo-horizontal-light.png")}
-          style={styles.officialLogo}
-        />
-
-        {/* Action Icons: Notification Bell & Profile Avatar */}
-        <View style={styles.actionsRow}>
+      {isSubscreen ? (
+        /* Sub-screen Header with Circular Back Arrow & Centered Title */
+        <View style={styles.subscreenRow}>
           <TouchableOpacity
-            style={styles.bellButton}
-            onPress={() => setShowNotificationsModal(true)}
+            style={styles.subscreenBackBtn}
+            onPress={onBack || goBack}
             activeOpacity={0.7}
           >
-            <Bell size={20} color="#1F3652" />
-            {unreadNotificationsCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{unreadNotificationsCount}</Text>
-              </View>
-            )}
+            <ArrowLeft size={20} color="#FFFFFF" />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.avatarButton}
-            onPress={() => setActiveTab("profile")}
-            activeOpacity={0.7}
-          >
-            {user?.avatarUrl ? (
-              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarInitials}>
-                  {user?.name ? user.name.split(" ").map(w => w[0]).slice(0, 2).join("") : "IH"}
-                </Text>
-              </View>
+          <View style={styles.subscreenTitleCol}>
+            {screenSubtitle && (
+              <Text style={styles.subscreenSubtitle}>{screenSubtitle}</Text>
             )}
-          </TouchableOpacity>
+            <Text style={styles.subscreenTitle} numberOfLines={1}>
+              {screenTitle || "Detalle"}
+            </Text>
+          </View>
+
+          <View style={styles.subscreenSpacer} />
         </View>
-      </View>
+      ) : (
+        /* Main Screen Header */
+        <View style={styles.mainHeaderCol}>
+          <View style={styles.topRow}>
+            {/* Devio Official Logo */}
+            <Image
+              source={require("../../assets/logo-horizontal-light.png")}
+              style={styles.officialLogo}
+            />
 
-      {/* Greeting row */}
-      {showGreeting && user && (
-        <View style={styles.greetingSection}>
-          <Text style={styles.greetingEyebrow}>Hola,</Text>
-          <Text style={styles.greetingName}>{user.name}</Text>
+            {/* Action Icons: Notification Bell & Profile Avatar */}
+            <View style={styles.actionsRow}>
+              <TouchableOpacity
+                style={styles.bellButton}
+                onPress={() => setShowNotificationsModal(true)}
+                activeOpacity={0.7}
+              >
+                <Bell size={18} color="#FFFFFF" />
+                {unreadNotificationsCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{unreadNotificationsCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.avatarButton}
+                onPress={() => setActiveTab("profile")}
+                activeOpacity={0.7}
+              >
+                {user?.avatarUrl ? (
+                  <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <Text style={styles.avatarInitials}>
+                      {getInitials(user?.name)}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Greeting row */}
+          {showGreeting && (
+            <View style={styles.greetingSection}>
+              {activeTab === "properties" ? (
+                <>
+                  <Text style={styles.greetingEyebrow}>Bienvenido de nuevo,</Text>
+                  <Text style={styles.greetingName}>{user?.name || "Eduardo Arroniz Estefan"}</Text>
+                </>
+              ) : (
+                <Text style={styles.greetingName}>Mi Perfil de Cliente</Text>
+              )}
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -71,11 +132,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
-    shadowColor: "#000",
+    shadowColor: "#1F3652",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 10,
+  },
+  mainHeaderCol: {
+    gap: 16,
   },
   topRow: {
     flexDirection: "row",
@@ -93,10 +158,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   bellButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F1F5F9",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255,255,255,0.15)",
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
@@ -107,26 +172,26 @@ const styles = StyleSheet.create({
     right: -2,
     backgroundColor: "#EF4444",
     borderRadius: 10,
-    minWidth: 18,
-    height: 18,
+    minWidth: 16,
+    height: 16,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
     borderWidth: 2,
     borderColor: "#1F3652",
   },
   badgeText: {
     color: "#FFFFFF",
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "800",
   },
   avatarButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     overflow: "hidden",
     borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.4)",
+    borderColor: "rgba(255,255,255,0.5)",
   },
   avatarImage: {
     width: "100%",
@@ -135,7 +200,7 @@ const styles = StyleSheet.create({
   avatarPlaceholder: {
     width: "100%",
     height: "100%",
-    backgroundColor: "#D97706",
+    backgroundColor: "#1F3652",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -145,18 +210,53 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   greetingSection: {
-    marginTop: 20,
+    marginTop: 4,
   },
   greetingEyebrow: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 13,
     fontWeight: "500",
   },
   greetingName: {
     color: "#FFFFFF",
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: "800",
     marginTop: 2,
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
+  },
+  subscreenRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  subscreenBackBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  subscreenTitleCol: {
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+    paddingHorizontal: 8,
+  },
+  subscreenSubtitle: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  subscreenTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  subscreenSpacer: {
+    width: 38,
   },
 });

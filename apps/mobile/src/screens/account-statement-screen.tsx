@@ -8,13 +8,11 @@ import {
   Alert,
 } from "react-native";
 import {
-  ArrowLeft,
   Download,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  FileText,
+  Calendar,
+  CreditCard,
   ExternalLink,
+  Eye,
 } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
 import { ClientHeader } from "../components/client-header";
@@ -35,8 +33,7 @@ export const AccountStatementScreen: React.FC = () => {
   const totalPaid = selectedProperty.paidAmount || 0;
   const totalOverdue = selectedProperty.overdueAmount || 0;
   const totalPending = selectedProperty.pendingAmount || 0;
-  const totalPlan = selectedProperty.totalPrice || 1;
-  const pctPaid = Math.round((totalPaid / totalPlan) * 100);
+  const totalPrice = selectedProperty.totalPrice || 0;
 
   const handleDownloadStatement = () => {
     Alert.alert(
@@ -47,8 +44,7 @@ export const AccountStatementScreen: React.FC = () => {
   };
 
   const handleScheduleRowPress = (item: ClientPaymentScheduleItem) => {
-    if (item.status === "PAGADO") {
-      // Find matching receipt
+    if (item.status === "PAGADO" || (item as any).status === "Pagado") {
       const match = (selectedProperty.paymentsList || []).find(
         (pl) => pl.reciboFolio === item.receiptNumber || pl.monto === item.amount
       );
@@ -57,10 +53,10 @@ export const AccountStatementScreen: React.FC = () => {
       } else {
         setSelectedReceiptPayment(item);
       }
-    } else if (item.status === "ATRASADO") {
+    } else if (item.status === "ATRASADO" || (item as any).status === "Atrasado") {
       Alert.alert(
         "Cuota Vencida",
-        `Esta cuota de ${formatMoney(item.amount)} venció el ${formatDateDisplay(item.scheduledDate)}. Por favor realiza tu abono para regularizar tu cuenta.`,
+        `Esta cuota de ${formatMoney(item.amount)} venció el ${formatDateDisplay(item.scheduledDate)}. Te sugerimos realizar tu abono para regularizar tu cuenta.`,
         [{ text: "Entendido" }]
       );
     } else {
@@ -81,105 +77,94 @@ export const AccountStatementScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <ClientHeader showGreeting={false} />
+      <ClientHeader
+        isSubscreen={true}
+        screenSubtitle="ESTADO DE CUENTA Y PAGOS"
+        screenTitle={`${selectedProperty.projectName} · Unidad ${selectedProperty.unitNumber}`}
+        onBack={goBack}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Navigation & Title Header */}
-        <View style={styles.navHeaderRow}>
-          <TouchableOpacity onPress={goBack} style={styles.backBtn} activeOpacity={0.7}>
-            <ArrowLeft size={18} color="#1F3652" />
-            <Text style={styles.backBtnText}>Volver</Text>
-          </TouchableOpacity>
+        {/* 4 Financial KPI Summary Cards (Identical to Web) */}
+        <View style={styles.kpiGrid}>
+          {/* 1. Total a Pagar */}
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Total a Pagar</Text>
+            <Text style={[styles.kpiVal, { color: "#1F3652" }]}>
+              {formatMoney(totalPrice)}
+            </Text>
+          </View>
 
-          <View style={styles.projectPillBadge}>
-            <Text style={styles.projectPillText}>
-              {selectedProperty.projectName} · Unidad {selectedProperty.unitNumber}
+          {/* 2. Total Pagado */}
+          <View style={styles.kpiCard}>
+            <Text style={[styles.kpiLabel, { color: "#00875A" }]}>Total Pagado</Text>
+            <Text style={[styles.kpiVal, { color: "#00875A" }]}>
+              {formatMoney(totalPaid)}
+            </Text>
+          </View>
+
+          {/* 3. Total Pendiente */}
+          <View style={styles.kpiCard}>
+            <Text style={[styles.kpiLabel, { color: "#B45309" }]}>Total Pendiente</Text>
+            <Text style={[styles.kpiVal, { color: "#B45309" }]}>
+              {formatMoney(totalPending)}
+            </Text>
+          </View>
+
+          {/* 4. Saldo Atrasado */}
+          <View style={styles.kpiCard}>
+            <Text style={[styles.kpiLabel, { color: totalOverdue > 0 ? "#DC2626" : "#64748B" }]}>
+              Saldo Atrasado
+            </Text>
+            <Text style={[styles.kpiVal, { color: totalOverdue > 0 ? "#DC2626" : "#1F3652" }]}>
+              {formatMoney(totalOverdue)}
             </Text>
           </View>
         </View>
 
-        {/* Resumen Financiero Top Card (2x2 Grid) */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Resumen Financiero</Text>
-
-          <View style={styles.grid2x2}>
-            {/* 1. Total Pagado */}
-            <View style={styles.gridCell}>
-              <Text style={[styles.gridVal, { color: "#00C48C" }]}>
-                {formatMoney(totalPaid)}
-              </Text>
-              <Text style={styles.gridLabel}>Total Pagado</Text>
-            </View>
-
-            {/* 2. Saldo Vencido */}
-            <View style={styles.gridCell}>
-              <Text style={[styles.gridVal, { color: totalOverdue > 0 ? "#DC2626" : "#1F3652" }]}>
-                {formatMoney(totalOverdue)}
-              </Text>
-              <Text style={styles.gridLabel}>Saldo Vencido</Text>
-            </View>
-
-            {/* 3. Saldo Pendiente */}
-            <View style={styles.gridCell}>
-              <Text style={styles.gridVal}>{formatMoney(totalPending)}</Text>
-              <Text style={styles.gridLabel}>Saldo Pendiente</Text>
-            </View>
-
-            {/* 4. % Pagado */}
-            <View style={styles.gridCell}>
-              <Text style={styles.gridVal}>{pctPaid}%</Text>
-              <Text style={styles.gridLabel}>% Pagado</Text>
-            </View>
-          </View>
-
-          {/* Download Account Statement Button */}
-          <TouchableOpacity
-            style={styles.downloadStatementBtn}
-            onPress={handleDownloadStatement}
-            activeOpacity={0.85}
-          >
-            <Download size={16} color="#FFFFFF" />
-            <Text style={styles.downloadStatementBtnText}>
-              Descargar Estado de Cuenta
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Subtabs Selector: [Estado de Cuenta] [Pagos] */}
-        <View style={styles.segmentedControl}>
+        {/* 2 Main Subtabs Selector */}
+        <View style={styles.subtabsRow}>
           <TouchableOpacity
             style={[
-              styles.segmentBtn,
-              activeSubTab === "statement" && styles.segmentBtnActive,
+              styles.subtabBtn,
+              activeSubTab === "statement" && styles.subtabBtnActive,
             ]}
             onPress={() => setActiveSubTab("statement")}
             activeOpacity={0.8}
           >
+            <Calendar
+              size={15}
+              color={activeSubTab === "statement" ? "#FFFFFF" : "#64748B"}
+            />
             <Text
               style={[
-                styles.segmentBtnText,
-                activeSubTab === "statement" && styles.segmentBtnTextActive,
+                styles.subtabBtnText,
+                activeSubTab === "statement" && styles.subtabBtnTextActive,
               ]}
             >
-              Estado de Cuenta ({scheduleItems.length})
+              Estado de Cuenta
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
-              styles.segmentBtn,
-              activeSubTab === "payments" && styles.segmentBtnActive,
+              styles.subtabBtn,
+              activeSubTab === "payments" && styles.subtabBtnActive,
             ]}
             onPress={() => setActiveSubTab("payments")}
             activeOpacity={0.8}
           >
+            <CreditCard
+              size={15}
+              color={activeSubTab === "payments" ? "#FFFFFF" : "#64748B"}
+            />
             <Text
               style={[
-                styles.segmentBtnText,
-                activeSubTab === "payments" && styles.segmentBtnTextActive,
+                styles.subtabBtnText,
+                activeSubTab === "payments" && styles.subtabBtnTextActive,
               ]}
             >
               Pagos Realizados ({paymentsList.length})
@@ -187,121 +172,151 @@ export const AccountStatementScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* TAB 1: ESTADO DE CUENTA (CALENDARIO DE CUOTAS) */}
+        {/* TAB 1: ESTADO DE CUENTA (CALENDARIO DE AMORTIZACIÓN) */}
         {activeSubTab === "statement" && (
-          <View style={styles.sectionWrap}>
-            <View style={styles.tableHeaderRow}>
-              <Text style={[styles.tableHeaderCol, { flex: 0.6 }]}>#</Text>
-              <Text style={[styles.tableHeaderCol, { flex: 1.3 }]}>Concepto</Text>
-              <Text style={[styles.tableHeaderCol, { flex: 1.4 }]}>Monto</Text>
-              <Text style={[styles.tableHeaderCol, { flex: 1.1, textAlign: "right" }]}>Estatus</Text>
+          <View style={styles.tabContentWrap}>
+            {/* Top Action Header */}
+            <View style={styles.statementActionCard}>
+              <View style={styles.statementActionLeft}>
+                <Text style={styles.statementActionTitle}>
+                  Calendario de Amortización
+                </Text>
+                <Text style={styles.statementActionSub}>
+                  Cuotas pactadas y desglose de mensualidades de la unidad {selectedProperty.unitNumber}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.downloadPdfBtn}
+                onPress={handleDownloadStatement}
+                activeOpacity={0.85}
+              >
+                <Download size={14} color="#FFFFFF" />
+                <Text style={styles.downloadPdfBtnText}>
+                  Descargar Estado de Cuenta PDF
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.paymentsList}>
+            {/* Installments Table / Card List */}
+            <View style={styles.paymentsListCard}>
               {scheduleItems.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyText}>No hay cuotas programadas</Text>
                 </View>
               ) : (
-                scheduleItems.map((p, idx) => (
-                  <TouchableOpacity
-                    key={p.id || `cuota-${idx}`}
-                    style={styles.paymentRowCard}
-                    onPress={() => handleScheduleRowPress(p)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.cellIndex, { flex: 0.6 }]}>
-                      {p.cuotaNumber || idx + 1}
-                    </Text>
+                scheduleItems.map((p, idx) => {
+                  const isPagado = p.status === "PAGADO" || (p.status as string) === "Pagado";
+                  const isAtrasado = p.status === "ATRASADO" || (p.status as string) === "Atrasado";
+                  const isParcial = (p.status as string) === "PARCIAL" || (p.status as string) === "Parcial";
 
-                    <View style={{ flex: 1.3 }}>
-                      <Text style={styles.cellConcept} numberOfLines={1}>
-                        {p.concept || `Cuota ${idx + 1}`}
-                      </Text>
-                      <Text style={styles.cellDateSub}>
-                        {formatDateDisplay(p.scheduledDate)}
-                      </Text>
-                    </View>
+                  return (
+                    <TouchableOpacity
+                      key={p.id || `cuota-${idx}`}
+                      style={styles.installmentRow}
+                      onPress={() => handleScheduleRowPress(p)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.installmentMain}>
+                        <View style={styles.installmentTitleRow}>
+                          <Text style={styles.installmentConcept}>
+                            {p.concept || `Cuota ${idx + 1}`}
+                          </Text>
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              isPagado
+                                ? styles.statusBadgePagado
+                                : isAtrasado
+                                ? styles.statusBadgeAtrasado
+                                : isParcial
+                                ? styles.statusBadgeParcial
+                                : styles.statusBadgePendiente,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusBadgeText,
+                                isPagado
+                                  ? styles.statusBadgeTextPagado
+                                  : isAtrasado
+                                  ? styles.statusBadgeTextAtrasado
+                                  : isParcial
+                                  ? styles.statusBadgeTextParcial
+                                  : styles.statusBadgeTextPendiente,
+                              ]}
+                            >
+                              {isPagado ? "Pagado" : isAtrasado ? "Atrasado" : isParcial ? "Parcial" : "Pendiente"}
+                            </Text>
+                          </View>
+                        </View>
 
-                    <Text style={[styles.cellAmount, { flex: 1.4 }]}>
-                      {formatMoney(p.amount)}
-                    </Text>
-
-                    <View style={[styles.cellStatusGroup, { flex: 1.1 }]}>
-                      {p.status === "PAGADO" ? (
-                        <View style={styles.badgePagado}>
-                          <Text style={styles.badgePagadoText}>Pagado</Text>
+                        <View style={styles.installmentDetailsRow}>
+                          <Text style={styles.installmentDate}>
+                            Vence: {formatDateDisplay(p.scheduledDate)}
+                          </Text>
+                          <Text style={styles.installmentAmount}>
+                            {formatMoney(p.amount)}
+                          </Text>
                         </View>
-                      ) : p.status === "ATRASADO" ? (
-                        <View style={styles.badgeAtrasado}>
-                          <Text style={styles.badgeAtrasadoText}>Atrasado</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.badgePendiente}>
-                          <Text style={styles.badgePendienteText}>Pendiente</Text>
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
               )}
             </View>
           </View>
         )}
 
-        {/* TAB 2: PAGOS REALIZADOS & RECIBOS */}
+        {/* TAB 2: PAGOS REALIZADOS */}
         {activeSubTab === "payments" && (
-          <View style={styles.sectionWrap}>
-            <View style={styles.tableHeaderRow}>
-              <Text style={[styles.tableHeaderCol, { flex: 1.4 }]}>Folio / Método</Text>
-              <Text style={[styles.tableHeaderCol, { flex: 1.3 }]}>Monto</Text>
-              <Text style={[styles.tableHeaderCol, { flex: 1.1, textAlign: "right" }]}>Recibo</Text>
+          <View style={styles.tabContentWrap}>
+            <View style={styles.statementActionCard}>
+              <Text style={styles.statementActionTitle}>
+                Historial de Pagos Realizados
+              </Text>
+              <Text style={styles.statementActionSub}>
+                Transacciones y abonos registrados con comprobante bancario SPEI y recibo oficial ({paymentsList.length} operaciones)
+              </Text>
             </View>
 
-            <View style={styles.paymentsList}>
+            <View style={styles.paymentsListCard}>
               {paymentsList.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>No hay pagos registrados aún</Text>
+                  <Text style={styles.emptyText}>No hay pagos registrados para esta unidad.</Text>
                 </View>
               ) : (
                 paymentsList.map((pl, idx) => (
-                  <TouchableOpacity
+                  <View
                     key={pl.id || `pl-${idx}`}
-                    style={styles.paymentRowCard}
-                    onPress={() => handlePaymentReceiptPress(pl)}
-                    activeOpacity={0.8}
+                    style={styles.paymentReceiptRow}
                   >
-                    <View style={{ flex: 1.4 }}>
-                      <Text style={styles.cellConcept} numberOfLines={1}>
+                    <View style={styles.paymentReceiptLeft}>
+                      <Text style={styles.receiptFolio}>
                         {pl.reciboFolio || pl.folio || `REC-${idx + 1}`}
                       </Text>
-                      <Text style={styles.cellDateSub}>
-                        {formatDateDisplay(pl.fechaPago)} • {pl.metodoPago}
+                      <Text style={styles.receiptDate}>
+                        {formatDateDisplay(pl.fechaPago)} • {pl.metodoPago || "Transferencia SPEI"}
+                      </Text>
+                      <Text style={styles.receiptAmount}>
+                        {formatMoney(pl.monto)}
                       </Text>
                     </View>
 
-                    <Text style={[styles.cellAmount, { flex: 1.3, color: "#00C48C" }]}>
-                      {formatMoney(pl.monto)}
-                    </Text>
-
-                    <View style={[styles.cellStatusGroup, { flex: 1.1 }]}>
-                      <View style={styles.badgeRecibo}>
-                        <ExternalLink size={11} color="#FFFFFF" />
-                        <Text style={styles.badgeReciboText}>Ver Recibo</Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.openReceiptBtn}
+                      onPress={() => handlePaymentReceiptPress(pl)}
+                      activeOpacity={0.8}
+                    >
+                      <ExternalLink size={12} color="#FFFFFF" />
+                      <Text style={styles.openReceiptBtnText}>Abrir Recibo PDF</Text>
+                    </TouchableOpacity>
+                  </View>
                 ))
               )}
             </View>
           </View>
         )}
-
-        {/* Back Button */}
-        <TouchableOpacity style={styles.backButton} onPress={goBack} activeOpacity={0.8}>
-          <ArrowLeft size={18} color="#1F3652" />
-          <Text style={styles.backButtonText}>Volver a la Propiedad</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -310,52 +325,119 @@ export const AccountStatementScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8FAFC",
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 40,
+    paddingTop: 16,
+    paddingBottom: 36,
+    gap: 16,
+  },
+  kpiGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  kpiCard: {
+    width: "48%",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  kpiLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  kpiVal: {
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  subtabsRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  subtabBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 9999,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  subtabBtnActive: {
+    backgroundColor: "#1B3047",
+    borderColor: "#1B3047",
+    shadowColor: "#1B3047",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  subtabBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  subtabBtnTextActive: {
+    color: "#FFFFFF",
+  },
+  tabContentWrap: {
     gap: 14,
   },
-  navHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
+  statementActionCard: {
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    gap: 6,
+    gap: 12,
   },
-  backBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1F3652",
+  statementActionLeft: {
+    gap: 4,
   },
-  projectPillBadge: {
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  projectPillText: {
-    fontSize: 13,
+  statementActionTitle: {
+    fontSize: 15,
     fontWeight: "800",
     color: "#1F3652",
   },
-  card: {
+  statementActionSub: {
+    fontSize: 12,
+    color: "#64748B",
+    lineHeight: 16,
+  },
+  downloadPdfBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#1B3047",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 9999,
+    alignSelf: "flex-start",
+  },
+  downloadPdfBtnText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  paymentsListCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 20,
+    borderRadius: 18,
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: "#E2E8F0",
     shadowColor: "#000",
@@ -363,212 +445,126 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
-    gap: 16,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#1F3652",
-  },
-  grid2x2: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  gridCell: {
-    width: "48%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 14,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  gridVal: {
-    fontSize: 17,
-    fontWeight: "900",
-    color: "#1F3652",
-    marginBottom: 4,
-  },
-  gridLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#64748B",
-  },
-  downloadStatementBtn: {
-    backgroundColor: "#1F3652",
+  installmentRow: {
+    paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
   },
-  downloadStatementBtnText: {
-    color: "#FFFFFF",
-    fontSize: 14,
+  installmentMain: {
+    gap: 6,
+  },
+  installmentTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  installmentConcept: {
+    fontSize: 13,
     fontWeight: "800",
+    color: "#1F3652",
   },
-  segmentedControl: {
+  installmentDetailsRow: {
     flexDirection: "row",
-    backgroundColor: "#E2E8F0",
-    borderRadius: 14,
-    padding: 4,
-    gap: 4,
-  },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 10,
+    justifyContent: "space-between",
     alignItems: "center",
-    borderRadius: 10,
   },
-  segmentBtnActive: {
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  segmentBtnText: {
+  installmentDate: {
     fontSize: 12,
-    fontWeight: "700",
     color: "#64748B",
   },
-  segmentBtnTextActive: {
-    color: "#1F3652",
+  installmentAmount: {
+    fontSize: 14,
     fontWeight: "900",
-  },
-  sectionWrap: {
-    gap: 8,
-  },
-  tableHeaderRow: {
-    flexDirection: "row",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  tableHeaderCol: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#64748B",
-    textTransform: "uppercase",
-  },
-  paymentsList: {
-    gap: 8,
-  },
-  paymentRowCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.02,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  cellIndex: {
-    fontSize: 13,
-    fontWeight: "800",
     color: "#1F3652",
   },
-  cellConcept: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#1F3652",
-  },
-  cellDateSub: {
-    fontSize: 10,
-    color: "#94A3B8",
-    marginTop: 2,
-  },
-  cellAmount: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#1F3652",
-  },
-  cellStatusGroup: {
-    alignItems: "flex-end",
-  },
-  badgePagado: {
-    backgroundColor: "#DCFCE7",
+  statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgePagadoText: {
-    color: "#166534",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  badgeAtrasado: {
-    backgroundColor: "#FEE2E2",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgeAtrasadoText: {
-    color: "#DC2626",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  badgePendiente: {
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgePendienteText: {
-    color: "#2563EB",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  badgeRecibo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#1B3047",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
     borderRadius: 99,
+    borderWidth: 1,
   },
-  badgeReciboText: {
-    color: "#FFFFFF",
+  statusBadgePagado: {
+    backgroundColor: "rgba(0, 196, 140, 0.12)",
+    borderColor: "rgba(0, 196, 140, 0.3)",
+  },
+  statusBadgeAtrasado: {
+    backgroundColor: "#FEE2E2",
+    borderColor: "#FECACA",
+  },
+  statusBadgeParcial: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
+  },
+  statusBadgePendiente: {
+    backgroundColor: "#F1F5F9",
+    borderColor: "#CBD5E1",
+  },
+  statusBadgeText: {
     fontSize: 10,
+    fontWeight: "700",
+  },
+  statusBadgeTextPagado: {
+    color: "#00A877",
+  },
+  statusBadgeTextAtrasado: {
+    color: "#DC2626",
+  },
+  statusBadgeTextParcial: {
+    color: "#1E40AF",
+  },
+  statusBadgeTextPendiente: {
+    color: "#475569",
+  },
+  paymentReceiptRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  paymentReceiptLeft: {
+    gap: 4,
+    flex: 1,
+  },
+  receiptFolio: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#1F3652",
+  },
+  receiptDate: {
+    fontSize: 11,
+    color: "#64748B",
+  },
+  receiptAmount: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#00C48C",
+  },
+  openReceiptBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#1B3047",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 9999,
+  },
+  openReceiptBtnText: {
+    color: "#FFFFFF",
+    fontSize: 11,
     fontWeight: "700",
   },
   emptyState: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    padding: 24,
+    padding: 32,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
   },
   emptyText: {
     fontSize: 13,
-    color: "#64748B",
-    fontWeight: "600",
-  },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-    paddingVertical: 14,
-    borderRadius: 14,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    marginTop: 8,
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#1F3652",
+    color: "#94A3B8",
+    textAlign: "center",
   },
 });

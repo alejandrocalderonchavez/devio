@@ -8,7 +8,7 @@ export const BottomTabs: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Tab 1: Propiedades */}
+      {/* Tab 1: Mis Propiedades */}
       <TouchableOpacity
         style={styles.tabItem}
         onPress={() => setActiveTab("properties")}
@@ -21,7 +21,7 @@ export const BottomTabs: React.FC = () => {
           ]}
         >
           <Home
-            size={22}
+            size={20}
             color={activeTab === "properties" ? "#FFFFFF" : "#94A3B8"}
           />
         </View>
@@ -31,11 +31,11 @@ export const BottomTabs: React.FC = () => {
             activeTab === "properties" && styles.tabLabelActive,
           ]}
         >
-          Propiedades
+          Mis Propiedades
         </Text>
       </TouchableOpacity>
 
-      {/* Tab 2: Perfil */}
+      {/* Tab 2: Mi Perfil */}
       <TouchableOpacity
         style={styles.tabItem}
         onPress={() => setActiveTab("profile")}
@@ -48,7 +48,7 @@ export const BottomTabs: React.FC = () => {
           ]}
         >
           <User
-            size={22}
+            size={20}
             color={activeTab === "profile" ? "#FFFFFF" : "#94A3B8"}
           />
         </View>
@@ -58,7 +58,7 @@ export const BottomTabs: React.FC = () => {
             activeTab === "profile" && styles.tabLabelActive,
           ]}
         >
-          Perfil
+          Mi Perfil
         </Text>
       </TouchableOpacity>
     </View>
@@ -69,10 +69,10 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     backgroundColor: "#FFFFFF",
-    paddingTop: 10,
-    paddingBottom: 28,
+    paddingTop: 8,
+    paddingBottom: 24,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#E2E8F0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.05,
@@ -85,12 +85,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
-    gap: 4,
+    gap: 3,
   },
   iconWrapper: {
-    width: 44,
-    height: 32,
-    borderRadius: 16,
+    width: 42,
+    height: 30,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "transparent",
@@ -99,12 +99,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#1F3652",
   },
   tabLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#94A3B8",
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
   },
   tabLabelActive: {
     color: "#1F3652",
-    fontWeight: "700",
+    fontWeight: "800",
   },
 });

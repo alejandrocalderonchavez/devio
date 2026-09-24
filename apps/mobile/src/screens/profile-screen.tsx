@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import {
   User,
-  Shield,
   HelpCircle,
   Globe,
   Lock,
@@ -64,9 +63,20 @@ export const ProfileScreen: React.FC = () => {
     );
   };
 
+  const getInitials = (name?: string) => {
+    if (!name) return "EE";
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      const first = parts[0][0] || "";
+      const second = parts[1][0] || "";
+      return (first + second).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
+
   return (
     <View style={styles.container}>
-      <ClientHeader showGreeting={false} />
+      <ClientHeader showGreeting={true} />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -80,14 +90,14 @@ export const ProfileScreen: React.FC = () => {
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Text style={styles.avatarText}>
-                  {user?.name ? user.name.split(" ").map(w => w[0]).slice(0, 2).join("") : "IH"}
+                  {getInitials(user?.name)}
                 </Text>
               </View>
             )}
           </View>
 
-          <Text style={styles.userName}>{user?.name || "Iñigo Heredia Horner"}</Text>
-          <Text style={styles.userEmail}>{user?.email || "0242573@up.edu.mx"}</Text>
+          <Text style={styles.userName}>{user?.name || "Eduardo Arroniz Estefan"}</Text>
+          <Text style={styles.userEmail}>{user?.email || "earronize@gmail.com"}</Text>
         </View>
 
         {/* Section Heading: Ajustes */}
@@ -114,8 +124,8 @@ export const ProfileScreen: React.FC = () => {
             onPress={() => setShowChangePasswordModal(true)}
             activeOpacity={0.8}
           >
-            <View style={styles.iconCircle}>
-              <Lock size={20} color="#00C48C" />
+            <View style={[styles.iconCircle, { backgroundColor: "#DCFCE7" }]}>
+              <Lock size={20} color="#166534" />
             </View>
             <Text style={styles.menuLabel}>Cambiar contraseña</Text>
             <ChevronRight size={18} color="#94A3B8" />
@@ -140,8 +150,8 @@ export const ProfileScreen: React.FC = () => {
             onPress={handleSupport}
             activeOpacity={0.8}
           >
-            <View style={styles.iconCircle}>
-              <HelpCircle size={20} color="#2563EB" />
+            <View style={[styles.iconCircle, { backgroundColor: "#FEF3C7" }]}>
+              <HelpCircle size={20} color="#D97706" />
             </View>
             <Text style={styles.menuLabel}>Soporte y Ayuda</Text>
             <ChevronRight size={18} color="#94A3B8" />
@@ -178,17 +188,17 @@ export const ProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8FAFC",
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 40,
+    paddingBottom: 36,
     gap: 16,
   },
   profileCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 24,
     alignItems: "center",
     borderWidth: 1,
@@ -200,11 +210,11 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   avatarWrapper: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     overflow: "hidden",
-    marginBottom: 14,
+    marginBottom: 12,
     borderWidth: 3,
     borderColor: "#F1F5F9",
   },
@@ -215,17 +225,17 @@ const styles = StyleSheet.create({
   avatarPlaceholder: {
     width: "100%",
     height: "100%",
-    backgroundColor: "#D97706",
+    backgroundColor: "#1F3652",
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "900",
     color: "#FFFFFF",
   },
   userName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "800",
     color: "#1F3652",
     marginBottom: 4,
@@ -236,33 +246,32 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   sectionHeading: {
-    fontSize: 20,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: "800",
     color: "#1F3652",
-    marginTop: 8,
   },
   menuList: {
-    gap: 12,
+    gap: 10,
   },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.02,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 1,
   },
   iconCircle: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: 12,
     backgroundColor: "#EFF6FF",
     alignItems: "center",
     justifyContent: "center",
@@ -270,7 +279,7 @@ const styles = StyleSheet.create({
   },
   menuLabel: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
     color: "#1F3652",
   },
@@ -279,12 +288,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    paddingVertical: 16,
+    borderRadius: 18,
+    paddingVertical: 15,
     gap: 8,
     borderWidth: 1,
     borderColor: "#FEE2E2",
-    marginTop: 8,
+    marginTop: 4,
   },
   logoutText: {
     fontSize: 14,

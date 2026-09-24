@@ -8,18 +8,16 @@ import {
   Image,
 } from "react-native";
 import {
-  ArrowLeft,
   FileText,
   CreditCard,
   ChevronDown,
   ChevronUp,
-  AlertTriangle,
 } from "lucide-react-native";
 import { useClientApp } from "../context/client-context";
 import { ClientHeader } from "../components/client-header";
 
 export const PropertyDetailScreen: React.FC = () => {
-  const { selectedProperty, goBack, navigateTo, formatMoney, formatDateDisplay } = useClientApp();
+  const { selectedProperty, navigateTo, formatMoney, formatDateDisplay, goBack } = useClientApp();
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isUnitInfoExpanded, setIsUnitInfoExpanded] = useState(true);
 
@@ -29,30 +27,26 @@ export const PropertyDetailScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <ClientHeader showGreeting={false} />
+      <ClientHeader
+        isSubscreen={true}
+        screenSubtitle="DETALLE DE PROPIEDAD"
+        screenTitle={`${selectedProperty.projectName} · Unidad ${selectedProperty.unitNumber}`}
+        onBack={goBack}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Navigation & Title Header */}
-        <View style={styles.navHeaderRow}>
-          <TouchableOpacity onPress={goBack} style={styles.backBtn} activeOpacity={0.7}>
-            <ArrowLeft size={18} color="#1F3652" />
-            <Text style={styles.backBtnText}>Volver</Text>
-          </TouchableOpacity>
-
-          <View style={styles.projectPillBadge}>
-            <Text style={styles.projectPillText}>
-              {selectedProperty.projectName} · Unidad {selectedProperty.unitNumber}
-            </Text>
-          </View>
-        </View>
-
         {/* 1. Photo Carousel & Thumbnails */}
-        <View style={styles.galleryContainer}>
+        <View style={styles.galleryCard}>
           <Image
-            source={{ uri: selectedProperty.images[selectedImageIndex] || selectedProperty.images[0] }}
+            source={{
+              uri:
+                selectedProperty.images[selectedImageIndex] ||
+                selectedProperty.images[0] ||
+                "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800",
+            }}
             style={styles.mainHeroImage}
           />
           {selectedProperty.images.length > 1 && (
@@ -246,58 +240,29 @@ export const PropertyDetailScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8FAFC",
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 40,
-    gap: 14,
+    paddingTop: 16,
+    paddingBottom: 36,
+    gap: 16,
   },
-  navHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    gap: 6,
-  },
-  backBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1F3652",
-  },
-  projectPillBadge: {
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  projectPillText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#1F3652",
-  },
-  galleryContainer: {
+  galleryCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   mainHeroImage: {
     width: "100%",
-    height: 220,
+    height: 240,
     resizeMode: "cover",
   },
   thumbnailsRow: {
@@ -331,7 +296,7 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
     gap: 12,
@@ -347,12 +312,12 @@ const styles = StyleSheet.create({
     color: "#1F3652",
   },
   metaLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#64748B",
     fontWeight: "700",
   },
   largeGreenPct: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "900",
     color: "#00875A",
     marginTop: 2,
@@ -379,16 +344,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   pillColLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
   },
   pillColAmount: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "900",
     marginVertical: 2,
   },
   pillColSub: {
-    fontSize: 10,
+    fontSize: 11,
   },
   primaryActionBtn: {
     backgroundColor: "#1F3652",
