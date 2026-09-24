@@ -1,18 +1,26 @@
 {
   "expo": {
-    "name": "Devio",
-    "slug": "devio",
+    "name": "Devio Cliente",
+    "slug": "devio-cliente",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "devio",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "lat.devio.cliente"
     },
     "android": {
+      "package": "lat.devio.cliente",
       "adaptiveIcon": {
-        "backgroundColor": "#1E3B59"
+        "backgroundColor": "#1F3652"
       }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png"
     }
   }
 }

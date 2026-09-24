@@ -17,8 +17,10 @@
     "@devio/types": "workspace:*",
     "expo": "~57.0.21",
     "expo-status-bar": "~57.0.1",
+    "lucide-react-native": "^1.47.0",
     "react": "19.2.3",
-    "react-native": "0.86.3"
+    "react-native": "0.86.3",
+    "react-native-svg": "^15.15.5"
   },
   "devDependencies": {
     "@devio/typescript-config": "workspace:*",
@@ -26,4 +28,3 @@
     "typescript": "5.9.3"
   }
 }
-
