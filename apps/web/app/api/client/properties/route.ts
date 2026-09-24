@@ -248,7 +248,7 @@ export async function GET(request: Request) {
               };
             }
 
-            // Client Documents: extract project.clientDocuments or construct dynamic official documents
+            // Client Documents: extract matching project.clientDocuments only (no dummy fallback)
             const rawClientDocs = proj.clientDocuments || [];
             const matchingClientDocs = rawClientDocs.filter(
               (d: any) =>
@@ -264,44 +264,6 @@ export async function GET(request: Request) {
               uploadDate: d.uploadDate || d.updatedAt || sale.saleDate || "15 Abr 2026",
               fileUrl: d.url || undefined,
             }));
-
-            // If no custom uploaded client documents, include dynamic authentic contract & technical docs
-            if (documentsList.length === 0) {
-              documentsList.push(
-                {
-                  id: `doc-${sale.id}-contrato`,
-                  title: `Contrato Oficial de Compraventa - ${projName} (Unidad ${sale.unit}).pdf`,
-                  category: "CONTRATO",
-                  fileSize: "2.4 MB",
-                  uploadDate: sale.saleDate || "15 Abr 2026",
-                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
-                },
-                {
-                  id: `doc-${sale.id}-reglamento`,
-                  title: `Reglamento de Condominio y Régimen de Propiedad - ${projName}.pdf`,
-                  category: "REGLAMENTO",
-                  fileSize: "1.8 MB",
-                  uploadDate: sale.saleDate || "15 Abr 2026",
-                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
-                },
-                {
-                  id: `doc-${sale.id}-plano`,
-                  title: `Plano Arquitectónico y Cuadro de Áreas - Unidad ${sale.unit} (${areaM2} m²).pdf`,
-                  category: "PLANO",
-                  fileSize: "3.1 MB",
-                  uploadDate: sale.saleDate || "15 Abr 2026",
-                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
-                },
-                {
-                  id: `doc-${sale.id}-acabados`,
-                  title: `Ficha Técnica de Acabados y Equipamiento - Unidad ${sale.unit}.pdf`,
-                  category: "FICHA TÉCNICA",
-                  fileSize: "1.5 MB",
-                  uploadDate: sale.saleDate || "15 Abr 2026",
-                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
-                }
-              );
-            }
 
             matchedProperties.push({
               id: `prop-${proj.id}-${sale.unit}`,
@@ -320,44 +282,23 @@ export async function GET(request: Request) {
               nextPaymentDueDate: nextPaymentItem.dueDate,
               nextPaymentDaysRemaining: nextPaymentItem.daysRemaining,
               nextPaymentConcept: nextPaymentItem.concept,
-              constructionPct: proj.progressPct || 48,
-              lastProgressUpdateDate: "19/03/26",
-              estimatedDeliveryDate: "15 Dic 2027",
+              constructionPct: proj.progressPct || 0,
+              lastProgressUpdateDate: proj.lastProgressUpdateDate || "-",
+              estimatedDeliveryDate: proj.estimatedDeliveryDate || "Por definir",
               areaM2: areaM2,
               bedrooms: bedrooms,
               bathrooms: bathrooms,
-              parkingSpots: unitInv?.parkingSpots ?? 1,
-              storageUnits: 0,
+              parkingSpots: unitInv?.parkingSpots ?? 0,
+              storageUnits: unitInv?.storageUnits ?? 0,
               floorLevel: floor,
-              maintenanceFeeMonthly: 2200,
-              images: [
-                projCover,
-                "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1000&auto=format&fit=crop&q=80",
-                "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1000&auto=format&fit=crop&q=80",
-              ],
-              specialtiesProgress: [
-                { id: "esp-1", name: "1. Cimentación y Muros", percentage: 100 },
-                { id: "esp-2", name: "2. Estructura y Losas", percentage: 65 },
-                { id: "esp-3", name: "3. Instalaciones Hidrosanitarias", percentage: 40 },
-                { id: "esp-4", name: "4. Acabados y Cancelería", percentage: 25 },
-              ],
-              constructionMilestones: [
-                {
-                  id: "ms-1",
-                  title: "Avance de Cimentación y Muros Milán",
-                  date: "19 Mar 2026",
-                  photo: projCover,
-                  description: "Se concluyeron los muros milán y el armado de zapatas en sótano 2. Inicio de armado de columnas piso 1.",
-                },
-              ],
+              maintenanceFeeMonthly: unitInv?.maintenanceFeeMonthly || 0,
+              images: projCover ? [projCover] : [],
+              specialtiesProgress: proj.specialtiesProgress || [],
+              constructionMilestones: proj.constructionMilestones || [],
               documents: documentsList,
               schedule: scheduleList,
               paymentsList: paymentsList,
-              customAttributes: [
-                { label: "Orientación", value: "Norte - Panorámica" },
-                { label: "Tipo de Vista", value: "Valle Real / Andares" },
-                { label: "Cajón Asignado", value: `Sótano 1, #${sale.unit}` },
-              ],
+              customAttributes: unitInv?.customAttributes || [],
             });
           }
         }
@@ -447,60 +388,23 @@ export async function GET(request: Request) {
               nextPaymentDueDate: "2026-05-15",
               nextPaymentDaysRemaining: 21,
               nextPaymentConcept: "Mensualidad 1",
-              constructionPct: proj.progressPct || 50,
-              lastProgressUpdateDate: "19/03/26",
-              estimatedDeliveryDate: "15 Dic 2027",
-              areaM2: unitInv.areaM2 || 55,
-              bedrooms: unitInv.bedrooms || 1,
-              bathrooms: unitInv.bathrooms || 1,
-              parkingSpots: unitInv.parkingSpots || 1,
-              storageUnits: 0,
+              constructionPct: proj.progressPct || 0,
+              lastProgressUpdateDate: proj.lastProgressUpdateDate || "-",
+              estimatedDeliveryDate: proj.estimatedDeliveryDate || "Por definir",
+              areaM2: unitInv.areaM2 || 0,
+              bedrooms: unitInv.bedrooms || 0,
+              bathrooms: unitInv.bathrooms || 0,
+              parkingSpots: unitInv.parkingSpots || 0,
+              storageUnits: unitInv.storageUnits || 0,
               floorLevel: unitInv.floor || 1,
-              maintenanceFeeMonthly: 2200,
-              images: [
-                projCover,
-                "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1000&auto=format&fit=crop&q=80",
-              ],
-              specialtiesProgress: [
-                { id: "esp-1", name: "1. Cimentación y Muros", percentage: 100 },
-                { id: "esp-2", name: "2. Estructura y Losas", percentage: 65 },
-                { id: "esp-3", name: "3. Instalaciones Hidrosanitarias", percentage: 40 },
-                { id: "esp-4", name: "4. Acabados y Cancelería", percentage: 25 },
-              ],
-              constructionMilestones: [
-                {
-                  id: "ms-1",
-                  title: "Avance de Cimentación y Estructura",
-                  date: "19 Mar 2026",
-                  photo: projCover,
-                  description: "Avance conforme a programa de obra con supervisión y control de calidad.",
-                },
-              ],
-              documents: [
-                {
-                  id: `doc-${unitInv.id}-1`,
-                  title: `Contrato Oficial de Compraventa - ${projName} Unidad ${unitInv.unit}.pdf`,
-                  category: "CONTRATO",
-                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
-                  fileSize: "2.4 MB",
-                  uploadDate: "15 Abr 2026",
-                },
-                {
-                  id: `doc-${unitInv.id}-2`,
-                  title: `Reglamento Interno y Régimen Condominal - ${projName}.pdf`,
-                  category: "REGLAMENTO",
-                  fileUrl: "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf",
-                  fileSize: "1.8 MB",
-                  uploadDate: "15 Abr 2026",
-                },
-              ],
+              maintenanceFeeMonthly: unitInv.maintenanceFeeMonthly || 0,
+              images: projCover ? [projCover] : [],
+              specialtiesProgress: proj.specialtiesProgress || [],
+              constructionMilestones: proj.constructionMilestones || [],
+              documents: [],
               schedule: fallbackSchedule,
               paymentsList: fallbackPayments,
-              customAttributes: [
-                { label: "Orientación", value: "Norte" },
-                { label: "Tipo de Vista", value: "Ciudad" },
-                { label: "Cajón Asignado", value: `Sótano 1, #${unitInv.unit}` },
-              ],
+              customAttributes: unitInv.customAttributes || [],
             });
           }
         }

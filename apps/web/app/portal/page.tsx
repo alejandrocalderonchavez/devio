@@ -1079,26 +1079,28 @@ export default function ClientPortalWeb() {
                         </div>
                       </div>
 
-                      {/* Avance por Especialidad */}
-                      <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
-                        <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.85rem" }}>
-                          Avance por Especialidad
-                        </div>
+                      {/* Avance por Especialidad (Solo si hay datos registrados) */}
+                      {selectedProp.specialtiesProgress && selectedProp.specialtiesProgress.length > 0 && (
+                        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
+                          <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.85rem" }}>
+                            Avance por Especialidad
+                          </div>
 
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-                          {selectedProp.specialtiesProgress.map((esp) => (
-                            <div key={esp.id}>
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", fontWeight: 700, marginBottom: "4px" }}>
-                                <span style={{ color: "#334155" }}>{esp.name}</span>
-                                <span style={{ color: "#00875A" }}>{esp.percentage}%</span>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                            {selectedProp.specialtiesProgress.map((esp) => (
+                              <div key={esp.id}>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", fontWeight: 700, marginBottom: "4px" }}>
+                                  <span style={{ color: "#334155" }}>{esp.name}</span>
+                                  <span style={{ color: "#00875A" }}>{esp.percentage}%</span>
+                                </div>
+                                <div style={{ height: "8px", backgroundColor: "#E2E8F0", borderRadius: "99px", overflow: "hidden" }}>
+                                  <div style={{ width: `${esp.percentage}%`, height: "100%", backgroundColor: "#00C48C", borderRadius: "99px" }} />
+                                </div>
                               </div>
-                              <div style={{ height: "8px", backgroundColor: "#E2E8F0", borderRadius: "99px", overflow: "hidden" }}>
-                                <div style={{ width: `${esp.percentage}%`, height: "100%", backgroundColor: "#00C48C", borderRadius: "99px" }} />
-                              </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Histórico Avances de Obra */}
                       <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "1.2rem", border: "1px solid #E2E8F0" }}>
@@ -1106,22 +1108,36 @@ export default function ClientPortalWeb() {
                           Histórico Fotográfico de Obra
                         </div>
 
-                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                          {selectedProp.constructionMilestones.map((m) => (
-                            <div key={m.id} style={{ borderRadius: "0.85rem", overflow: "hidden", border: "1px solid #E2E8F0" }}>
-                              <img src={m.photo} alt={m.title} style={{ width: "100%", height: "180px", objectFit: "cover", display: "block" }} />
-                              <div style={{ padding: "0.85rem" }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                  <strong style={{ fontSize: "0.9rem", color: "#1F3652" }}>{m.title}</strong>
-                                  <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 600 }}>{m.date}</span>
+                        {selectedProp.constructionMilestones && selectedProp.constructionMilestones.length > 0 ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                            {selectedProp.constructionMilestones.map((m) => (
+                              <div key={m.id} style={{ borderRadius: "0.85rem", overflow: "hidden", border: "1px solid #E2E8F0" }}>
+                                {m.photo && (
+                                  <img src={m.photo} alt={m.title} style={{ width: "100%", height: "180px", objectFit: "cover", display: "block" }} />
+                                )}
+                                <div style={{ padding: "0.85rem" }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <strong style={{ fontSize: "0.9rem", color: "#1F3652" }}>{m.title}</strong>
+                                    {m.date && <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 600 }}>{m.date}</span>}
+                                  </div>
+                                  {m.description && (
+                                    <p style={{ fontSize: "0.78rem", color: "#475569", marginTop: "0.4rem", lineHeight: 1.45 }}>
+                                      {m.description}
+                                    </p>
+                                  )}
                                 </div>
-                                <p style={{ fontSize: "0.78rem", color: "#475569", marginTop: "0.4rem", lineHeight: 1.45 }}>
-                                  {m.description}
-                                </p>
                               </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ padding: "2.5rem 1rem", textAlign: "center" }}>
+                            <Building2 size={36} color="#94A3B8" style={{ margin: "0 auto 0.6rem auto" }} />
+                            <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652" }}>Sin bitácoras fotográficas aún</div>
+                            <div style={{ fontSize: "0.8rem", color: "#64748B", marginTop: "4px", maxWidth: "340px", margin: "0.3rem auto 0" }}>
+                              El equipo de obra publicará las actualizaciones fotográficas y avances periódicamente conforme se ejecuten los trabajos.
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1150,10 +1166,14 @@ export default function ClientPortalWeb() {
                       </div>
 
                       {filteredDocs.length === 0 ? (
-                        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1rem", padding: "2.5rem 1rem", textAlign: "center", border: "1px solid #E2E8F0" }}>
-                          <FileText size={32} color="#94A3B8" style={{ margin: "0 auto 0.5rem auto" }} />
-                          <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#1F3652" }}>No se encontraron documentos</div>
-                          <div style={{ fontSize: "0.78rem", color: "#64748B", marginTop: "4px" }}>Prueba buscando con otro término.</div>
+                        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "3rem 1.5rem", textAlign: "center", border: "1px solid #E2E8F0" }}>
+                          <FileText size={36} color="#94A3B8" style={{ margin: "0 auto 0.6rem auto" }} />
+                          <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652" }}>
+                            {docSearch ? "No se encontraron documentos" : "No hay documentos disponibles"}
+                          </div>
+                          <div style={{ fontSize: "0.8rem", color: "#64748B", marginTop: "4px", maxWidth: "340px", margin: "0.3rem auto 0" }}>
+                            {docSearch ? "Prueba buscando con otro término." : "Aún no se han cargado contratos o archivos digitales para esta unidad."}
+                          </div>
                         </div>
                       ) : (
                         filteredDocs.map((doc) => (
@@ -1184,26 +1204,28 @@ export default function ClientPortalWeb() {
                               </div>
                             </div>
 
-                            <a
-                              href={doc.fileUrl || "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1787347922111x601030756913299600/3.4_210826.pdf"}
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{
-                                padding: "0.5rem 0.85rem",
-                                borderRadius: "0.5rem",
-                                backgroundColor: "#1B3047",
-                                color: "#FFFFFF",
-                                fontSize: "0.75rem",
-                                fontWeight: 800,
-                                textDecoration: "none",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "0.35rem",
-                                flexShrink: 0,
-                              }}
-                            >
-                              <Download size={14} /> Abrir PDF
-                            </a>
+                            {doc.fileUrl && (
+                              <a
+                                href={doc.fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  padding: "0.5rem 0.85rem",
+                                  borderRadius: "0.5rem",
+                                  backgroundColor: "#1B3047",
+                                  color: "#FFFFFF",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 800,
+                                  textDecoration: "none",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.35rem",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <Download size={14} /> Abrir PDF
+                              </a>
+                            )}
                           </div>
                         ))
                       )}

@@ -75,10 +75,14 @@ export const DocumentsScreen: React.FC = () => {
         {/* Documents List or Empty State */}
         {filteredDocs.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <FileText size={36} color="#94A3B8" />
-            <Text style={styles.emptyTitle}>No se encontraron documentos</Text>
+            <FileText size={36} color="#94A3B8" style={{ marginBottom: 10 }} />
+            <Text style={styles.emptyTitle}>
+              {searchQuery ? "No se encontraron documentos" : "No hay documentos disponibles"}
+            </Text>
             <Text style={styles.emptySubtitle}>
-              Prueba buscando con otro término o consulta los documentos formalizados.
+              {searchQuery
+                ? "Prueba buscando con otro término."
+                : "Aún no se han cargado contratos o archivos digitales para esta unidad."}
             </Text>
           </View>
         ) : (

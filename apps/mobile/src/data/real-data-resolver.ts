@@ -188,58 +188,14 @@ export function resolveClientPropertiesLocal(targetEmail: string): {
           }
 
           // Construction progress
-          const constructionPct = proj.constructionProgress || proj.constructionPct || 65;
-          const specialties = [
-            { id: "esp-1", name: "Cimentación y Estructura", percentage: 100 },
-            { id: "esp-2", name: "Albañilería y Muros", percentage: 85 },
-            { id: "esp-3", name: "Instalaciones Hidráulicas", percentage: 70 },
-            { id: "esp-4", name: "Acabados y Fachadas", percentage: 40 },
-          ];
-
-          const milestones = [
-            {
-              id: "ms-1",
-              title: "Avance de Fachada Principal y Cristalería",
-              date: "20 Sep 2026",
-              photos: ["https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=600"],
-              description: "Colocación de perfilería y paneles exteriores en locales comerciales.",
-            },
-            {
-              id: "ms-2",
-              title: "Conclusión de Estructura de Concreto",
-              date: "15 Ago 2026",
-              photos: ["https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=600"],
-              description: "Colado de losa superior e impermeabilización de azoteas.",
-            },
-          ];
-
-          // Dynamic Documents
-          const dynamicDocuments = [
-            {
-              id: `doc-contract-${sale.unit}`,
-              title: `Contrato Compraventa - Unidad ${sale.unit}`,
-              category: "CONTRATO",
-              fileSize: "2.4 MB",
-              uploadDate: "15 Abr 2026",
-              fileUrl: "/assets/placeholder-contract.pdf",
-            },
-            {
-              id: `doc-blueprint-${sale.unit}`,
-              title: `Plano Arquitectónico Oficial - Unidad ${sale.unit}`,
-              category: "PLANO",
-              fileSize: "4.1 MB",
-              uploadDate: "10 Mar 2026",
-              fileUrl: "/assets/placeholder-blueprint.pdf",
-            },
-            {
-              id: `doc-regulations-${proj.id || "proj"}`,
-              title: `Reglamento de Condominio - ${projName}`,
-              category: "REGLAMENTO",
-              fileSize: "1.8 MB",
-              uploadDate: "01 Ene 2026",
-              fileUrl: "/assets/placeholder-regulations.pdf",
-            },
-          ];
+          const constructionPct = proj.constructionProgress || proj.constructionPct || 0;
+          const specialties = proj.specialtiesProgress || [];
+          const milestones = proj.constructionMilestones || [];
+          const dynamicDocuments = (proj.clientDocuments || []).filter(
+            (d: any) =>
+              (d.clientId === sale.clientId || (d.clientName && sale.clientName && d.clientName.toLowerCase() === sale.clientName.toLowerCase()) || d.unit === sale.unit) &&
+              d.isVisibleToClient !== false
+          );
 
           matchedProperties.push({
             id: sale.id || `prop-${sale.unit}`,
@@ -260,30 +216,23 @@ export function resolveClientPropertiesLocal(targetEmail: string): {
             nextPaymentDaysRemaining: nextPaymentItem.daysRemaining,
             nextPaymentConcept: nextPaymentItem.concept,
             constructionPct: constructionPct,
-            lastProgressUpdateDate: "20 Sep 2026",
-            estimatedDeliveryDate: "Diciembre 2026",
+            lastProgressUpdateDate: proj.lastProgressUpdateDate || "-",
+            estimatedDeliveryDate: proj.estimatedDeliveryDate || "Por definir",
             areaM2: areaM2,
             bedrooms: bedrooms,
             bathrooms: bathrooms,
-            parkingSpots: 1,
+            parkingSpots: unitInv?.parkingSpots || 0,
             storageUnits: 0,
             floorLevel: floor,
-            maintenanceFeeMonthly: 2500,
-            images: [
-              projCover,
-              "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200",
-              "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1200",
-            ],
+            maintenanceFeeMonthly: unitInv?.maintenanceFeeMonthly || 0,
+            images: projCover ? [projCover] : [],
             specialtiesProgress: specialties,
             constructionMilestones: milestones,
             documents: dynamicDocuments,
             schedule: scheduleList,
             paymentsList: paymentsList,
             payments: scheduleList,
-            customAttributes: [
-              { key: "orientacion", label: "Orientación", value: "Norte" },
-              { key: "estacionamiento", label: "Estacionamiento", value: "Cajón #12 Subterráneo" },
-            ],
+            customAttributes: unitInv?.customAttributes || [],
           });
         }
       }
