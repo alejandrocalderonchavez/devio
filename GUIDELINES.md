@@ -231,3 +231,69 @@ Para garantizar una experiencia visual prémium, táctil y coherente en todo el 
 ### 13.4 Persistencia de Sesión
 - En la aplicación móvil (`apps/mobile`), la sesión debe persistirse de forma segura mediante `expo-secure-store` para mantener al usuario autenticado entre reinicios de la aplicación sin cerrar sesión inesperadamente.
 
+---
+
+## 14. Arquitectura de Despliegue, Base de Datos (Supabase + Railway) y Sincronización Frontend/Backend (Zero-Failure Architecture)
+
+Para garantizar que todas las implementaciones funcionen de manera robusta y sin fallas entre el backend, la base de datos y la interfaz de usuario:
+
+### 14.1 Despliegue y Networking (Railway + Vercel)
+1. **Backend Central NestJS (`apps/api`):**
+   - Desplegado en **Railway** (`https://devio-production.up.railway.app`).
+   - Variables de entorno críticas: `DATABASE_URL`, `PORT`, `POSTMARK_API_KEY`, `POSTMARK_FROM_EMAIL`, `JWT_SECRET`.
+2. **Frontend Next.js (`apps/web`):**
+   - Desplegado en **Vercel** (`https://devio-web-six.vercel.app`).
+   - Todas las llamadas al backend pasan a través de `rewrites()` en `apps/web/next.config.ts`, mapeando `/api/:path*` a la URL del backend en Railway.
+3. **Límites de Payload HTTP (Evitar Errores 413):**
+   - En `apps/api/src/main.ts`, siempre configurar `express.json({ limit: '50mb' })` y `express.urlencoded({ extended: true, limit: '50mb' })` para permitir la subida de fotos de portada, renders, logos y matrices de unidades en base64 sin truncamiento ni rechazos 413.
+
+### 14.2 Base de Datos y Modelado (Supabase PostgreSQL + Prisma ORM)
+1. **Modelos Relacionales en `packages/database/prisma/schema.prisma`:**
+   - `Developer`: Desarrolladora u organización raíz.
+   - `Membership`: Relación usuario-desarrolladora con rol asignado (`SUPERADMIN`, `ADMIN`, `SALES_AGENT`, etc.).
+   - `Project`: Desarrollo inmobiliario (`developerId`, `name`, `projectType`, `baseCurrency`, `coverImagePath`, etc.).
+   - `Unit`: Unidades/lotes/departamentos pertenecientes a un proyecto (`unitNumber`, `category`, `status`, `basePrice`, `totalAreaM2`, `level`, etc.).
+   - `UnitAdditional`: Adicionales (cajones, bodegas, terrazas) ligados a un proyecto y opcionalmente asignados a una unidad.
+   - `Sale`, `PaymentPlan`, `ScheduledObligation`, `PaymentReceipt`: Motor financiero y cobranza.
+2. **Convenciones de Mapeo de Nombres:**
+   - En PostgreSQL / Prisma: `snake_case` en la base de datos mediante `@map("unit_number")` y `camelCase` en TypeScript (`unitNumber`).
+   - Inserción masiva eficiente: Utilizar `prisma.unit.createMany({ data: [...], skipDuplicates: true })` y `prisma.unitAdditional.createMany({ data: [...], skipDuplicates: true })`.
+3. **Resolución Dinámica de `developerId`:**
+   - Al crear proyectos o recursos, resolver el `developerId` a partir de:
+     1. El `developerId` UUID provisto en la petición.
+     2. El email del usuario autenticado (`userEmail`), buscando sus membresías asociadas.
+     3. El nombre de la desarrolladora en sesión.
+     4. Si no existe ninguno, crear o asociar a la desarrolladora activa para evitar que los datos queden huérfanos.
+
+### 14.3 Sincronización de Estado en Frontend (`ProjectContext` y Vistas)
+1. **Mapper Bidireccional Obligatorio (`mapDbProjectToProjectItem`):**
+   - Todo proyecto proveniente de la base de datos debe ser transformado a la interfaz de TypeScript del frontend:
+     - `p.units` ➔ `unitsInventory` (con campos normalizados: `unit`, `type`, `price`, `areaM2`, `floor`, `status`, `client`).
+     - `p.additionals` ➔ `additionals` (con `category`, `price`, `status`, `assignedToUnit`).
+     - `p.coverImagePath` ➔ `image`.
+     - `p.logoPath` ➔ `logo`.
+     - Cálculo en tiempo real de métricas (`totalUnits`, `soldUnits`, `availableUnits`, `valorComercialTotal`, `valorComercialVendido`, `porVenderMonto`, `avanceVentasPct`).
+2. **Persistencia Dual (Memoria + LocalStorage):**
+   - Los datos de proyectos (`devio_projects_state`) y planes de pago (`devio_developer_payment_plans`) deben persistirse en `localStorage` y `sessionStorage`.
+   - `loadFromStorage()` debe ejecutarse inmediatamente en el montaje del componente para evitar destellos (flickering) o listas vacías mientras concluyen las llamadas a la API.
+   - Escuchar y disparar eventos personalizados (`devio_projects_updated`, `devio_payment_plans_updated`, `devio_developer_updated`) para sincronizar pestañas y componentes en caliente.
+3. **Validación de Sesión Viva:**
+   - En cada carga, el frontend valida el email del usuario contra `/api/auth/validate`. Si el usuario ya no existe en la base de datos (por ejemplo, tras un vaciado o eliminación de tablas), se ejecuta `logout()` inmediatamente y se limpian los tokens.
+
+### 14.4 Notificaciones y Correos Transaccionales (Postmark)
+1. **Plantillas Oficiales Postmark:**
+   - `bienvenida-user`: Se envía al agregar o invitar colaboradores en el onboarding de desarrolladora o en la sección de Configuración (`/settings`).
+   - Parámetros requeridos en el payload del template:
+     - `user_name`: Nombre completo del colaborador.
+     - `user_email`: Correo electrónico del usuario.
+     - `developer_name`: Nombre comercial de la desarrolladora inmobiliaria.
+     - `user_role`: Rol en español (e.g., "Director Comercial", "Asesor de Ventas").
+     - `temporary_password`: `Devio2026!` (o credencial temporal asignada).
+     - `login_url`: `https://devio-web-six.vercel.app/login`.
+     - `support_email`: `contacto@devio.mx`.
+2. **Tolerancia a Fallos:**
+   - El envío de correos transaccionales debe ejecutarse de forma asíncrona dentro de un bloque `try/catch` para que ninguna interrupción externa o falta de API key bloquee la creación de entidades en base de datos.
+
+---
+
+
