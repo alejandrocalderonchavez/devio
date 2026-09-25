@@ -529,10 +529,26 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Persistir en Supabase (Prisma)
+    let devId = (newProject as any).developerId;
+    if (!devId && typeof window !== "undefined") {
+      try {
+        const storedDev = localStorage.getItem("devio_active_developer") || sessionStorage.getItem("devio_active_developer");
+        if (storedDev) {
+          const parsed = JSON.parse(storedDev);
+          if (parsed?.id && !parsed.id.startsWith("dev-")) devId = parsed.id;
+        }
+      } catch (e) {}
+    }
+
     fetch("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newProject),
+      body: JSON.stringify({
+        ...newProject,
+        developerId: devId,
+        developerName: developerName,
+        userEmail: userEmail || undefined,
+      }),
     }).catch((err) => console.warn("Could not save project to API:", err));
   };
 

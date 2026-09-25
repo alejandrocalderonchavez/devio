@@ -1140,6 +1140,21 @@ export default function ProjectOnboardingPage() {
       window.dispatchEvent(new Event("devio_projects_updated"));
 
       // Persistir inmediatamente en Supabase (Prisma)
+      let activeDevId: string | undefined = undefined;
+      let activeDevName: string | undefined = undefined;
+      let activeUserEmail: string | undefined = undefined;
+      if (typeof window !== "undefined") {
+        try {
+          const devRaw = localStorage.getItem("devio_active_developer") || sessionStorage.getItem("devio_active_developer");
+          if (devRaw) {
+            const parsed = JSON.parse(devRaw);
+            if (parsed?.id && !parsed.id.startsWith("dev-")) activeDevId = parsed.id;
+            activeDevName = parsed.name || parsed.commercialName || parsed.legalName;
+          }
+          activeUserEmail = localStorage.getItem("devio_user_email") || sessionStorage.getItem("devio_user_email") || undefined;
+        } catch (_) {}
+      }
+
       fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1148,6 +1163,9 @@ export default function ProjectOnboardingPage() {
           type: newProject.type,
           image: newProject.image,
           unitsInventory: newProject.unitsInventory,
+          developerId: activeDevId,
+          developerName: activeDevName,
+          userEmail: activeUserEmail,
         }),
       }).catch((err) => console.warn("Could not persist onboarding project:", err));
     }

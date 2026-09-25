@@ -147,7 +147,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, type, developerId, unitsInventory, image, coverFileName } = body;
+    const { name, type, developerId, developerName, userEmail, unitsInventory, image, coverFileName } = body;
 
     if (!name) {
       return NextResponse.json(
@@ -156,15 +156,41 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Find a developer or use the first developer in DB
-    let targetDevId = developerId;
-    if (!targetDevId || targetDevId.startsWith("dev-")) {
+    // 1. Dynamically resolve developerId
+    let targetDevId: string | null = null;
+
+    if (developerId && !developerId.startsWith("dev-") && developerId.length > 10) {
+      const devById = await prisma.developer.findUnique({ where: { id: developerId } });
+      if (devById) targetDevId = devById.id;
+    }
+
+    if (!targetDevId && userEmail) {
+      const cleanUserEmail = userEmail.toLowerCase().trim();
+      const devByUser = await prisma.developer.findFirst({
+        where: {
+          OR: [
+            { email: cleanUserEmail },
+            { memberships: { some: { user: { email: cleanUserEmail } } } },
+          ],
+        },
+      });
+      if (devByUser) targetDevId = devByUser.id;
+    }
+
+    if (!targetDevId && developerName && developerName !== "Mi Desarrolladora") {
+      const devByName = await prisma.developer.findFirst({
+        where: { name: { equals: developerName.trim(), mode: "insensitive" } },
+      });
+      if (devByName) targetDevId = devByName.id;
+    }
+
+    if (!targetDevId) {
       const firstDev = await prisma.developer.findFirst();
       if (firstDev) {
         targetDevId = firstDev.id;
       } else {
         const newDev = await prisma.developer.create({
-          data: { name: "Mi Desarrolladora", email: "contacto@devio.mx" },
+          data: { name: developerName || "Mi Desarrolladora", email: userEmail || "contacto@devio.mx" },
         });
         targetDevId = newDev.id;
       }
