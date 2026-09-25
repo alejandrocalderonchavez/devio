@@ -254,33 +254,63 @@ export default function ProjectPaymentsPage() {
       const planName = typeof sale.paymentPlan === "string" ? sale.paymentPlan : (sale.paymentPlan as any)?.name || "Plan de Pago";
       const targetClientId = sale.clientId || sale.clientEmail || (sale as any).primaryClient?.email || clientName;
 
+      const totalPaidAvailable = (sale.payments && sale.payments.length > 0)
+        ? sale.payments.reduce((acc: number, p: any) => acc + (Number(p.amount ?? p.monto) || 0), 0)
+        : (Number(sale.paidAmount) || 0);
+
+      let remainingPaid = totalPaidAvailable;
+
       const obligationsList = Array.isArray(sale.schedule) && sale.schedule.length > 0
         ? sale.schedule
         : Array.isArray((sale as any).scheduledObligations)
-        ? (sale as any).scheduledObligations.map((ob: any, obIdx: number) => ({
-            id: ob.id || `inst-${unitNum}-${obIdx + 1}`,
-            concept: ob.title || ob.concept || `Cuota ${obIdx + 1}`,
-            scheduledDate: ob.dueDate ? new Date(ob.dueDate).toLocaleDateString("es-MX") : "18/09/2026",
-            scheduledAmount: Number(ob.originalAmount || ob.scheduledAmount) || 0,
-            paidAmount: Number(ob.paidAmount) || 0,
-            pendingAmount: ob.pendingAmount !== undefined ? Number(ob.pendingAmount) : (Number(ob.originalAmount) || 0) - (Number(ob.paidAmount) || 0),
-            status: ((ob.status || "").toUpperCase() === "PAID" || Number(ob.pendingAmount) === 0 ? "Pagado" : "Pendiente") as any,
-          }))
+        ? (sale as any).scheduledObligations
         : [];
 
-      if (obligationsList.length > 0) {
-        obligationsList.forEach((inst: any, idx: number) => {
+      const sortedObligations = [...obligationsList].sort((a: any, b: any) => {
+        const dateA = parseDateFlexible(a.scheduledDate || a.dueDate || a.fechaProgramada || "")?.getTime() || 0;
+        const dateB = parseDateFlexible(b.scheduledDate || b.dueDate || b.fechaProgramada || "")?.getTime() || 0;
+        return dateA - dateB;
+      });
+
+      if (sortedObligations.length > 0) {
+        sortedObligations.forEach((inst: any, idx: number) => {
           const uniqueId = inst.id && String(inst.id).includes(unitNum)
             ? inst.id
             : `pay-${unitNum}-${inst.id || idx}`;
 
-          const instDate = parseDateFlexible(inst.scheduledDate);
-          const isOverdue = Boolean(instDate && instDate < now && (inst.pendingAmount || 0) > 0);
-          const status = inst.pendingAmount === 0 || inst.status === "Pagado"
-            ? "PAGADO"
-            : isOverdue || inst.status === "Atrasado"
-            ? "ATRASADO"
-            : "PENDIENTE";
+          const sAmount = Number(inst.scheduledAmount || inst.originalAmount || inst.amount) || 0;
+          const sDate = inst.scheduledDate || (inst.dueDate ? new Date(inst.dueDate).toLocaleDateString("es-MX") : "18/09/2026");
+
+          const instDate = parseDateFlexible(sDate);
+          const isOverdue = Boolean(instDate && instDate < now);
+
+          let pAmount = 0;
+          let pendAmount = sAmount;
+          let status = "PENDIENTE";
+          let pDate = "-";
+          let pMethod = "Pendiente";
+
+          if (remainingPaid >= sAmount && sAmount > 0) {
+            pAmount = sAmount;
+            pendAmount = 0;
+            remainingPaid -= sAmount;
+            status = "PAGADO";
+            pDate = sDate;
+            pMethod = inst.paymentMethod || "Transferencia SPEI";
+          } else if (remainingPaid > 0) {
+            pAmount = remainingPaid;
+            pendAmount = Math.max(0, sAmount - remainingPaid);
+            remainingPaid = 0;
+            status = isOverdue ? "ATRASADO" : "PENDIENTE";
+            pDate = "Parcial";
+            pMethod = inst.paymentMethod || "Transferencia SPEI";
+          } else {
+            pAmount = Number(inst.paidAmount) || 0;
+            pendAmount = inst.pendingAmount !== undefined ? Number(inst.pendingAmount) : Math.max(0, sAmount - pAmount);
+            status = pendAmount === 0 && sAmount > 0 ? "PAGADO" : isOverdue && pendAmount > 0 ? "ATRASADO" : "PENDIENTE";
+            pDate = pAmount > 0 ? (inst.paymentDate || "Parcial") : "-";
+            pMethod = pAmount > 0 ? (inst.paymentMethod || "Transferencia SPEI") : "Pendiente";
+          }
 
           result.push({
             id: uniqueId,
@@ -288,14 +318,14 @@ export default function ProjectPaymentsPage() {
             clientName,
             unit: unitNum,
             paymentPlan: planName,
-            scheduledAmount: Number(inst.scheduledAmount) || 0,
-            scheduledDate: inst.scheduledDate || "18/09/2026",
-            paidAmount: Number(inst.paidAmount) || 0,
-            paymentDate: inst.paymentDate || (inst.pendingAmount === 0 ? "Liquidado" : "-"),
-            paymentMethod: (inst.paymentMethod || (inst.paidAmount > 0 ? "SPEI" : "Pendiente")) as any,
-            status,
-            concept: inst.concept || `Cuota ${idx + 1}`,
-            pendingAmount: Number(inst.pendingAmount) || 0,
+            scheduledAmount: sAmount,
+            scheduledDate: sDate,
+            paidAmount: pAmount,
+            paymentDate: pDate,
+            paymentMethod: pMethod as any,
+            status: status as any,
+            concept: inst.concept || inst.title || `Cuota ${idx + 1}`,
+            pendingAmount: pendAmount,
             saleRecord: sale,
           } as any);
         });

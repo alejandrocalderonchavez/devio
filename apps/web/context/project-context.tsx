@@ -297,53 +297,6 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           }))
         : [];
 
-      const rawObligations = Array.isArray(s.scheduledObligations)
-        ? s.scheduledObligations
-        : Array.isArray(s.schedule)
-        ? s.schedule
-        : [];
-
-      const mappedSchedule = rawObligations
-        .map((ob: any, obIdx: number) => {
-          const origAmt = Number(ob.originalAmount ?? ob.scheduledAmount ?? ob.amount) || 0;
-          const paidAmt = Number(ob.paidAmount) || 0;
-          const pendAmt = ob.pendingAmount !== undefined ? Number(ob.pendingAmount) : Math.max(0, origAmt - paidAmt);
-          const rawDate = ob.dueDate || ob.scheduledDate;
-          let formattedDate = "18/09/2026";
-          let rawTimestamp = 0;
-          if (rawDate) {
-            try {
-              const d = new Date(rawDate);
-              if (!isNaN(d.getTime())) {
-                rawTimestamp = d.getTime();
-                formattedDate = d.toLocaleDateString("es-MX");
-              } else {
-                formattedDate = String(rawDate);
-              }
-            } catch (_) {
-              formattedDate = String(rawDate);
-            }
-          }
-
-          const isPaid = (ob.status || "").toUpperCase() === "PAID" || pendAmt === 0;
-          return {
-            id: ob.id || `inst-${uNum || sIdx}-${obIdx + 1}`,
-            concept: ob.title || ob.concept || `Cuota ${obIdx + 1}`,
-            scheduledDate: formattedDate,
-            scheduledAmount: origAmt,
-            paidAmount: paidAmt,
-            pendingAmount: pendAmt,
-            status: isPaid ? ("Pagado" as const) : paidAmt > 0 ? ("Parcial" as const) : ("Pendiente" as const),
-            _timestamp: rawTimestamp,
-            _obNumber: Number(ob.obligationNumber) || obIdx + 1,
-          };
-        })
-        .sort((a: any, b: any) => {
-          if (a._timestamp && b._timestamp) return a._timestamp - b._timestamp;
-          return a._obNumber - b._obNumber;
-        })
-        .map(({ _timestamp, _obNumber, ...rest }: any) => rest);
-
       const rawReceipts = Array.isArray(s.paymentReceipts)
         ? s.paymentReceipts
         : Array.isArray(s.payments)
@@ -382,6 +335,69 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const totalP = Number(s.finalPrice ?? s.agreedPrice ?? s.totalPrice) || 0;
       const totalPaid = mappedPayments.reduce((sum, p) => sum + p.amount, 0) || Number(s.paidAmount) || 0;
       const totalPending = Math.max(0, totalP - totalPaid);
+
+      const rawObligations = Array.isArray(s.scheduledObligations)
+        ? s.scheduledObligations
+        : Array.isArray(s.schedule)
+        ? s.schedule
+        : [];
+
+      let remainingPaid = totalPaid;
+
+      const mappedSchedule = rawObligations
+        .map((ob: any, obIdx: number) => {
+          const origAmt = Number(ob.originalAmount ?? ob.scheduledAmount ?? ob.amount) || 0;
+          const rawDate = ob.dueDate || ob.scheduledDate;
+          let formattedDate = "18/09/2026";
+          let rawTimestamp = 0;
+          if (rawDate) {
+            try {
+              const d = new Date(rawDate);
+              if (!isNaN(d.getTime())) {
+                rawTimestamp = d.getTime();
+                formattedDate = d.toLocaleDateString("es-MX");
+              } else {
+                formattedDate = String(rawDate);
+              }
+            } catch (_) {
+              formattedDate = String(rawDate);
+            }
+          }
+
+          return {
+            id: ob.id || `inst-${uNum || sIdx}-${obIdx + 1}`,
+            concept: ob.title || ob.concept || `Cuota ${obIdx + 1}`,
+            scheduledDate: formattedDate,
+            scheduledAmount: origAmt,
+            _timestamp: rawTimestamp,
+            _obNumber: Number(ob.obligationNumber) || obIdx + 1,
+            _rawPaid: Number(ob.paidAmount) || 0,
+          };
+        })
+        .sort((a: any, b: any) => {
+          if (a._timestamp && b._timestamp) return a._timestamp - b._timestamp;
+          return a._obNumber - b._obNumber;
+        })
+        .map(({ _timestamp, _obNumber, _rawPaid, ...inst }: any) => {
+          const sAmount = inst.scheduledAmount;
+          let alloc = 0;
+          if (remainingPaid > 0 && sAmount > 0) {
+            alloc = Math.min(remainingPaid, sAmount);
+            remainingPaid -= alloc;
+          } else if (_rawPaid > 0) {
+            alloc = _rawPaid;
+          }
+          const pend = Math.max(0, sAmount - alloc);
+          const isPaid = pend === 0 && sAmount > 0;
+          return {
+            ...inst,
+            paidAmount: alloc,
+            pendingAmount: pend,
+            paymentDate: isPaid ? inst.scheduledDate : alloc > 0 ? "Parcial" : "-",
+            paymentMethod: alloc > 0 ? "Transferencia SPEI" : "Pendiente",
+            status: isPaid ? ("Pagado" as const) : alloc > 0 ? ("Parcial" as const) : ("Pendiente" as const),
+          };
+        });
 
       const planName = s.paymentPlan?.name || s.paymentPlan || "Plan Tradicional";
       const sFolio = s.contractNumber || s.folio || `VTA-${new Date().getFullYear()}-${String(sIdx + 1).padStart(3, "0")}`;
