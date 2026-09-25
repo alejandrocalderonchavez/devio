@@ -2,10 +2,11 @@
 nixPkgs = ["nodejs_22", "openssl"]
 
 [phases.install]
-cmds = ["npm install -g pnpm@11.19.0", "pnpm install --frozen-lockfile"]
+cmds = ["npx --yes pnpm@11.19.0 install --frozen-lockfile"]
 
 [phases.build]
-cmds = ["pnpm --filter @devio/database generate && pnpm --filter @devio/api build"]
+cmds = ["npx --yes pnpm@11.19.0 --filter @devio/database generate && npx --yes pnpm@11.19.0 --filter @devio/api build"]
 
 [start]
-cmd = "pnpm --filter @devio/api start"
+cmd = "npx --yes pnpm@11.19.0 --filter @devio/api start"
+
