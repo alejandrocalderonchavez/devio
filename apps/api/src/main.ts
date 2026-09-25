@@ -1,9 +1,14 @@
 import "dotenv/config";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
+import { json, urlencoded } from "express";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  
+  // Aumentar el límite de tamaño para payloads con imágenes en base64, planos y lotes de unidades
+  app.use(json({ limit: "50mb" }));
+  app.use(urlencoded({ extended: true, limit: "50mb" }));
   
   app.enableCors({
     origin: true, // Allow Vercel preview URLs, production domains and local development
@@ -20,3 +25,4 @@ async function bootstrap() {
 }
 
 void bootstrap();
+
