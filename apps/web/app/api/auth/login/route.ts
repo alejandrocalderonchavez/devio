@@ -162,88 +162,30 @@ export async function POST(request: Request) {
       console.warn("Prisma DB lookup skipped or failed:", dbErr);
     }
 
-    // 4. Read migrated developers fallback JSON
-    let developersList: any[] = [];
-    try {
-      const devsPath = path.join(process.cwd(), "data/migrated-developers.json");
-      if (fs.existsSync(devsPath)) {
-        developersList = JSON.parse(fs.readFileSync(devsPath, "utf-8"));
-      }
-    } catch (e) {
-      console.warn("Could not read migrated-developers.json:", e);
-    }
+    // 4. Strict Supabase Existence Verification
+    const existsInSupabase = Boolean(dbUser || dbDev || dbClient);
 
-    // Match migrated developer / team member / client
-    let matchedDev: any = null;
-    let matchedTeamMember: any = null;
-    let matchedMembership: any = null;
-    let matchedClientSale: any = null;
-    let matchedClientDev: any = null;
-    let matchedClientUnit: any = null;
-
-    for (const dev of developersList) {
-      const tm = (dev.teamMembers || []).find(
-        (m: any) => m.email?.toLowerCase().trim() === cleanEmail
+    if (!existsInSupabase && !(isSuperAdminEmail && matchesSuperAdminPassword)) {
+      return NextResponse.json(
+        { error: "No existe ninguna cuenta registrada con este correo en la base de datos de Devio. Por favor regístrate en /register." },
+        { status: 401 }
       );
-      if (tm) {
-        matchedDev = dev;
-        matchedTeamMember = tm;
-      }
-      const mem = (dev.memberships || []).find(
-        (m: any) => m.user?.email?.toLowerCase().trim() === cleanEmail
-      );
-      if (mem) {
-        matchedDev = matchedDev || dev;
-        matchedMembership = mem;
-      }
-      if (dev.email?.toLowerCase().trim() === cleanEmail) {
-        matchedDev = matchedDev || dev;
-      }
-
-      // Check client sales
-      for (const proj of dev.projects || []) {
-        const s = (proj.sales || []).find(
-          (sale: any) => (sale.clientEmail || "").toLowerCase().trim() === cleanEmail
-        );
-        if (s) {
-          matchedClientSale = s;
-          matchedClientDev = dev;
-        }
-        const u = (proj.unitsInventory || []).find(
-          (unit: any) => (unit.clientEmail || "").toLowerCase().trim() === cleanEmail
-        );
-        if (u) {
-          matchedClientUnit = u;
-          matchedClientDev = dev;
-          if (!matchedClientSale) {
-            matchedClientSale = {
-              clientName: u.client,
-              clientEmail: u.clientEmail,
-              clientPhone: u.clientPhone,
-              clientId: `cli-${Date.now()}`,
-              unit: u.unit,
-            };
-          }
-        }
-      }
     }
 
     // 5. Password Validation
     const isClientContext = Boolean(
       isTempPassword ||
-      matchedClientSale ||
       (dbClient && dbClient.sales?.length > 0) ||
       (dbUser?.memberships?.some((m: any) => m.role === "CLIENT")) ||
       cleanEmail === "0242573@up.edu.mx" ||
-      cleanEmail.includes("@cliente") ||
-      cleanEmail.includes("inigo")
+      cleanEmail.includes("@cliente")
     );
 
     const isAuthorizedPassword =
-      matchesSuperAdminPassword ||
-      matchesStandardPassword ||
-      isTempPassword ||
-      cleanPassword === dbUser?.password;
+      (isSuperAdminEmail && matchesSuperAdminPassword) ||
+      (dbUser && (cleanPassword === dbUser.password || matchesStandardPassword)) ||
+      (dbClient && (isTempPassword || matchesStandardPassword)) ||
+      matchesSuperAdminPassword;
 
     if (!isAuthorizedPassword) {
       return NextResponse.json(
@@ -257,26 +199,23 @@ export async function POST(request: Request) {
     if (isTempPassword || (!matchesSuperAdminPassword && isClientContext)) {
       const clientFullName =
         dbClient?.fullName ||
-        matchedClientSale?.clientName ||
-        matchedClientUnit?.client ||
         dbUser?.fullName ||
-        (cleanEmail === "0242573@up.edu.mx" ? "Iñigo Heredia Horner" : "Cliente Propietario");
+        "Cliente Propietario";
 
       const clientDevName =
         dbClient?.developer?.name ||
-        matchedClientDev?.name ||
         dbDev?.name ||
         dbUser?.memberships?.[0]?.developer?.name ||
         "Desarrollos Inmobiliarios";
 
       const clientUser = {
-        id: dbClient?.id || matchedClientSale?.clientId || `cli-${cleanEmail.replace(/[^a-zA-Z0-9]/g, "_")}`,
+        id: dbClient?.id || dbUser?.id || `cli-${cleanEmail.replace(/[^a-zA-Z0-9]/g, "_")}`,
         fullName: clientFullName,
         name: clientFullName,
         email: cleanEmail,
-        phone: dbClient?.phone || matchedClientSale?.clientPhone || matchedClientUnit?.clientPhone || "+52 33 0000 0000",
-        rfc: dbClient?.taxId || matchedClientSale?.clientRfc || "RFC-PENDIENTE",
-        address: dbClient?.addressStreet || matchedClientSale?.clientAddress || matchedClientDev?.addressStreet || "Guadalajara, Jalisco",
+        phone: dbClient?.phone || dbUser?.phone || "+52 33 0000 0000",
+        rfc: dbClient?.taxId || "RFC-PENDIENTE",
+        address: dbClient?.addressStreet || "Guadalajara, Jalisco",
         role: "Cliente",
         roleTitle: "Propietario / Inversionista",
         isClient: true,
@@ -305,12 +244,12 @@ export async function POST(request: Request) {
         roleTitle: "Super Administrador Devio",
         permissions: ["all"],
         isSuperAdmin: true,
-        activeDeveloper: dbDev ? dbDev.name : matchedDev ? matchedDev.name : "Devio Global",
+        activeDeveloper: dbDev ? dbDev.name : "Devio Global",
       };
 
       const token = `devio_token_sa_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
-      const devObj = dbDev || matchedDev || {
+      const devObj = dbDev || {
         id: "dev-global",
         name: "Devio Global",
         commercialName: "Devio Global",
@@ -322,7 +261,7 @@ export async function POST(request: Request) {
         logoPath: null,
       };
 
-      const projects = (dbDev?.projects || matchedDev?.projects || []);
+      const projects = dbDev?.projects || [];
 
       return NextResponse.json({
         success: true,
@@ -335,47 +274,13 @@ export async function POST(request: Request) {
     }
 
     // 8. DEVELOPER TEAM MEMBER / ADMIN LOGIN
-    let devRecord = dbUser?.memberships?.[0]?.developer || dbDev || matchedDev;
-
-    // If still no developer assigned, search latest developer in DB or create one for this email
-    if (!devRecord) {
-      try {
-        devRecord = await prisma.developer.findFirst({
-          orderBy: { createdAt: "desc" },
-          include: {
-            projects: {
-              include: {
-                units: true,
-                sales: true,
-                additionals: true,
-                documents: true,
-              },
-            },
-          },
-        });
-      } catch (e) {}
-    }
+    let devRecord = dbUser?.memberships?.[0]?.developer || dbDev;
 
     if (!devRecord) {
-      const prefix = cleanEmail.split("@")[0].replace(/[^a-zA-Z0-9]/g, " ");
-      const fallbackName = prefix.charAt(0).toUpperCase() + prefix.slice(1) + " Desarrollos";
-      try {
-        devRecord = await prisma.developer.create({
-          data: {
-            name: fallbackName,
-            legalName: fallbackName + " S.A. de C.V.",
-            email: cleanEmail,
-          },
-        });
-      } catch (e) {
-        devRecord = {
-          id: `dev-${Date.now()}`,
-          name: fallbackName,
-          legalName: fallbackName + " S.A. de C.V.",
-          email: cleanEmail,
-          projects: [],
-        };
-      }
+      return NextResponse.json(
+        { error: "Tu cuenta no tiene una desarrolladora asignada en Supabase. Si eres nuevo en Devio, regístrate en /register." },
+        { status: 403 }
+      );
     }
 
     const devName = devRecord.name || "Desarrolladora Devio";
@@ -392,17 +297,17 @@ export async function POST(request: Request) {
       ? "Director Comercial"
       : userMembership?.role === "MEMBER"
       ? "Asesor de Ventas"
-      : matchedTeamMember?.role || "Director Comercial";
+      : "Director Comercial";
 
     const userObj = {
-      id: dbUser?.id || matchedTeamMember?.id || `usr-${Date.now()}`,
-      fullName: dbUser?.fullName || matchedTeamMember?.name || `${devName} Admin`,
+      id: dbUser?.id || `usr-${Date.now()}`,
+      fullName: dbUser?.fullName || `${devName} Admin`,
       email: cleanEmail,
-      phone: dbUser?.phone || matchedTeamMember?.phone || devPhone,
+      phone: dbUser?.phone || devPhone,
       role: userRole,
       roleTitle: userRole,
-      permissions: userRole === "Super Admin" ? ["all"] : matchedTeamMember?.permissions || ["all"],
-      assignedProjects: matchedTeamMember?.assignedProjects || [],
+      permissions: ["all"],
+      assignedProjects: [],
       isSuperAdmin: userRole === "Super Admin",
       activeDeveloper: devName,
     };

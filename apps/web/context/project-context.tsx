@@ -216,7 +216,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<UserRole>("Super Admin");
   const [userPermissions, setUserPermissions] = useState<string[]>(["all"]);
   const [paymentPlans, setPaymentPlans] = useState<DeveloperPaymentPlan[]>([]);
-  const [postventaIncidents, setPostventaIncidents] = useState<PostventaIncident[]>(INITIAL_INCIDENTS);
+  const [postventaIncidents, setPostventaIncidents] = useState<PostventaIncident[]>([]);
   const [toast, setToast] = useState<{ title: string; desc: string; type?: "success" | "info" | "warning" } | null>(null);
   const [banxicoRate, setBanxicoRate] = useState<number>(18.35);
 
@@ -236,108 +236,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const loadFromStorage = () => {
     if (typeof window === "undefined") return;
 
-    const isNewUser = localStorage.getItem("devio_is_new_user") || sessionStorage.getItem("devio_is_new_user");
-    const storedProjects = localStorage.getItem("devio_projects_state") || sessionStorage.getItem("devio_projects_state");
     const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
     const storedLogo = localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo");
     const storedUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
-    const storedPlans = localStorage.getItem("devio_developer_payment_plans") || sessionStorage.getItem("devio_developer_payment_plans");
-    const storedLibraryPlans = localStorage.getItem("devio_payment_plans_library") || sessionStorage.getItem("devio_payment_plans_library");
-    const storedIncidents = localStorage.getItem("devio_postventa_incidents") || sessionStorage.getItem("devio_postventa_incidents");
 
     if (storedLogo) {
       setDeveloperLogo(storedLogo);
-    }
-
-    if (storedProjects) {
-      try {
-        const parsed = JSON.parse(storedProjects);
-        if (Array.isArray(parsed)) {
-          const sanitized = parsed.map((p: ProjectItem) => {
-            if (!p.sales || p.sales.length === 0) return p;
-            const updatedSales = p.sales.map((s: SaleRecord, idx: number) => {
-              if (s.clientId === "primary-1" || !s.clientId) {
-                const uniqueId = s.clientEmail
-                  ? `cli-${s.clientEmail.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
-                  : `cli-${s.clientName ? s.clientName.toLowerCase().replace(/[^a-z0-9]/g, "-") : `sale-${idx}`}`;
-                return { ...s, clientId: uniqueId };
-              }
-              return s;
-            });
-            return { ...p, sales: updatedSales };
-          });
-          setProjects(sanitized);
-        }
-      } catch (e) {
-        setProjects([]);
-      }
-    } else if (isNewUser === "true" || storedDev) {
-      setProjects([]);
-    } else {
-      setProjects([]);
-    }
-
-    if (storedPlans) {
-      try {
-        const parsed = JSON.parse(storedPlans);
-        if (Array.isArray(parsed)) {
-          setPaymentPlans(parsed);
-        }
-      } catch (e) {
-        setPaymentPlans([]);
-      }
-    } else if (storedLibraryPlans) {
-      try {
-        const parsedLib = JSON.parse(storedLibraryPlans);
-        if (Array.isArray(parsedLib) && parsedLib.length > 0) {
-          const mapped: DeveloperPaymentPlan[] = parsedLib.map((p: any) => ({
-            id: p.id || `plan-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-            name: p.name || "Plan de Pago",
-            downPaymentPct: p.downPaymentPercentage ?? p.downPaymentPct ?? 20,
-            installmentsCount: p.installmentsCount ?? 12,
-            balloonLiquidationPct: p.settlementPercentage ?? p.balloonLiquidationPct ?? 20,
-            discountPct: p.discountPercentage ?? p.discountPct ?? 0,
-            isActive: true,
-            description: p.internalNotes || p.description || `${p.downPaymentPercentage ?? 20}% Enganche, ${p.installmentsCount ?? 12} Mensualidades (${Math.max(0, 100 - (p.downPaymentPercentage ?? 20) - (p.settlementPercentage ?? 20))}%), ${p.settlementPercentage ?? 20}% Liquidación`,
-            moratoryRatePct: p.interestPercentage ?? p.moratoryRatePct ?? 3.0,
-          }));
-          setPaymentPlans(mapped);
-          localStorage.setItem("devio_developer_payment_plans", JSON.stringify(mapped));
-        } else {
-          setPaymentPlans([]);
-        }
-      } catch (e) {
-        setPaymentPlans([]);
-      }
-    } else if (isNewUser === "true" || storedDev) {
-      setPaymentPlans([]);
-    } else {
-      let foundPlans: DeveloperPaymentPlan[] = [];
-      if (storedProjects) {
-        try {
-          const parsedProjects = JSON.parse(storedProjects);
-          if (Array.isArray(parsedProjects)) {
-            for (const pr of parsedProjects) {
-              if (Array.isArray(pr.paymentPlans) && pr.paymentPlans.length > 0) {
-                foundPlans = pr.paymentPlans;
-                break;
-              }
-            }
-          }
-        } catch (e) {}
-      }
-      setPaymentPlans(foundPlans);
-    }
-
-    if (storedIncidents) {
-      try {
-        const parsed = JSON.parse(storedIncidents);
-        if (Array.isArray(parsed)) {
-          setPostventaIncidents(parsed);
-        }
-      } catch (e) {}
-    } else {
-      setPostventaIncidents(INITIAL_INCIDENTS);
     }
 
     if (storedDev) {
@@ -453,8 +357,6 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
             }
             if (Array.isArray(matched.projects)) {
               setProjects(matched.projects);
-              localStorage.setItem("devio_projects_state", JSON.stringify(matched.projects));
-              sessionStorage.setItem("devio_projects_state", JSON.stringify(matched.projects));
             }
           }
         }
@@ -516,17 +418,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addProject = (newProject: ProjectItem) => {
-    setProjects((prev) => {
-      const updated = [newProject, ...prev.filter((p) => p.id !== newProject.id)];
-      if (typeof window !== "undefined") {
-        localStorage.setItem("devio_projects_state", JSON.stringify(updated));
-        sessionStorage.setItem("devio_projects_state", JSON.stringify(updated));
-        localStorage.removeItem("devio_is_new_user");
-        sessionStorage.removeItem("devio_is_new_user");
-        window.dispatchEvent(new Event("devio_projects_updated"));
-      }
-      return updated;
-    });
+    setProjects((prev) => [newProject, ...prev.filter((p) => p.id !== newProject.id)]);
 
     // Persistir en Supabase (Prisma)
     let devId = (newProject as any).developerId;
@@ -556,43 +448,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     setProjects([]);
     setPaymentPlans([]);
     setDeveloperName("Mi Desarrolladora");
-    if (typeof window !== "undefined") {
-      localStorage.setItem("devio_projects_state", JSON.stringify([]));
-      sessionStorage.setItem("devio_projects_state", JSON.stringify([]));
-      localStorage.setItem("devio_developer_payment_plans", JSON.stringify([]));
-      sessionStorage.setItem("devio_developer_payment_plans", JSON.stringify([]));
-      localStorage.removeItem("devio_payment_plans_library");
-      sessionStorage.removeItem("devio_payment_plans_library");
-      localStorage.setItem("devio_is_new_user", "true");
-      sessionStorage.setItem("devio_is_new_user", "true");
-      window.dispatchEvent(new Event("devio_payment_plans_updated"));
-    }
-    showToast("Cuenta Limpia", "Se eliminaron los datos de muestra. Puedes registrar tus proyectos desde cero.", "info");
+    showToast("Cuenta Limpia", "Se restableció el estado a limpio.", "info");
   };
 
   const loadDemoData = () => {
-    setProjects(INITIAL_PROJECTS);
-    setPaymentPlans(DEFAULT_DEVELOPER_PAYMENT_PLANS);
-    setDeveloperName("Mainstreet Desarrollos");
-    if (typeof window !== "undefined") {
-      localStorage.setItem("devio_projects_state", JSON.stringify(INITIAL_PROJECTS));
-      sessionStorage.setItem("devio_projects_state", JSON.stringify(INITIAL_PROJECTS));
-      localStorage.setItem("devio_developer_payment_plans", JSON.stringify(DEFAULT_DEVELOPER_PAYMENT_PLANS));
-      sessionStorage.setItem("devio_developer_payment_plans", JSON.stringify(DEFAULT_DEVELOPER_PAYMENT_PLANS));
-      localStorage.removeItem("devio_is_new_user");
-      sessionStorage.removeItem("devio_is_new_user");
-      window.dispatchEvent(new Event("devio_payment_plans_updated"));
-    }
-    showToast("Datos Demo Cargados", "Se restauraron los proyectos de demostración (Tradere, Torre Paseo).", "success");
+    setProjects([]);
+    setPaymentPlans([]);
   };
 
   const saveProjects = (newProjects: ProjectItem[]) => {
     setProjects(newProjects);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("devio_projects_state", JSON.stringify(newProjects));
-      sessionStorage.setItem("devio_projects_state", JSON.stringify(newProjects));
-      window.dispatchEvent(new Event("devio_projects_updated"));
-    }
   };
 
   const showToast = (title: string, desc: string, type: "success" | "info" | "warning" = "success") => {
@@ -2370,11 +2235,6 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   const savePostventaIncidents = (newIncidents: PostventaIncident[]) => {
     setPostventaIncidents(newIncidents);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("devio_postventa_incidents", JSON.stringify(newIncidents));
-      sessionStorage.setItem("devio_postventa_incidents", JSON.stringify(newIncidents));
-      window.dispatchEvent(new Event("devio_postventa_updated"));
-    }
   };
 
   const addPostventaIncident = (incident: PostventaIncident) => {
