@@ -1008,7 +1008,7 @@ export default function ProjectOnboardingPage() {
   };
 
   // Submit Handler
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const generalResult = validateStep(1);
@@ -1019,7 +1019,7 @@ export default function ProjectOnboardingPage() {
 
     setIsSubmitting(true);
 
-    const newProjectId = `proj-${Date.now()}`;
+    let newProjectId = `proj-${Date.now()}`;
     const mappedUnits: UnitItem[] = units.map((u, idx) => ({
       id: u.id || `u-${idx + 1}`,
       unit: u.unitNumber,
@@ -1116,6 +1116,57 @@ export default function ProjectOnboardingPage() {
     };
 
     if (typeof window !== "undefined") {
+      let activeDevId: string | undefined = undefined;
+      let activeDevName: string | undefined = undefined;
+      let activeUserEmail: string | undefined = undefined;
+
+      try {
+        const devRaw = localStorage.getItem("devio_active_developer") || sessionStorage.getItem("devio_active_developer") || localStorage.getItem("devio_developer_onboarding");
+        if (devRaw) {
+          const parsed = JSON.parse(devRaw);
+          if (parsed?.id && !parsed.id.startsWith("dev-")) activeDevId = parsed.id;
+          activeDevName = parsed.name || parsed.commercialName || parsed.legalName;
+          if (!activeUserEmail && parsed.email) activeUserEmail = parsed.email;
+        }
+        const userRaw = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
+        if (userRaw) {
+          const parsedU = JSON.parse(userRaw);
+          if (parsedU?.email) activeUserEmail = parsedU.email;
+          if (!activeDevName && parsedU?.activeDeveloper) activeDevName = parsedU.activeDeveloper;
+        }
+      } catch (_) {}
+
+      try {
+        const res = await fetch("/api/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: newProject.name,
+            type: newProject.type,
+            currency: (newProject as any).currency || "MXN",
+            description: projectGeneralData.description || undefined,
+            googleMapsUrl: projectGeneralData.googleMapsUrl || undefined,
+            websiteUrl: projectGeneralData.websiteUrl || undefined,
+            estimatedDeliveryDate: projectGeneralData.estimatedDeliveryDate || undefined,
+            image: newProject.image,
+            coverImagePath: newProject.image,
+            units: mappedUnits,
+            additionals: mappedAdditionals,
+            developerId: activeDevId,
+            developerName: activeDevName,
+            userEmail: activeUserEmail,
+          }),
+        });
+
+        const resData = await res.json().catch(() => null);
+        if (resData?.project?.id) {
+          newProjectId = resData.project.id;
+          newProject.id = resData.project.id;
+        }
+      } catch (err) {
+        console.warn("Could not persist onboarding project to Supabase:", err);
+      }
+
       const isNewUser = localStorage.getItem("devio_is_new_user") || sessionStorage.getItem("devio_is_new_user");
       let currentProjects: ProjectItem[] = [];
       const stored = localStorage.getItem("devio_projects_state") || sessionStorage.getItem("devio_projects_state");
@@ -1124,7 +1175,7 @@ export default function ProjectOnboardingPage() {
           currentProjects = JSON.parse(stored);
         } catch (e) {}
       }
-      const updatedList = [newProject, ...currentProjects];
+      const updatedList = [newProject, ...currentProjects.filter((p) => p.id !== newProject.id)];
       localStorage.setItem("devio_projects_state", JSON.stringify(updatedList));
       sessionStorage.setItem("devio_projects_state", JSON.stringify(updatedList));
       localStorage.removeItem("devio_is_new_user");
@@ -1138,57 +1189,11 @@ export default function ProjectOnboardingPage() {
       }
 
       window.dispatchEvent(new Event("devio_projects_updated"));
-
-      // Persistir inmediatamente en Supabase (Prisma)
-      let activeDevId: string | undefined = undefined;
-      let activeDevName: string | undefined = undefined;
-      let activeUserEmail: string | undefined = undefined;
-      if (typeof window !== "undefined") {
-        try {
-          const devRaw = localStorage.getItem("devio_active_developer") || sessionStorage.getItem("devio_active_developer") || localStorage.getItem("devio_developer_onboarding");
-          if (devRaw) {
-            const parsed = JSON.parse(devRaw);
-            if (parsed?.id && !parsed.id.startsWith("dev-")) activeDevId = parsed.id;
-            activeDevName = parsed.name || parsed.commercialName || parsed.legalName;
-            if (!activeUserEmail && parsed.email) activeUserEmail = parsed.email;
-          }
-          const userRaw = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
-          if (userRaw) {
-            const parsedU = JSON.parse(userRaw);
-            if (parsedU?.email) activeUserEmail = parsedU.email;
-            if (!activeDevName && parsedU?.activeDeveloper) activeDevName = parsedU.activeDeveloper;
-          }
-        } catch (_) {}
-      }
-
-      fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newProject.name,
-          type: newProject.type,
-          currency: (newProject as any).currency || "MXN",
-          description: projectGeneralData.description || undefined,
-          googleMapsUrl: projectGeneralData.googleMapsUrl || undefined,
-          websiteUrl: projectGeneralData.websiteUrl || undefined,
-          estimatedDeliveryDate: projectGeneralData.estimatedDeliveryDate || undefined,
-          image: newProject.image,
-          coverImagePath: newProject.image,
-          units: mappedUnits,
-          additionals: mappedAdditionals,
-          developerId: activeDevId,
-          developerName: activeDevName,
-          userEmail: activeUserEmail,
-        }),
-      }).catch((err) => console.warn("Could not persist onboarding project:", err));
     }
 
     setCreatedProjectId(newProjectId);
-
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setIsSuccess(true);
-    }, 600);
+    setIsSubmitting(false);
+    setIsSuccess(true);
   };
 
   const filteredColumnPresets = availableColumnPresets.filter((col) =>
