@@ -877,6 +877,12 @@ export default function ClientDetailPage() {
       let aVal = a[statementSortField];
       let bVal = b[statementSortField];
 
+      if (statementSortField === "fechaProgramada" || statementSortField === "fechaPago") {
+        const dateA = parseDateFlexible(String(aVal || ""))?.getTime() || 0;
+        const dateB = parseDateFlexible(String(bVal || ""))?.getTime() || 0;
+        return statementSortDirection === "asc" ? dateA - dateB : dateB - dateA;
+      }
+
       if (typeof aVal === "string") {
         return statementSortDirection === "asc"
           ? (aVal as string).localeCompare(bVal as string)
@@ -907,6 +913,12 @@ export default function ClientDetailPage() {
     list.sort((a, b) => {
       let aVal = a[paymentSortField];
       let bVal = b[paymentSortField];
+
+      if (paymentSortField === "fechaPago" || paymentSortField === "scheduledDate") {
+        const dateA = parseDateFlexible(String(aVal || ""))?.getTime() || 0;
+        const dateB = parseDateFlexible(String(bVal || ""))?.getTime() || 0;
+        return paymentSortDirection === "asc" ? dateA - dateB : dateB - dateA;
+      }
 
       if (typeof aVal === "string") {
         return paymentSortDirection === "asc"

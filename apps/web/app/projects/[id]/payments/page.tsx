@@ -452,6 +452,12 @@ export default function ProjectPaymentsPage() {
       let aVal = a[sortField];
       let bVal = b[sortField];
 
+      if (sortField === "scheduledDate" || sortField === "paymentDate") {
+        const dateA = parseDateFlexible(String(aVal || ""))?.getTime() || 0;
+        const dateB = parseDateFlexible(String(bVal || ""))?.getTime() || 0;
+        return sortDirection === "asc" ? dateA - dateB : dateB - dateA;
+      }
+
       if (typeof aVal === "string") {
         return sortDirection === "asc"
           ? (aVal as string).localeCompare(bVal as string)

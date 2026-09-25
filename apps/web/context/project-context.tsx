@@ -303,32 +303,46 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         ? s.schedule
         : [];
 
-      const mappedSchedule = rawObligations.map((ob: any, obIdx: number) => {
-        const origAmt = Number(ob.originalAmount ?? ob.scheduledAmount ?? ob.amount) || 0;
-        const paidAmt = Number(ob.paidAmount) || 0;
-        const pendAmt = ob.pendingAmount !== undefined ? Number(ob.pendingAmount) : Math.max(0, origAmt - paidAmt);
-        const rawDate = ob.dueDate || ob.scheduledDate;
-        let formattedDate = "18/09/2026";
-        if (rawDate) {
-          try {
-            const d = new Date(rawDate);
-            formattedDate = !isNaN(d.getTime()) ? d.toLocaleDateString("es-MX") : String(rawDate);
-          } catch (_) {
-            formattedDate = String(rawDate);
+      const mappedSchedule = rawObligations
+        .map((ob: any, obIdx: number) => {
+          const origAmt = Number(ob.originalAmount ?? ob.scheduledAmount ?? ob.amount) || 0;
+          const paidAmt = Number(ob.paidAmount) || 0;
+          const pendAmt = ob.pendingAmount !== undefined ? Number(ob.pendingAmount) : Math.max(0, origAmt - paidAmt);
+          const rawDate = ob.dueDate || ob.scheduledDate;
+          let formattedDate = "18/09/2026";
+          let rawTimestamp = 0;
+          if (rawDate) {
+            try {
+              const d = new Date(rawDate);
+              if (!isNaN(d.getTime())) {
+                rawTimestamp = d.getTime();
+                formattedDate = d.toLocaleDateString("es-MX");
+              } else {
+                formattedDate = String(rawDate);
+              }
+            } catch (_) {
+              formattedDate = String(rawDate);
+            }
           }
-        }
 
-        const isPaid = (ob.status || "").toUpperCase() === "PAID" || pendAmt === 0;
-        return {
-          id: ob.id || `inst-${uNum || sIdx}-${obIdx + 1}`,
-          concept: ob.title || ob.concept || `Cuota ${obIdx + 1}`,
-          scheduledDate: formattedDate,
-          scheduledAmount: origAmt,
-          paidAmount: paidAmt,
-          pendingAmount: pendAmt,
-          status: isPaid ? ("Pagado" as const) : paidAmt > 0 ? ("Parcial" as const) : ("Pendiente" as const),
-        };
-      });
+          const isPaid = (ob.status || "").toUpperCase() === "PAID" || pendAmt === 0;
+          return {
+            id: ob.id || `inst-${uNum || sIdx}-${obIdx + 1}`,
+            concept: ob.title || ob.concept || `Cuota ${obIdx + 1}`,
+            scheduledDate: formattedDate,
+            scheduledAmount: origAmt,
+            paidAmount: paidAmt,
+            pendingAmount: pendAmt,
+            status: isPaid ? ("Pagado" as const) : paidAmt > 0 ? ("Parcial" as const) : ("Pendiente" as const),
+            _timestamp: rawTimestamp,
+            _obNumber: Number(ob.obligationNumber) || obIdx + 1,
+          };
+        })
+        .sort((a: any, b: any) => {
+          if (a._timestamp && b._timestamp) return a._timestamp - b._timestamp;
+          return a._obNumber - b._obNumber;
+        })
+        .map(({ _timestamp, _obNumber, ...rest }: any) => rest);
 
       const rawReceipts = Array.isArray(s.paymentReceipts)
         ? s.paymentReceipts
