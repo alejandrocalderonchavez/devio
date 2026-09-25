@@ -11,11 +11,11 @@ async function bootstrap() {
     allowedHeaders: ["Content-Type", "Authorization", "Accept", "X-Requested-With"],
   });
   
-  app.setGlobalPrefix("v1");
+  app.setGlobalPrefix("api");
   
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port, "0.0.0.0");
+  console.log(`DEVIO Railway NestJS API running on http://0.0.0.0:${port}/api`);
 }
 
 void bootstrap();
-

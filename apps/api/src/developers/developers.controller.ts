@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, HttpCode, HttpStatus } from "@nestjs/common";
+import { Controller, Post, Get, Put, Body, Param, Query, HttpCode, HttpStatus } from "@nestjs/common";
 import { DevelopersService, CreateDeveloperDto } from "./developers.service";
 
 @Controller("developers")
@@ -12,8 +12,16 @@ export class DevelopersController {
   }
 
   @Get()
-  async findAll() {
+  async findByQuery(@Query("email") email?: string, @Query("id") id?: string) {
+    if (email || id) {
+      return this.developersService.findByQuery(email, id);
+    }
     return this.developersService.findAll();
+  }
+
+  @Put()
+  async updateDeveloper(@Body() body: any) {
+    return this.developersService.updateDeveloper(body);
   }
 
   @Get(":id")

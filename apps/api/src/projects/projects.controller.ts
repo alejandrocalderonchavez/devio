@@ -1,5 +1,5 @@
-import { Controller, Post, Get, Body, Param, Query, HttpCode, HttpStatus } from "@nestjs/common";
-import { ProjectsService, CreateProjectFullPayloadDto } from "./projects.service";
+import { Controller, Post, Get, Put, Delete, Body, Param, Query, HttpCode, HttpStatus } from "@nestjs/common";
+import { ProjectsService } from "./projects.service";
 
 @Controller("projects")
 export class ProjectsController {
@@ -7,7 +7,7 @@ export class ProjectsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() body: CreateProjectFullPayloadDto) {
+  async create(@Body() body: any) {
     return this.projectsService.create(body);
   }
 
@@ -19,5 +19,15 @@ export class ProjectsController {
   @Get(":id")
   async findById(@Param("id") id: string) {
     return this.projectsService.findById(id);
+  }
+
+  @Put(":id")
+  async update(@Param("id") id: string, @Body() body: any) {
+    return this.projectsService.update(id, body);
+  }
+
+  @Delete(":id")
+  async delete(@Param("id") id: string) {
+    return this.projectsService.delete(id);
   }
 }
