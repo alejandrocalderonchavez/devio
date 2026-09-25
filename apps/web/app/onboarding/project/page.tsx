@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import PaymentPlanModal from "@/components/plans/payment-plan-modal";
+import ProjectDocumentModal from "@/components/documents/project-document-modal";
 import {
   generateUnitsExcelTemplate,
   generateAdditionalsExcelTemplate,
@@ -1100,6 +1101,19 @@ export default function ProjectOnboardingPage() {
       overdueClients: [],
       unitsInventory: mappedUnits,
       additionals: mappedAdditionals,
+      documents: documents.map((d) => ({
+        id: d.id,
+        title: d.title,
+        category: d.category as any,
+        fileName: d.fileName,
+        fileSize: d.fileSize,
+        uploadDate: new Date().toLocaleDateString("es-MX"),
+        updatedAt: new Date().toLocaleDateString("es-MX"),
+        notes: (d as any).internalNotes || (d as any).notes || "",
+        fileType: (d as any).fileType || "PDF",
+        version: (d as any).version || "v1.0",
+        url: (d as any).url || (d as any).fileDataUrl || undefined,
+      })),
       team: teamMembers.filter((m) => m.assigned),
       floorPlans: onboardingFloorPlans.length > 0 ? onboardingFloorPlans : undefined,
       paymentPlans: (globalPlanLibrary.length > 0 ? globalPlanLibrary : []).map((p) => ({
@@ -1152,6 +1166,7 @@ export default function ProjectOnboardingPage() {
             coverImagePath: newProject.image,
             units: mappedUnits,
             additionals: mappedAdditionals,
+            documents: documents,
             developerId: activeDevId,
             developerName: activeDevName,
             userEmail: activeUserEmail,
@@ -3301,172 +3316,33 @@ export default function ProjectOnboardingPage() {
       />
 
 
-      {/* MODAL: DOCUMENTO CON UPLOADER REAL FUNCIONAL */}
-      {isDocModalOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(22, 43, 63, 0.65)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-            padding: "1rem",
-          }}
-        >
-          <div
-            className="modal-content"
-            style={{
-              backgroundColor: "var(--devio-white)",
-              borderRadius: "1rem",
-              width: "100%",
-              maxWidth: "580px",
-              padding: "2rem",
-              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.25)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
-              <div>
-                <h2 style={{ fontSize: "1.5rem", color: "var(--devio-blue-dark)" }}>Documento</h2>
-                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                  Sube y clasifica contratos, planos, fichas técnicas u otros archivos.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsDocModalOpen(false)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--devio-neutral-3)" }}
-              >
-                <X size={24} />
-              </button>
-            </div>
+      {/* MODAL ESTANDARIZADO: DOCUMENTO */}
+      <ProjectDocumentModal
+        isOpen={isDocModalOpen}
+        onClose={() => setIsDocModalOpen(false)}
+        initialData={modalDocData.id ? (modalDocData as any) : null}
+        onSave={(savedDoc: any) => {
+          const finalDoc: ProjectDocumentItem = {
+            id: savedDoc.id || `doc-${Date.now()}`,
+            title: savedDoc.title,
+            category: savedDoc.category || "Legal",
+            fileName: savedDoc.fileName || `${savedDoc.title.toLowerCase().replace(/\s+/g, "_")}.pdf`,
+            fileSize: savedDoc.fileSize || "1.0 MB",
+            internalNotes: savedDoc.notes || "",
+            ...(savedDoc.url ? { url: savedDoc.url } : {}),
+            ...(savedDoc.fileDataUrl ? { fileDataUrl: savedDoc.fileDataUrl } : {}),
+            ...(savedDoc.fileType ? { fileType: savedDoc.fileType } : {}),
+            ...(savedDoc.version ? { version: savedDoc.version } : {}),
+          } as any;
 
-            {/* Hidden Input for Doc File */}
-            <input
-              type="file"
-              ref={modalDocFileInputRef}
-              onChange={handleDocFileSelect}
-              accept=".pdf,.dwg,.docx,.doc,.jpg,.png,.xlsx"
-              style={{ display: "none" }}
-            />
-
-            <form onSubmit={handleSaveDocument}>
-              <div className="grid-cols-2" style={{ marginBottom: "1rem" }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Nombre del documento *</label>
-                  <input
-                    type="text"
-                    value={modalDocData.title}
-                    onChange={(e) => setModalDocData({ ...modalDocData, title: e.target.value })}
-                    placeholder="Ej. Contrato Promesa Tipo A"
-                    className="form-input"
-                    required
-                  />
-                </div>
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Categoría</label>
-                  <select
-                    value={modalDocData.category || "Legal"}
-                    onChange={(e) => setModalDocData({ ...modalDocData, category: e.target.value })}
-                    className="form-select"
-                  >
-                    <option value="Legal">Legal y Contratos</option>
-                    <option value="Técnico">Planos y Técnico</option>
-                    <option value="Comercial">Comercial y Fichas</option>
-                    <option value="Financiero">Financiero y Fiscal</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Uploader Box Conectado a Input */}
-              <div className="form-group" style={{ marginBottom: "1rem" }}>
-                <label className="form-label">Archivo Adjunto *</label>
-                {modalDocData.fileName ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "0.85rem 1rem",
-                      border: "1px solid var(--devio-green)",
-                      borderRadius: "0.5rem",
-                      backgroundColor: "rgba(111, 172, 156, 0.08)",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      <FileText size={22} color="var(--devio-green)" />
-                      <div>
-                        <p style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--devio-blue-dark)", margin: 0 }}>
-                          {modalDocData.fileName}
-                        </p>
-                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                          {modalDocData.fileSize || "Archivo listo"}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => modalDocFileInputRef.current?.click()}
-                      className="btn btn-outline"
-                      style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem" }}
-                    >
-                      Cambiar Archivo
-                    </button>
-                  </div>
-                ) : (
-                  <div
-                    onClick={() => modalDocFileInputRef.current?.click()}
-                    style={{
-                      border: "2px dashed var(--devio-neutral-2)",
-                      borderRadius: "0.5rem",
-                      padding: "1.5rem",
-                      textAlign: "center",
-                      backgroundColor: "var(--bg-page)",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--devio-blue)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--devio-neutral-2)")}
-                  >
-                    <Upload size={24} color="var(--devio-blue-matte)" style={{ margin: "0 auto 0.4rem" }} />
-                    <p style={{ fontSize: "0.875rem", color: "var(--devio-neutral-4)", fontWeight: 600, margin: 0 }}>
-                      Click para seleccionar archivo desde tu equipo
-                    </p>
-                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>PDF, DWG, DOCX, JPG o PNG (hasta 25MB)</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="form-group" style={{ marginBottom: "1.5rem" }}>
-                <label className="form-label">Notas Internas</label>
-                <textarea
-                  value={modalDocData.internalNotes}
-                  onChange={(e) => setModalDocData({ ...modalDocData, internalNotes: e.target.value })}
-                  placeholder="Detalles sobre uso, vigencia o firmas..."
-                  className="form-textarea"
-                  rows={2}
-                />
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-                <button
-                  type="button"
-                  onClick={() => setIsDocModalOpen(false)}
-                  className="btn btn-outline"
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  <Save size={16} /> Guardar Documento
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+          if (documents.some((d) => d.id === finalDoc.id)) {
+            setDocuments((prev) => prev.map((d) => (d.id === finalDoc.id ? finalDoc : d)));
+          } else {
+            setDocuments((prev) => [...prev, finalDoc]);
+          }
+          setIsDocModalOpen(false);
+        }}
+      />
 
       {/* MODAL: MAPEDOR INTELIGENTE DE COLUMNAS DE EXCEL */}
       {isColumnMapperModalOpen && (

@@ -355,6 +355,42 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       dbProj.image ||
       "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80";
 
+    const rawDocs = Array.isArray(dbProj.documents) ? dbProj.documents : [];
+    const mappedDocuments: ProjectDocument[] = rawDocs.map((d: any, idx: number) => {
+      const rawType = String(d.type || d.category || "Contratos").toUpperCase();
+      let category: any = "Contratos";
+
+      if (rawType.includes("BLUEPRINT") || rawType.includes("PLANO")) {
+        category = "Planos y Arquitectura";
+      } else if (rawType.includes("LICENSE") || rawType.includes("PERMISO") || rawType.includes("LICENCIA")) {
+        category = "Licencias y Permisos";
+      } else if (rawType.includes("TECHNICAL") || rawType.includes("FICHA") || rawType.includes("TÉCNICO")) {
+        category = "Fichas Técnicas";
+      } else if (rawType.includes("REGULATION") || rawType.includes("REGLAMENTO") || rawType.includes("ACTA")) {
+        category = "Reglamentos y Actas";
+      } else if (rawType.includes("FINANCIAL") || rawType.includes("FISCAL") || rawType.includes("RECEIPT") || rawType.includes("STATEMENT")) {
+        category = "Financiero y Fiscal";
+      } else if (d.category) {
+        category = d.category;
+      }
+
+      const fileType = d.fileType || (d.mimeType?.includes("image") ? "PNG" : d.storagePath?.split(".").pop()?.toUpperCase() || "PDF");
+
+      return {
+        id: d.id || `doc-${idx + 1}`,
+        title: d.title || d.name || "Documento",
+        category: category,
+        fileType: fileType === "DOCX" || fileType === "XLSX" || fileType === "DWG" || fileType === "ZIP" ? fileType : "PDF",
+        fileSize: d.fileSizeBytes ? `${Math.round(d.fileSizeBytes / 1024)} KB` : d.fileSize || "1.0 MB",
+        uploadDate: d.uploadDate || (d.createdAt ? new Date(d.createdAt).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX")),
+        updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX"),
+        version: d.version || "v1.0",
+        notes: d.notes || "",
+        url: d.storagePath || d.url || d.fileDataUrl || undefined,
+        fileName: d.fileName || (d.storagePath ? d.storagePath.split("/").pop() : `${d.title || "documento"}.pdf`),
+      };
+    });
+
     return {
       id: dbProj.id,
       name: dbProj.name,
@@ -397,7 +433,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       sales: dbProj.sales || [],
       quotes: dbProj.quotes || [],
       floorPlans: dbProj.floorPlans || [],
-      documents: dbProj.documents || [],
+      documents: mappedDocuments,
       clientDocuments: dbProj.clientDocuments || [],
       paymentPlans: dbProj.paymentPlans || [],
       team: dbProj.team || [],

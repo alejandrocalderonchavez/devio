@@ -24,6 +24,8 @@ export class ProjectsService {
       unitsInventory,
       units,
       additionals,
+      documents,
+      projectDocuments,
       image,
       coverImagePath,
       coverFileName,
@@ -184,6 +186,42 @@ export class ProjectsService {
             status: aStatus as any,
             price: Number(a.price) || 0,
             currency: baseCurr as any,
+          };
+        }),
+        skipDuplicates: true,
+      });
+    }
+
+    // 5. Create Documents if provided
+    const docsList = Array.isArray(documents) && documents.length > 0 ? documents : Array.isArray(projectDocuments) ? projectDocuments : [];
+    if (docsList.length > 0) {
+      await this.prisma.document.createMany({
+        data: docsList.map((d: any, idx: number) => {
+          const rawType = String(d.type || d.category || "OTHER").toUpperCase();
+          let docType: "QUOTE" | "RECEIPT" | "STATEMENT" | "CONTRACT" | "OTHER" = "OTHER";
+
+          if (rawType.includes("QUOTE") || rawType.includes("COTIZACION")) {
+            docType = "QUOTE";
+          } else if (rawType.includes("RECEIPT") || rawType.includes("RECIBO")) {
+            docType = "RECEIPT";
+          } else if (rawType.includes("STATEMENT") || rawType.includes("ESTADO_CUENTA")) {
+            docType = "STATEMENT";
+          } else if (rawType.includes("CONTRACT") || rawType.includes("CONTRATO") || rawType.includes("LEGAL")) {
+            docType = "CONTRACT";
+          }
+
+          const storagePath = d.url || d.fileDataUrl || d.filePath || d.fileName || `/documents/${project.id}/${idx + 1}.pdf`;
+
+          return {
+            id: randomUUID(),
+            developerId: targetDevId,
+            projectId: project.id,
+            title: d.title || d.name || `Documento ${idx + 1}`,
+            type: docType as any,
+            storagePath,
+            fileSizeBytes: Number(d.fileSizeBytes || (typeof d.fileSize === "number" ? d.fileSize : 1024)),
+            mimeType: d.mimeType || "application/pdf",
+            isClientVisible: d.isClientVisible !== false,
           };
         }),
         skipDuplicates: true,
