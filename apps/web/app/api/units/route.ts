@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@devio/database";
 
+const isUuid = (str?: string | null) =>
+  Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+
+async function resolveProjectId(projectId?: string | null): Promise<string | null> {
+  if (projectId && isUuid(projectId)) return projectId;
+  const firstProject = await prisma.project.findFirst({ select: { id: true } });
+  return firstProject?.id || null;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const projectId = searchParams.get("projectId");
+    const projectIdParam = searchParams.get("projectId");
+    const resolvedProjId = await resolveProjectId(projectIdParam);
 
     const whereClause: any = {};
-    if (projectId) whereClause.projectId = projectId;
+    if (resolvedProjId) whereClause.projectId = resolvedProjId;
 
     const units = await prisma.unit.findMany({
       where: whereClause,
@@ -41,11 +51,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { projectId, units, unitNumber, type, price, areaM2, floor, status } = body;
+    const { projectId: rawProjectId, units, unitNumber, type, price, areaM2, floor, status } = body;
 
+    const projectId = await resolveProjectId(rawProjectId);
     if (!projectId) {
       return NextResponse.json(
-        { success: false, error: "projectId es requerido" },
+        { success: false, error: "Proyecto no encontrado" },
         { status: 400 }
       );
     }
@@ -143,7 +154,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { projectId, unitNumber, unitId, status, price, areaM2, floor, client } = body;
+    const { projectId: rawProjectId, unitNumber, unitId, status, price, areaM2, floor } = body;
 
     if (!unitNumber && !unitId) {
       return NextResponse.json(
@@ -153,16 +164,18 @@ export async function PATCH(request: Request) {
     }
 
     // Find unit
-    let targetUnit = null;
-    if (unitId && !unitId.startsWith("u-") && unitId.length > 10) {
+    let targetUnit: any = null;
+    if (unitId && isUuid(unitId)) {
       targetUnit = await prisma.unit.findUnique({ where: { id: unitId } });
     }
 
-    if (!targetUnit && projectId && unitNumber) {
+    const resolvedProjId = await resolveProjectId(rawProjectId);
+
+    if (!targetUnit && resolvedProjId && unitNumber) {
       targetUnit = await prisma.unit.findFirst({
         where: {
-          projectId,
-          unitNumber: String(unitNumber).trim(),
+          projectId: resolvedProjId,
+          unitNumber: { equals: String(unitNumber).trim(), mode: "insensitive" },
         },
       });
     }
@@ -170,9 +183,27 @@ export async function PATCH(request: Request) {
     if (!targetUnit && unitNumber) {
       targetUnit = await prisma.unit.findFirst({
         where: {
-          unitNumber: String(unitNumber).trim(),
+          unitNumber: { equals: String(unitNumber).trim(), mode: "insensitive" },
         },
       });
+    }
+
+    // Flexible alphanumeric normalization (e.g. "A-02" matches "A2" / "A02")
+    if (!targetUnit && unitNumber) {
+      const cleanSearch = String(unitNumber).replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+      const allUnits = await prisma.unit.findMany({
+        where: resolvedProjId ? { projectId: resolvedProjId } : undefined,
+      });
+      targetUnit =
+        allUnits.find((u: any) => {
+          const cleanDb = u.unitNumber.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+          return (
+            cleanDb === cleanSearch ||
+            cleanDb.replace(/^0+/, "") === cleanSearch.replace(/^0+/, "") ||
+            cleanDb === cleanSearch.replace(/^a0*/, "a") ||
+            cleanSearch === cleanDb.replace(/^a0*/, "a")
+          );
+        }) || null;
     }
 
     // Map status string
@@ -243,14 +274,20 @@ export async function PATCH(request: Request) {
           }).catch(() => {});
         }
       }
+
+      return NextResponse.json({
+        success: true,
+        message: `Unidad ${unitNumber || unitId} actualizada a ${mappedStatus} y ventas sincronizadas.`,
+        unit: targetUnit,
+      });
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `Unidad ${unitNumber || unitId} actualizada a ${mappedStatus} y pagos sincronizados correctamente.`,
-    });
+    return NextResponse.json(
+      { success: false, error: "Unidad no encontrada" },
+      { status: 404 }
+    );
   } catch (error: any) {
-    console.error("Error updating unit via /api/units:", error);
+    console.error("Error in /api/units PATCH:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Error al actualizar unidad" },
       { status: 500 }
@@ -263,15 +300,23 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     const unitNumber = searchParams.get("unitNumber");
-    const projectId = searchParams.get("projectId");
+    const projectIdParam = searchParams.get("projectId");
+    const resolvedProjId = await resolveProjectId(projectIdParam);
 
     let targetUnit = null;
-    if (id && !id.startsWith("u-") && id.length > 10) {
+    if (id && isUuid(id)) {
       targetUnit = await prisma.unit.findUnique({ where: { id } });
-    } else if (projectId && unitNumber) {
-      targetUnit = await prisma.unit.findFirst({
-        where: { projectId, unitNumber: String(unitNumber).trim() },
-      });
+    } else if (unitNumber) {
+      if (resolvedProjId) {
+        targetUnit = await prisma.unit.findFirst({
+          where: { projectId: resolvedProjId, unitNumber: String(unitNumber).trim() },
+        });
+      }
+      if (!targetUnit) {
+        targetUnit = await prisma.unit.findFirst({
+          where: { unitNumber: String(unitNumber).trim() },
+        });
+      }
     }
 
     if (targetUnit) {

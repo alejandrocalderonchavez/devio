@@ -94,13 +94,17 @@ export async function GET(request: Request) {
     // 2. Fetch Real Active Sales for this client from Supabase
     let dbSales: any[] = [];
     try {
+      const orConditions: any[] = [
+        { primaryClient: { email: { equals: targetEmail, mode: "insensitive" } } },
+        { coOwners: { some: { client: { email: { equals: targetEmail, mode: "insensitive" } } } } },
+      ];
+      if (dbClient?.id) {
+        orConditions.push({ primaryClientId: dbClient.id });
+      }
+
       dbSales = await prisma.sale.findMany({
         where: {
-          OR: [
-            { primaryClientId: dbClient?.id },
-            { primaryClient: { email: targetEmail } },
-            { coOwners: { some: { client: { email: targetEmail } } } },
-          ],
+          OR: orConditions,
           status: { in: ["ACTIVE", "RESERVED", "IN_CONTRACT", "LIQUIDATED"] },
         },
         include: {
@@ -108,7 +112,7 @@ export async function GET(request: Request) {
             include: {
               developer: true,
               constructionProgress: {
-                orderBy: { recordedDate: "desc" },
+                orderBy: { progressDate: "desc" },
                 take: 1,
               },
               documents: true,
@@ -132,7 +136,7 @@ export async function GET(request: Request) {
         },
       });
     } catch (salesErr) {
-      console.warn("Prisma sales query error:", salesErr);
+      console.warn("Prisma sales query error in client properties:", salesErr);
       dbSales = [];
     }
 
@@ -250,6 +254,84 @@ export async function GET(request: Request) {
         ? Number(proj.constructionProgress[0].overallPercentage)
         : 45;
 
+      let finalSchedule = scheduleList;
+      if (finalSchedule.length === 0 && agreedPrice > 0) {
+        const dpPct = Number(sale.paymentPlan?.downPaymentPercentage || 20);
+        const instCount = Number(sale.paymentPlan?.installmentsCount || 12);
+        const stPct = Number(sale.paymentPlan?.settlementPercentage || 20);
+        const dpAmount = round2(agreedPrice * (dpPct / 100));
+        const stAmount = round2(agreedPrice * (stPct / 100));
+        const remAmount = Math.max(0, agreedPrice - dpAmount - stAmount);
+        const monthlyAmount = instCount > 0 ? round2(remAmount / instCount) : 0;
+
+        const generatedSched: any[] = [];
+        const baseDate = sale.reservationDate ? new Date(sale.reservationDate) : new Date();
+
+        generatedSched.push({
+          id: `sched-dp-${sale.id}`,
+          cuotaNumber: 1,
+          concept: "Enganche",
+          montoProgramado: dpAmount,
+          fechaProgramada: baseDate.toISOString().slice(0, 10),
+          montoPagado: 0,
+          montoPendiente: dpAmount,
+          fechaPago: "-",
+          planPago: sale.paymentPlan?.notes || "Plan Personalizado",
+          metodoPago: "Pendiente",
+          status: "Pendiente",
+          interesMoratorio: 0,
+        });
+
+        for (let i = 1; i <= instCount; i++) {
+          const mDate = new Date(baseDate);
+          mDate.setMonth(baseDate.getMonth() + i);
+          generatedSched.push({
+            id: `sched-inst-${sale.id}-${i}`,
+            cuotaNumber: i + 1,
+            concept: `Mensualidad ${i}`,
+            montoProgramado: monthlyAmount,
+            fechaProgramada: mDate.toISOString().slice(0, 10),
+            montoPagado: 0,
+            montoPendiente: monthlyAmount,
+            fechaPago: "-",
+            planPago: sale.paymentPlan?.notes || "Plan Personalizado",
+            metodoPago: "Pendiente",
+            status: "Pendiente",
+            interesMoratorio: 0,
+          });
+        }
+
+        if (stAmount > 0) {
+          const lDate = new Date(baseDate);
+          lDate.setMonth(baseDate.getMonth() + instCount + 1);
+          generatedSched.push({
+            id: `sched-liq-${sale.id}`,
+            cuotaNumber: instCount + 2,
+            concept: "Liquidación",
+            montoProgramado: stAmount,
+            fechaProgramada: lDate.toISOString().slice(0, 10),
+            montoPagado: 0,
+            montoPendiente: stAmount,
+            fechaPago: "-",
+            planPago: sale.paymentPlan?.notes || "Plan Personalizado",
+            metodoPago: "Pendiente",
+            status: "Pendiente",
+            interesMoratorio: 0,
+          });
+        }
+
+        finalSchedule = generatedSched;
+
+        if (!nextPaymentItem && finalSchedule.length > 0) {
+          nextPaymentItem = {
+            amount: finalSchedule[0].montoPendiente,
+            dueDate: finalSchedule[0].fechaProgramada,
+            daysRemaining: Math.ceil((new Date(finalSchedule[0].fechaProgramada).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+            concept: finalSchedule[0].concept,
+          };
+        }
+      }
+
       properties.push({
         id: sale.id,
         developerName: devName,
@@ -293,7 +375,7 @@ export async function GET(request: Request) {
           uploadDate: new Date().toLocaleDateString("es-MX"),
           fileUrl: d.filePath,
         })),
-        schedule: scheduleList,
+        schedule: finalSchedule,
         paymentsList,
         customAttributes: [],
         isCoOwnership,
