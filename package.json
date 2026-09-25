@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "pnpm --filter @devio/database generate && turbo run build",
-    "start": "pnpm --filter @devio/web start",
+    "start": "pnpm --filter @devio/api start",
     "start:web": "pnpm --filter @devio/web start",
     "start:api": "pnpm --filter @devio/api start",
     "dev": "turbo run dev --parallel",

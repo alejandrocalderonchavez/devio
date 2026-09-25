@@ -1,0 +1,5 @@
+[phases.build]
+cmds = ["pnpm --filter @devio/database generate && pnpm --filter @devio/api build"]
+
+[start]
+cmd = "pnpm --filter @devio/api start"

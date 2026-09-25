@@ -135,11 +135,11 @@ function RegisterContent() {
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok || !data.success) {
         setIsSubmitting(false);
-        setErrorMessage(data.error || "Error al registrar la cuenta en la base de datos.");
+        setErrorMessage(data.error || data.message || "Error al registrar la cuenta en la base de datos.");
         return;
       }
 

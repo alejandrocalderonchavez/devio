@@ -222,7 +222,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetch("/api/finance/exchange-rate")
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && typeof data.rate === "number" && data.rate > 0) {
           setBanxicoRate(data.rate);
@@ -298,9 +298,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
     // Fetch live developer and projects data from Supabase / API
     fetch("/api/developers")
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data.success && Array.isArray(data.developers) && data.developers.length > 0) {
+        if (data && data.success && Array.isArray(data.developers) && data.developers.length > 0) {
           const storedUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
           const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
           const storedImp = localStorage.getItem("devio_impersonation") || sessionStorage.getItem("devio_impersonation");
