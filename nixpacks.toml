@@ -1,12 +1,13 @@
 [phases.setup]
-nixPkgs = ["nodejs_22", "openssl"]
+nixPkgs = ["nodejs_22", "pnpm", "openssl"]
 
 [phases.install]
-cmds = ["npx --yes pnpm@11.19.0 install --frozen-lockfile"]
+cmds = ["pnpm install --frozen-lockfile"]
 
 [phases.build]
-cmds = ["npx --yes pnpm@11.19.0 --filter @devio/database generate && npx --yes pnpm@11.19.0 --filter @devio/api build"]
+cmds = ["pnpm --filter @devio/database generate && pnpm --filter @devio/api build"]
 
 [start]
-cmd = "npx --yes pnpm@11.19.0 --filter @devio/api start"
+cmd = "pnpm --filter @devio/api start"
+
 
