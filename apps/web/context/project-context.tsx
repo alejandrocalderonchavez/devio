@@ -636,13 +636,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         return a;
       });
 
-      // Synchronize sales: if unit is made DISPONIBLE, mark sale as CANCELADA
-      const updatedSales = (p.sales || []).map((s) => {
-        if (s.unit === unitNumber && isAvailable) {
-          return { ...s, status: "CANCELADA" as const };
-        }
-        return s;
-      });
+      // Synchronize sales: if unit is made DISPONIBLE, purge sale from sales list
+      const updatedSales = isAvailable
+        ? (p.sales || []).filter((s) => s.unit !== unitNumber)
+        : (p.sales || []);
 
       const soldCount = newInventory.filter((u) => u.status === "VENDIDA").length;
       const availCount = newInventory.filter((u) => u.status === "DISPONIBLE").length;

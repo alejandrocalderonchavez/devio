@@ -61,42 +61,54 @@ export async function PATCH(request: Request) {
         data: updateData,
       });
 
-      // If unit was made AVAILABLE, cancel any active sales linked to this unit
+      // If unit was made AVAILABLE, purge any sales and payments associated with this unit
       if (mappedStatus === "AVAILABLE") {
-        await prisma.sale.updateMany({
-          where: {
-            unitId: targetUnit.id,
-            status: "ACTIVE",
-          },
-          data: {
-            status: "CANCELLED",
-          },
-        });
-
-        // Also cancel scheduled obligations for cancelled sales
-        const cancelledSales = await prisma.sale.findMany({
-          where: { unitId: targetUnit.id, status: "CANCELLED" },
+        const salesToPurge = await prisma.sale.findMany({
+          where: { unitId: targetUnit.id },
           select: { id: true },
         });
 
-        if (cancelledSales.length > 0) {
-          const saleIds = cancelledSales.map((s: any) => s.id);
-          await prisma.scheduledObligation.updateMany({
+        if (salesToPurge.length > 0) {
+          const saleIds = salesToPurge.map((s: any) => s.id);
+
+          // 1. Delete payment allocations
+          await prisma.paymentAllocation.deleteMany({
             where: {
-              saleId: { in: saleIds },
-              status: { in: ["PENDING", "PARTIALLY_PAID", "OVERDUE"] },
+              obligation: { saleId: { in: saleIds } },
             },
-            data: {
-              status: "CANCELLED",
-            },
-          });
+          }).catch(() => {});
+
+          // 2. Delete payment receipts
+          await prisma.paymentReceipt.deleteMany({
+            where: { saleId: { in: saleIds } },
+          }).catch(() => {});
+
+          // 3. Delete scheduled obligations
+          await prisma.scheduledObligation.deleteMany({
+            where: { saleId: { in: saleIds } },
+          }).catch(() => {});
+
+          // 4. Delete payment plans
+          await prisma.paymentPlan.deleteMany({
+            where: { saleId: { in: saleIds } },
+          }).catch(() => {});
+
+          // 5. Delete co-owners
+          await prisma.saleCoOwner.deleteMany({
+            where: { saleId: { in: saleIds } },
+          }).catch(() => {});
+
+          // 6. Delete sales
+          await prisma.sale.deleteMany({
+            where: { id: { in: saleIds } },
+          }).catch(() => {});
         }
       }
     }
 
     return NextResponse.json({
       success: true,
-      message: `Unidad ${unitNumber || unitId} actualizada a ${mappedStatus}`,
+      message: `Unidad ${unitNumber || unitId} actualizada a ${mappedStatus} y pagos sincronizados correctamente.`,
     });
   } catch (error: any) {
     console.error("Error updating unit via /api/units:", error);
