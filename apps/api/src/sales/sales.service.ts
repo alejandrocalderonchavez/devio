@@ -17,6 +17,8 @@ export class SalesService {
       schedule,
       initialPayment,
       folio,
+      additionals,
+      soldAddons,
     } = body;
 
     if (!projectId) {
@@ -225,6 +227,41 @@ export class SalesService {
             ownershipPercentage: Number(co.percentage || (100 / (coOwners.length + 1))),
           },
         });
+      }
+    }
+
+    // 6.5 Handle Additionals / Add-ons sold with the unit
+    const addonsList = Array.isArray(additionals) && additionals.length > 0
+      ? additionals
+      : Array.isArray(soldAddons) && soldAddons.length > 0
+      ? soldAddons
+      : [];
+
+    if (addonsList.length > 0) {
+      for (const addOn of addonsList) {
+        const addOnId = typeof addOn === "string" ? addOn : addOn?.id;
+        const addOnName = typeof addOn === "object" ? addOn?.name : undefined;
+
+        if (addOnId && addOnId.length > 10 && !addOnId.startsWith("add-")) {
+          await this.prisma.unitAdditional.updateMany({
+            where: { id: addOnId },
+            data: {
+              status: "SOLD",
+              unitId: targetUnit.id,
+            },
+          });
+        } else if (addOnName) {
+          await this.prisma.unitAdditional.updateMany({
+            where: {
+              projectId: project.id,
+              name: { equals: addOnName, mode: "insensitive" },
+            },
+            data: {
+              status: "SOLD",
+              unitId: targetUnit.id,
+            },
+          });
+        }
       }
     }
 

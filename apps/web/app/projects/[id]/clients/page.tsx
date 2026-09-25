@@ -57,8 +57,15 @@ export default function ProjectClientsPage() {
     (project.sales || []).forEach((sale) => {
       if (sale.status === "CANCELADA") return;
 
-      const normName = (sale.clientName || "").trim().toLowerCase();
-      const normEmail = (sale.clientEmail || "").trim().toLowerCase();
+      const rawUnitStr = typeof sale.unit === "object" && sale.unit !== null ? (sale.unit as any).unitNumber : sale.unit;
+      const unitNum = String(rawUnitStr || "").trim();
+      const clientName = sale.clientName || (sale as any).primaryClient?.fullName || (sale.coOwners && sale.coOwners.length > 0 ? sale.coOwners[0]?.name : "") || "Cliente";
+      const clientEmail = sale.clientEmail || (sale as any).primaryClient?.email || (sale.coOwners && sale.coOwners.length > 0 ? sale.coOwners[0]?.email : "") || "-";
+      const clientPhone = sale.clientPhone || (sale as any).primaryClient?.phone || (sale.coOwners && sale.coOwners.length > 0 ? sale.coOwners[0]?.phone : "") || "-";
+      const clientRfc = sale.clientRfc || (sale as any).primaryClient?.taxId || (sale.coOwners && sale.coOwners.length > 0 ? sale.coOwners[0]?.rfc : "") || "-";
+
+      const normName = (clientName || "").trim().toLowerCase();
+      const normEmail = (clientEmail || "").trim().toLowerCase();
       const primaryKey = normEmail && normEmail !== "-" ? normEmail : normName;
 
       if (!primaryKey) return;
@@ -71,8 +78,8 @@ export default function ProjectClientsPage() {
         ? `cli-${normName.replace(/[^a-z0-9]/g, "-")}`
         : `cli-${Date.now()}`;
 
-      const uObj = soldUnitsMap.get(sale.unit);
-      knownUnits.add(sale.unit);
+      const uObj = soldUnitsMap.get(unitNum) || (project.unitsInventory || []).find((u) => u.unit.toLowerCase() === unitNum.toLowerCase());
+      if (unitNum) knownUnits.add(unitNum);
 
       let existingKey = clientMap.has(primaryKey) 
         ? primaryKey 
@@ -81,22 +88,22 @@ export default function ProjectClientsPage() {
       if (!existingKey || !clientMap.has(existingKey)) {
         clientMap.set(primaryKey, {
           id: targetClientId,
-          name: sale.clientName || "Cliente",
-          email: sale.clientEmail || "-",
-          phone: sale.clientPhone || "-",
-          rfc: sale.clientRfc || "-",
-          totalPaid: sale.paidAmount || 0,
-          totalPending: sale.pendingAmount || 0,
+          name: clientName,
+          email: clientEmail,
+          phone: clientPhone,
+          rfc: clientRfc,
+          totalPaid: Number(sale.paidAmount) || 0,
+          totalPending: Number(sale.pendingAmount) || 0,
           unitsCount: 1,
           ownedUnits: [
             {
-              unit: sale.unit,
+              unit: unitNum,
               type: uObj?.type || "Departamento",
-              price: sale.totalPrice || uObj?.price || 0,
+              price: Number(sale.totalPrice || (sale as any).finalPrice || uObj?.price) || 0,
               ownershipPct: sale.coOwners && sale.coOwners.length > 0 ? (sale.coOwners[0]?.ownershipPct || 100) : 100,
               isPrimary: true,
-              saleFolio: sale.folio,
-              additionals: sale.additionals && sale.additionals.length > 0 ? sale.additionals : (project.additionals || []).filter(a => a.assignedToUnit === sale.unit),
+              saleFolio: sale.folio || (sale as any).contractNumber,
+              additionals: sale.additionals && sale.additionals.length > 0 ? sale.additionals : (project.additionals || []).filter(a => a.assignedToUnit && a.assignedToUnit.toLowerCase() === unitNum.toLowerCase()),
             },
           ],
         });

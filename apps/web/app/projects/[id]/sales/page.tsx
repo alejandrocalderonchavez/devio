@@ -123,16 +123,25 @@ export default function ProjectSalesPage() {
       const activeSales = project.sales
         .filter((s) => s.status !== "CANCELADA")
         .map((s) => {
+          const rawUnitStr = typeof s.unit === "object" && s.unit !== null ? (s.unit as any).unitNumber : s.unit;
+          const uNum = String(rawUnitStr || "").trim();
           const matchingAddons =
             s.additionals && s.additionals.length > 0
               ? s.additionals
-              : (project.additionals || []).filter((a) => a.assignedToUnit === s.unit);
+              : (project.additionals || []).filter((a) => a.assignedToUnit && a.assignedToUnit.toLowerCase() === uNum.toLowerCase());
           return {
             ...s,
-            clientName: s.clientName || (s.coOwners && s.coOwners.length > 0 ? s.coOwners[0]?.name || "Cliente Comprador" : "Cliente Comprador"),
-            clientEmail: s.clientEmail || s.coOwners?.[0]?.email || "-",
-            clientPhone: s.clientPhone || s.coOwners?.[0]?.phone || "-",
-            clientRfc: s.clientRfc || s.coOwners?.[0]?.rfc || "-",
+            id: s.id,
+            folio: s.folio || (s as any).contractNumber || `VTA-2026-${uNum || "01"}`,
+            unit: uNum,
+            clientName: s.clientName || (s as any).primaryClient?.fullName || (s.coOwners && s.coOwners.length > 0 ? s.coOwners[0]?.name || "Cliente Comprador" : "Cliente Comprador"),
+            clientEmail: s.clientEmail || (s as any).primaryClient?.email || s.coOwners?.[0]?.email || "-",
+            clientPhone: s.clientPhone || (s as any).primaryClient?.phone || s.coOwners?.[0]?.phone || "-",
+            clientRfc: s.clientRfc || (s as any).primaryClient?.taxId || s.coOwners?.[0]?.rfc || "-",
+            paymentPlan: typeof s.paymentPlan === "string" ? s.paymentPlan : (s.paymentPlan as any)?.name || "Plan Tradicional",
+            totalPrice: Number(s.totalPrice || (s as any).finalPrice || (s as any).agreedPrice) || 0,
+            paidAmount: Number(s.paidAmount) || 0,
+            pendingAmount: Number(s.pendingAmount) || 0,
             additionals: matchingAddons,
           };
         });
@@ -226,12 +235,12 @@ export default function ProjectSalesPage() {
       const q = quoteSearchQuery.toLowerCase();
       result = result.filter(
         (item) =>
-          item.clientName.toLowerCase().includes(q) ||
-          item.folio.toLowerCase().includes(q) ||
-          item.unit.toLowerCase().includes(q) ||
-          (item.clientEmail && item.clientEmail.toLowerCase().includes(q)) ||
-          item.advisorName.toLowerCase().includes(q) ||
-          item.planName.toLowerCase().includes(q)
+          (item.clientName ? String(item.clientName).toLowerCase() : "").includes(q) ||
+          (item.folio ? String(item.folio).toLowerCase() : "").includes(q) ||
+          (item.unit ? String(item.unit).toLowerCase() : "").includes(q) ||
+          (item.clientEmail ? String(item.clientEmail).toLowerCase() : "").includes(q) ||
+          (item.advisorName ? String(item.advisorName).toLowerCase() : "").includes(q) ||
+          (item.planName ? String(item.planName).toLowerCase() : "").includes(q)
       );
     }
 
@@ -258,10 +267,10 @@ export default function ProjectSalesPage() {
       const q = searchQuery.toLowerCase();
       result = result.filter(
         (s) =>
-          s.clientName.toLowerCase().includes(q) ||
-          s.unit.toLowerCase().includes(q) ||
-          s.folio.toLowerCase().includes(q) ||
-          s.paymentPlan.toLowerCase().includes(q)
+          (s.clientName ? String(s.clientName).toLowerCase() : "").includes(q) ||
+          (s.unit ? String(typeof s.unit === "object" ? (s.unit as any)?.unitNumber || "" : s.unit).toLowerCase() : "").includes(q) ||
+          (s.folio ? String(s.folio).toLowerCase() : "").includes(q) ||
+          (s.paymentPlan ? String(s.paymentPlan).toLowerCase() : "").includes(q)
       );
     }
 

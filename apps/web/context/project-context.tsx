@@ -237,57 +237,6 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const mapDbProjectToProjectItem = (dbProj: any): ProjectItem => {
     if (!dbProj) return {} as ProjectItem;
 
-    const hasInventory = Array.isArray(dbProj.unitsInventory);
-    const rawUnits = Array.isArray(dbProj.units) ? dbProj.units : hasInventory ? dbProj.unitsInventory : [];
-
-    const unitsInventory: UnitItem[] = rawUnits.map((u: any, idx: number) => {
-      const rawCategory = u.category || u.type || "APARTMENT";
-      const type =
-        rawCategory === "HOUSE" || rawCategory === "Casa"
-          ? "Casa"
-          : rawCategory === "COMMERCIAL_SPACE" || rawCategory === "Local"
-          ? "Local"
-          : rawCategory === "LAND_LOT" || rawCategory === "Terreno"
-          ? "Terreno"
-          : rawCategory === "INDUSTRIAL_WAREHOUSE" || rawCategory === "Bodega"
-          ? "Bodega"
-          : "Departamento";
-
-      const rawStatus = (u.status || "AVAILABLE").toUpperCase();
-      const status: "DISPONIBLE" | "VENDIDA" | "BLOQUEADA" | "APARTADA" =
-        rawStatus === "SOLD" || rawStatus === "VENDIDA"
-          ? "VENDIDA"
-          : rawStatus === "BLOCKED" || rawStatus === "BLOQUEADA"
-          ? "BLOQUEADA"
-          : rawStatus === "RESERVED" || rawStatus === "APARTADA"
-          ? "APARTADA"
-          : "DISPONIBLE";
-
-      const client =
-        u.sales?.[0]?.primaryClient?.fullName ||
-        u.client ||
-        "-";
-
-      return {
-        id: u.id || `u-${idx + 1}`,
-        unit: String(u.unitNumber || u.unit || `${idx + 1}`),
-        type,
-        price: Number(u.basePrice ?? u.price) || 0,
-        areaM2: Number(u.totalAreaM2 ?? u.areaM2 ?? u.surfaceM2) || 0,
-        floor: Number(u.level ?? u.floor) || 1,
-        status,
-        client,
-        deliveryDate: u.deliveryDate || dbProj.estimatedDeliveryDate || "",
-        bedrooms: u.bedrooms != null ? Number(u.bedrooms) : undefined,
-        bathrooms: u.bathrooms != null ? Number(u.bathrooms) : undefined,
-        parkingSpots: u.parkingSpaces != null ? Number(u.parkingSpaces) : u.parkingSpots != null ? Number(u.parkingSpots) : 0,
-        storageUnits: u.storageRooms != null ? Number(u.storageRooms) : u.storageUnits != null ? Number(u.storageUnits) : 0,
-        floorPlan: u.floorPlan || undefined,
-        images: Array.isArray(u.renderUrls) ? u.renderUrls : Array.isArray(u.images) ? u.images : [],
-        priceHistory: u.priceHistory || [],
-      };
-    });
-
     const rawAdditionals = Array.isArray(dbProj.additionals) ? dbProj.additionals : [];
     const additionals: ProjectAdditional[] = rawAdditionals.map((a: any, idx: number) => {
       const rawType = (a.type || a.category || "PARKING").toUpperCase();
@@ -302,11 +251,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           ? "acabados"
           : "otro";
 
+      const assignedUnitNum = a.unit?.unitNumber || a.assignedToUnit || undefined;
       const rawStatus = (a.status || "AVAILABLE").toUpperCase();
       const status: "DISPONIBLE" | "ASIGNADO" | "VENDIDO" =
         rawStatus === "SOLD" || rawStatus === "VENDIDO"
           ? "VENDIDO"
-          : rawStatus === "RESERVED" || rawStatus === "ASSIGNED" || rawStatus === "ASIGNADO"
+          : rawStatus === "RESERVED" || rawStatus === "ASSIGNED" || rawStatus === "ASIGNADO" || Boolean(assignedUnitNum)
           ? "ASIGNADO"
           : "DISPONIBLE";
 
@@ -316,8 +266,215 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         category,
         price: Number(a.price) || 0,
         status,
-        assignedToUnit: a.unit?.unitNumber || a.assignedToUnit,
+        assignedToUnit: assignedUnitNum,
         notes: a.notes || "",
+      };
+    });
+
+    const rawSales = Array.isArray(dbProj.sales) ? dbProj.sales : [];
+    const mappedSales: SaleRecord[] = rawSales.map((s: any, sIdx: number) => {
+      const uNum = String(s.unit?.unitNumber || s.unitNumber || s.unit || "").trim();
+      const primaryClientName =
+        s.primaryClient?.fullName ||
+        s.clientName ||
+        s.client?.fullName ||
+        s.client?.name ||
+        "Cliente Comprador";
+      const primaryClientEmail =
+        s.primaryClient?.email || s.clientEmail || s.client?.email || "";
+      const primaryClientPhone =
+        s.primaryClient?.phone || s.clientPhone || s.client?.phone || "";
+      const primaryClientRfc =
+        s.primaryClient?.taxId || s.clientRfc || s.client?.rfc || "";
+
+      const mappedCoOwners: CoOwner[] = Array.isArray(s.coOwners)
+        ? s.coOwners.map((c: any) => ({
+            name: c.client?.fullName || c.name || "Co-propietario",
+            email: c.client?.email || c.email || "",
+            phone: c.client?.phone || c.phone || "",
+            rfc: c.client?.taxId || c.rfc || "",
+            ownershipPct: Number(c.ownershipPercentage ?? c.ownershipPct ?? 50),
+          }))
+        : [];
+
+      const rawObligations = Array.isArray(s.scheduledObligations)
+        ? s.scheduledObligations
+        : Array.isArray(s.schedule)
+        ? s.schedule
+        : [];
+
+      const mappedSchedule = rawObligations.map((ob: any, obIdx: number) => {
+        const origAmt = Number(ob.originalAmount ?? ob.scheduledAmount ?? ob.amount) || 0;
+        const paidAmt = Number(ob.paidAmount) || 0;
+        const pendAmt = ob.pendingAmount !== undefined ? Number(ob.pendingAmount) : Math.max(0, origAmt - paidAmt);
+        const rawDate = ob.dueDate || ob.scheduledDate;
+        let formattedDate = "18/09/2026";
+        if (rawDate) {
+          try {
+            const d = new Date(rawDate);
+            formattedDate = !isNaN(d.getTime()) ? d.toLocaleDateString("es-MX") : String(rawDate);
+          } catch (_) {
+            formattedDate = String(rawDate);
+          }
+        }
+
+        const isPaid = (ob.status || "").toUpperCase() === "PAID" || pendAmt === 0;
+        return {
+          id: ob.id || `inst-${uNum || sIdx}-${obIdx + 1}`,
+          concept: ob.title || ob.concept || `Cuota ${obIdx + 1}`,
+          scheduledDate: formattedDate,
+          scheduledAmount: origAmt,
+          paidAmount: paidAmt,
+          pendingAmount: pendAmt,
+          status: isPaid ? ("Pagado" as const) : paidAmt > 0 ? ("Parcial" as const) : ("Pendiente" as const),
+        };
+      });
+
+      const rawReceipts = Array.isArray(s.paymentReceipts)
+        ? s.paymentReceipts
+        : Array.isArray(s.payments)
+        ? s.payments
+        : [];
+
+      const mappedPayments: SalePaymentReceipt[] = rawReceipts.map((r: any, rIdx: number) => {
+        const amt = Number(r.amount) || 0;
+        const rawDate = r.paymentDate || r.createdAt;
+        let pDate = new Date().toLocaleDateString("es-MX");
+        if (rawDate) {
+          try {
+            const d = new Date(rawDate);
+            pDate = !isNaN(d.getTime()) ? d.toLocaleDateString("es-MX") : String(rawDate);
+          } catch (_) {
+            pDate = String(rawDate);
+          }
+        }
+
+        return {
+          id: r.id || `pay-rec-${sIdx}-${rIdx + 1}`,
+          receiptFolio: r.receiptFolio || `REC-${new Date().getFullYear()}-${String(rIdx + 1).padStart(3, "0")}`,
+          paymentDate: pDate,
+          amount: amt,
+          paymentMethod: r.paymentMethod || "SPEI",
+          unit: uNum,
+          reference: r.transactionReference || r.reference || "",
+          notes: r.notes || "",
+          scheduledAmount: amt,
+          scheduledDate: pDate,
+          sendReceiptEmail: Boolean(r.sendReceiptEmail),
+          createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+        };
+      });
+
+      const totalP = Number(s.finalPrice ?? s.agreedPrice ?? s.totalPrice) || 0;
+      const totalPaid = mappedPayments.reduce((sum, p) => sum + p.amount, 0) || Number(s.paidAmount) || 0;
+      const totalPending = Math.max(0, totalP - totalPaid);
+
+      const planName = s.paymentPlan?.name || s.paymentPlan || "Plan Tradicional";
+      const sFolio = s.contractNumber || s.folio || `VTA-${new Date().getFullYear()}-${String(sIdx + 1).padStart(3, "0")}`;
+
+      let saleDateIso = new Date().toISOString();
+      if (s.reservationDate || s.saleDate || s.createdAt) {
+        try {
+          const d = new Date(s.reservationDate || s.saleDate || s.createdAt);
+          if (!isNaN(d.getTime())) saleDateIso = d.toISOString();
+        } catch (_) {}
+      }
+
+      const matchingAddons = additionals.filter(
+        (a) => a.assignedToUnit && a.assignedToUnit.toLowerCase() === uNum.toLowerCase()
+      );
+
+      return {
+        id: s.id || `sale-${sIdx + 1}`,
+        folio: sFolio,
+        clientId: s.primaryClientId || s.clientId || s.primaryClient?.id,
+        clientName: primaryClientName,
+        clientEmail: primaryClientEmail,
+        clientPhone: primaryClientPhone,
+        clientRfc: primaryClientRfc,
+        unit: uNum,
+        paymentPlan: typeof planName === "string" ? planName : "Plan Tradicional",
+        totalPrice: totalP,
+        paidAmount: totalPaid,
+        pendingAmount: totalPending,
+        saleDate: saleDateIso,
+        coOwners: mappedCoOwners,
+        additionals: matchingAddons.length > 0 ? matchingAddons : Array.isArray(s.additionals) ? s.additionals : [],
+        schedule: mappedSchedule,
+        payments: mappedPayments,
+        status:
+          (s.status || "ACTIVA").toUpperCase() === "CANCELLED" ||
+          (s.status || "").toUpperCase() === "CANCELADA"
+            ? "CANCELADA"
+            : "ACTIVA",
+      };
+    });
+
+    const hasInventory = Array.isArray(dbProj.unitsInventory);
+    const rawUnits = Array.isArray(dbProj.units) ? dbProj.units : hasInventory ? dbProj.unitsInventory : [];
+
+    const saleByUnitNumber = new Map<string, SaleRecord>();
+    const saleByUnitId = new Map<string, SaleRecord>();
+    mappedSales.forEach((s) => {
+      if (s.unit) saleByUnitNumber.set(s.unit.toLowerCase().trim(), s);
+      if (s.id) saleByUnitId.set(s.id, s);
+    });
+
+    const unitsInventory: UnitItem[] = rawUnits.map((u: any, idx: number) => {
+      const uNum = String(u.unitNumber || u.unit || `${idx + 1}`).trim();
+      const associatedSale = saleByUnitNumber.get(uNum.toLowerCase()) || (u.id ? saleByUnitId.get(u.id) : undefined);
+
+      const rawCategory = u.category || u.type || "APARTMENT";
+      const type =
+        rawCategory === "HOUSE" || rawCategory === "Casa"
+          ? "Casa"
+          : rawCategory === "COMMERCIAL_SPACE" || rawCategory === "Local"
+          ? "Local"
+          : rawCategory === "LAND_LOT" || rawCategory === "Terreno"
+          ? "Terreno"
+          : rawCategory === "INDUSTRIAL_WAREHOUSE" || rawCategory === "Bodega"
+          ? "Bodega"
+          : "Departamento";
+
+      const rawStatus = (u.status || (associatedSale ? "SOLD" : "AVAILABLE")).toUpperCase();
+      const status: "DISPONIBLE" | "VENDIDA" | "BLOQUEADA" | "APARTADA" =
+        rawStatus === "SOLD" || rawStatus === "VENDIDA" || Boolean(associatedSale)
+          ? "VENDIDA"
+          : rawStatus === "BLOCKED" || rawStatus === "BLOQUEADA"
+          ? "BLOQUEADA"
+          : rawStatus === "RESERVED" || rawStatus === "APARTADA"
+          ? "APARTADA"
+          : "DISPONIBLE";
+
+      const client =
+        associatedSale?.clientName ||
+        u.sales?.[0]?.primaryClient?.fullName ||
+        u.client ||
+        "-";
+
+      return {
+        id: u.id || `u-${idx + 1}`,
+        unit: uNum,
+        type,
+        price: Number(associatedSale?.totalPrice ?? u.basePrice ?? u.price) || 0,
+        areaM2: Number(u.totalAreaM2 ?? u.areaM2 ?? u.surfaceM2) || 0,
+        floor: Number(u.level ?? u.floor) || 1,
+        status,
+        client,
+        coOwners: associatedSale?.coOwners || u.coOwners,
+        saleFolio: associatedSale?.folio || u.saleFolio,
+        saleDate: associatedSale?.saleDate || u.saleDate,
+        salePlanName: associatedSale?.paymentPlan || u.salePlanName,
+        salePaidAmount: associatedSale?.paidAmount ?? u.salePaidAmount,
+        salePendingAmount: associatedSale?.pendingAmount ?? u.salePendingAmount,
+        deliveryDate: u.deliveryDate || dbProj.estimatedDeliveryDate || "",
+        bedrooms: u.bedrooms != null ? Number(u.bedrooms) : undefined,
+        bathrooms: u.bathrooms != null ? Number(u.bathrooms) : undefined,
+        parkingSpots: u.parkingSpaces != null ? Number(u.parkingSpaces) : u.parkingSpots != null ? Number(u.parkingSpots) : 0,
+        storageUnits: u.storageRooms != null ? Number(u.storageRooms) : u.storageUnits != null ? Number(u.storageUnits) : 0,
+        floorPlan: u.floorPlan || undefined,
+        images: Array.isArray(u.renderUrls) ? u.renderUrls : Array.isArray(u.images) ? u.images : [],
+        priceHistory: u.priceHistory || [],
       };
     });
 
@@ -327,26 +484,29 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const blockedUnits = unitsInventory.filter((u) => u.status === "BLOQUEADA" || u.status === "APARTADA").length || Number(dbProj.blockedUnits) || 0;
 
     const valorComercialTotal = unitsInventory.reduce((acc, u) => acc + (u.price || 0), 0);
-    const valorComercialVendido = unitsInventory.filter((u) => u.status === "VENDIDA").reduce((acc, u) => acc + (u.price || 0), 0);
-    const porVenderMonto = valorComercialTotal - valorComercialVendido;
+    const soldUnitsPriceSum = unitsInventory.filter((u) => u.status === "VENDIDA").reduce((acc, u) => acc + (u.price || 0), 0);
+    const activeMappedSales = mappedSales.filter((s) => s.status !== "CANCELADA");
+    const totalCobrado = activeMappedSales.reduce((acc, s) => acc + (s.paidAmount || 0), 0);
+    const porCobrar = Math.max(0, soldUnitsPriceSum - totalCobrado);
+    const porVenderMonto = valorComercialTotal - soldUnitsPriceSum;
     const precioPromedio = totalUnits > 0 ? Math.round(valorComercialTotal / totalUnits) : 0;
     const avanceVentasPct = totalUnits > 0 ? Math.round((soldUnits / totalUnits) * 100) : 0;
 
     const metrics: ProjectMetric = dbProj.metrics || {
-      totalCobrado: Math.round(valorComercialVendido * 0.4),
-      porCobrar: valorComercialVendido - Math.round(valorComercialVendido * 0.4),
+      totalCobrado,
+      porCobrar,
       pagosAtrasados: 0,
       avanceVentasPct,
       unidadesVendidasCount: soldUnits,
       unidadesTotalesCount: totalUnits,
       porVenderUnidades: availableUnits + blockedUnits,
-      valorComercialVendido,
+      valorComercialVendido: soldUnitsPriceSum,
       valorComercialTotal,
       porVenderMonto,
-      flujoFuturoMonto: porVenderMonto,
+      flujoFuturoMonto: totalCobrado + porCobrar,
       precioPromedio,
-      inventarioMonetarioPct: valorComercialTotal > 0 ? Math.round((valorComercialVendido / valorComercialTotal) * 100) : 0,
-      totalFacturado: valorComercialVendido,
+      inventarioMonetarioPct: valorComercialTotal > 0 ? Math.round((soldUnitsPriceSum / valorComercialTotal) * 100) : 0,
+      totalFacturado: soldUnitsPriceSum,
       distribucionPct: 0,
     };
 
@@ -446,7 +606,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       overdueClients: dbProj.overdueClients || [],
       unitsInventory,
       additionals,
-      sales: dbProj.sales || [],
+      sales: mappedSales,
       quotes: dbProj.quotes || [],
       floorPlans: dbProj.floorPlans || [],
       documents: mappedDocuments,
@@ -1312,6 +1472,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         schedule: salePayload.schedule,
         initialPayment: salePayload.initialPayment,
         folio: saleFolio,
+        additionals: salePayload.additionals,
       }),
     }).catch((err) => console.warn("Could not save sale to API:", err));
   };

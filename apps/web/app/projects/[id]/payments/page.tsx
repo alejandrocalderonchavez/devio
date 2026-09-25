@@ -248,17 +248,29 @@ export default function ProjectPaymentsPage() {
     // 1. Process all active sales schedule cuotas for currently sold units
     (project.sales || []).forEach((sale, sIdx) => {
       if (sale.status === "CANCELADA") return;
-      if (!soldUnitsMap.has(sale.unit)) return;
+      const rawUnitStr = typeof sale.unit === "object" && sale.unit !== null ? (sale.unit as any).unitNumber : sale.unit;
+      const unitNum = String(rawUnitStr || "").trim();
+      const clientName = sale.clientName || (sale as any).primaryClient?.fullName || "Cliente Devio";
+      const planName = typeof sale.paymentPlan === "string" ? sale.paymentPlan : (sale.paymentPlan as any)?.name || "Plan de Pago";
+      const targetClientId = sale.clientId || sale.clientEmail || (sale as any).primaryClient?.email || clientName;
 
-      const clientName = sale.clientName || "Cliente Devio";
-      const planName = sale.paymentPlan || "Plan de Pago";
-      const unitNum = sale.unit;
-      const targetClientId = sale.clientId || sale.clientEmail || sale.clientName;
-      const saleKey = sale.folio || sale.id || `sale-${unitNum}-${sIdx}`;
+      const obligationsList = Array.isArray(sale.schedule) && sale.schedule.length > 0
+        ? sale.schedule
+        : Array.isArray((sale as any).scheduledObligations)
+        ? (sale as any).scheduledObligations.map((ob: any, obIdx: number) => ({
+            id: ob.id || `inst-${unitNum}-${obIdx + 1}`,
+            concept: ob.title || ob.concept || `Cuota ${obIdx + 1}`,
+            scheduledDate: ob.dueDate ? new Date(ob.dueDate).toLocaleDateString("es-MX") : "18/09/2026",
+            scheduledAmount: Number(ob.originalAmount || ob.scheduledAmount) || 0,
+            paidAmount: Number(ob.paidAmount) || 0,
+            pendingAmount: ob.pendingAmount !== undefined ? Number(ob.pendingAmount) : (Number(ob.originalAmount) || 0) - (Number(ob.paidAmount) || 0),
+            status: ((ob.status || "").toUpperCase() === "PAID" || Number(ob.pendingAmount) === 0 ? "Pagado" : "Pendiente") as any,
+          }))
+        : [];
 
-      if (sale.schedule && sale.schedule.length > 0) {
-        sale.schedule.forEach((inst, idx) => {
-          const uniqueId = inst.id && inst.id.includes(unitNum)
+      if (obligationsList.length > 0) {
+        obligationsList.forEach((inst: any, idx: number) => {
+          const uniqueId = inst.id && String(inst.id).includes(unitNum)
             ? inst.id
             : `pay-${unitNum}-${inst.id || idx}`;
 
@@ -276,14 +288,14 @@ export default function ProjectPaymentsPage() {
             clientName,
             unit: unitNum,
             paymentPlan: planName,
-            scheduledAmount: inst.scheduledAmount,
-            scheduledDate: inst.scheduledDate,
-            paidAmount: inst.paidAmount,
+            scheduledAmount: Number(inst.scheduledAmount) || 0,
+            scheduledDate: inst.scheduledDate || "18/09/2026",
+            paidAmount: Number(inst.paidAmount) || 0,
             paymentDate: inst.paymentDate || (inst.pendingAmount === 0 ? "Liquidado" : "-"),
             paymentMethod: (inst.paymentMethod || (inst.paidAmount > 0 ? "SPEI" : "Pendiente")) as any,
             status,
-            concept: inst.concept,
-            pendingAmount: inst.pendingAmount,
+            concept: inst.concept || `Cuota ${idx + 1}`,
+            pendingAmount: Number(inst.pendingAmount) || 0,
             saleRecord: sale,
           } as any);
         });
