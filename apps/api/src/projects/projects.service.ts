@@ -29,6 +29,16 @@ export class ProjectsService {
       image,
       coverImagePath,
       coverFileName,
+      logo,
+      logoUrl,
+      logoPath,
+      logoFileName,
+      description,
+      googleMapsUrl,
+      websiteUrl,
+      totalSurfaceM2,
+      estimatedDeliveryDate,
+      legalName,
     } = body;
 
     if (!name) {
@@ -98,15 +108,18 @@ export class ProjectsService {
         id: randomUUID(),
         developerId: targetDevId,
         name: name.trim(),
+        description: description || null,
         projectType: projType as any,
         baseCurrency: baseCurr as any,
         status: "ACTIVE",
-        addressLine1: addressLine1 || address || null,
+        addressLine1: googleMapsUrl || addressLine1 || address || null,
+        addressLine2: websiteUrl || null,
         neighborhood: neighborhood || null,
         city: city || null,
         state: state || null,
-        postalCode: postalCode || zipCode || null,
+        postalCode: postalCode || zipCode || (totalSurfaceM2 ? String(totalSurfaceM2) : null),
         coverImagePath: coverFileName || coverImagePath || image || null,
+        galleryPaths: logoUrl || logo || logoPath || logoFileName ? [logoUrl || logo || logoPath || logoFileName] : [],
       },
     });
 
@@ -302,7 +315,27 @@ export class ProjectsService {
   }
 
   async update(id: string, body: any) {
-    const { name, coverFileName, image, status, type, unitsInventory } = body;
+    const {
+      name,
+      description,
+      googleMapsUrl,
+      websiteUrl,
+      totalSurfaceM2,
+      addressLine1,
+      address,
+      coverFileName,
+      coverImagePath,
+      image,
+      logo,
+      logoUrl,
+      logoPath,
+      logoFileName,
+      status,
+      type,
+      currency,
+      baseCurrency,
+      unitsInventory,
+    } = body;
 
     if (!id || id.startsWith("proj-")) {
       return { success: true, message: "Mock project updated" };
@@ -310,9 +343,30 @@ export class ProjectsService {
 
     const updateData: any = {};
     if (name) updateData.name = name;
-    if (coverFileName || image) updateData.coverImagePath = coverFileName || image;
+    if (description !== undefined) updateData.description = description;
+    if (googleMapsUrl || addressLine1 || address) updateData.addressLine1 = googleMapsUrl || addressLine1 || address;
+    if (websiteUrl !== undefined) updateData.addressLine2 = websiteUrl;
+    if (totalSurfaceM2 !== undefined) updateData.postalCode = totalSurfaceM2 ? String(totalSurfaceM2) : null;
+    if (coverFileName || coverImagePath || image) updateData.coverImagePath = coverFileName || coverImagePath || image;
+    if (logoUrl || logo || logoPath || logoFileName) {
+      updateData.galleryPaths = [logoUrl || logo || logoPath || logoFileName];
+    }
     if (status) updateData.status = status;
-    if (type) updateData.projectType = type.toUpperCase() === "HORIZONTAL" ? "HORIZONTAL" : "VERTICAL";
+    if (type) {
+      updateData.projectType =
+        type.toUpperCase() === "HORIZONTAL"
+          ? "HORIZONTAL"
+          : type.toUpperCase() === "COMMERCIAL"
+          ? "COMMERCIAL"
+          : type.toUpperCase() === "INDUSTRIAL"
+          ? "INDUSTRIAL"
+          : type.toUpperCase() === "MIXED"
+          ? "MIXED"
+          : "VERTICAL";
+    }
+    if (currency || baseCurrency) {
+      updateData.baseCurrency = (currency || baseCurrency).toUpperCase() === "USD" ? "USD" : "MXN";
+    }
 
     const updated = await this.prisma.project.update({
       where: { id },

@@ -114,9 +114,18 @@ export default function EditProjectModal({
 
       if (activeProject.logoFileName) {
         setLogoFileName(activeProject.logoFileName);
+      } else if (activeProject.logo || activeProject.logoUrl) {
+        setLogoFileName("logo.png");
+      } else {
+        setLogoFileName(null);
       }
+
       if (activeProject.coverFileName) {
         setCoverFileName(activeProject.coverFileName);
+      } else if (activeProject.image) {
+        setCoverFileName("portada.jpg");
+      } else {
+        setCoverFileName(null);
       }
 
       // Load real system users from storage to merge with project assigned team

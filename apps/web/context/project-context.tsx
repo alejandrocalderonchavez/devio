@@ -355,6 +355,22 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       dbProj.image ||
       "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80";
 
+    const logo =
+      (dbProj.galleryPaths && dbProj.galleryPaths.length > 0 ? dbProj.galleryPaths[0] : null) ||
+      dbProj.logoPath ||
+      dbProj.logoUrl ||
+      dbProj.logo ||
+      "";
+
+    const googleMapsUrl = dbProj.googleMapsUrl || dbProj.addressLine1 || "";
+    const websiteUrl = dbProj.websiteUrl || dbProj.addressLine2 || "";
+    const totalSurfaceM2 =
+      dbProj.totalSurfaceM2 != null
+        ? Number(dbProj.totalSurfaceM2)
+        : dbProj.postalCode && !isNaN(Number(dbProj.postalCode))
+        ? Number(dbProj.postalCode)
+        : undefined;
+
     const rawDocs = Array.isArray(dbProj.documents) ? dbProj.documents : [];
     const mappedDocuments: ProjectDocument[] = rawDocs.map((d: any, idx: number) => {
       const rawType = String(d.type || d.category || "Contratos").toUpperCase();
@@ -404,14 +420,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       blockedUnits,
       legalName: dbProj.legalName || dbProj.name,
       description: dbProj.description || "",
-      googleMapsUrl: dbProj.googleMapsUrl || "",
-      websiteUrl: dbProj.websiteUrl || "",
-      totalSurfaceM2: Number(dbProj.totalSurfaceM2) || undefined,
+      googleMapsUrl,
+      websiteUrl,
+      totalSurfaceM2,
       estimatedDeliveryDate: dbProj.estimatedDeliveryDate || "",
-      logoFileName: dbProj.logoFileName || "",
-      logoUrl: dbProj.logoPath || dbProj.logoUrl || dbProj.logo || "",
-      logo: dbProj.logoPath || dbProj.logoUrl || dbProj.logo || "",
-      coverFileName: dbProj.coverFileName || "",
+      logoFileName: dbProj.logoFileName || (logo ? "logo.png" : ""),
+      logoUrl: logo,
+      logo,
+      coverFileName: dbProj.coverFileName || (image ? "cover.jpg" : ""),
       metrics,
       monthlyBilling: dbProj.monthlyBilling || [
         { month: "Ene", cobrado: 0, porCobrar: 0 },
@@ -756,6 +772,11 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   const saveProjects = (newProjects: ProjectItem[]) => {
     setProjects(newProjects);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("devio_projects_state", JSON.stringify(newProjects));
+      sessionStorage.setItem("devio_projects_state", JSON.stringify(newProjects));
+      window.dispatchEvent(new Event("devio_projects_updated"));
+    }
   };
 
   const showToast = (title: string, desc: string, type: "success" | "info" | "warning" = "success") => {
@@ -2163,6 +2184,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
     saveProjects(updated);
     showToast("Proyecto Actualizado", `La información del proyecto "${updatedFields.name || 'actual'}" ha sido guardada.`);
+
+    // Persist to Supabase via backend API
+    fetch(`/api/projects/${projectId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...updatedFields,
+        projectId,
+      }),
+    }).catch((err) => console.warn("Could not sync project update with backend:", err));
   };
 
   const registerConstructionProgress = (projectId: string, advanceData: ProjectConstructionAdvance) => {
