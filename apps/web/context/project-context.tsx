@@ -17,6 +17,7 @@ import {
   ProjectDocument,
   ClientDocument,
   QuoteRecord,
+  ProjectMetric,
 } from "../data/projects-data";
 import { PostventaIncident, INITIAL_INCIDENTS } from "../data/postventa-data";
 import {
@@ -233,15 +234,205 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       });
   }, []);
 
+  const mapDbProjectToProjectItem = (dbProj: any): ProjectItem => {
+    if (!dbProj) return {} as ProjectItem;
+
+    const hasInventory = Array.isArray(dbProj.unitsInventory);
+    const rawUnits = Array.isArray(dbProj.units) ? dbProj.units : hasInventory ? dbProj.unitsInventory : [];
+
+    const unitsInventory: UnitItem[] = rawUnits.map((u: any, idx: number) => {
+      const rawCategory = u.category || u.type || "APARTMENT";
+      const type =
+        rawCategory === "HOUSE" || rawCategory === "Casa"
+          ? "Casa"
+          : rawCategory === "COMMERCIAL_SPACE" || rawCategory === "Local"
+          ? "Local"
+          : rawCategory === "LAND_LOT" || rawCategory === "Terreno"
+          ? "Terreno"
+          : rawCategory === "INDUSTRIAL_WAREHOUSE" || rawCategory === "Bodega"
+          ? "Bodega"
+          : "Departamento";
+
+      const rawStatus = (u.status || "AVAILABLE").toUpperCase();
+      const status: "DISPONIBLE" | "VENDIDA" | "BLOQUEADA" | "APARTADA" =
+        rawStatus === "SOLD" || rawStatus === "VENDIDA"
+          ? "VENDIDA"
+          : rawStatus === "BLOCKED" || rawStatus === "BLOQUEADA"
+          ? "BLOQUEADA"
+          : rawStatus === "RESERVED" || rawStatus === "APARTADA"
+          ? "APARTADA"
+          : "DISPONIBLE";
+
+      const client =
+        u.sales?.[0]?.primaryClient?.fullName ||
+        u.client ||
+        "-";
+
+      return {
+        id: u.id || `u-${idx + 1}`,
+        unit: String(u.unitNumber || u.unit || `${idx + 1}`),
+        type,
+        price: Number(u.basePrice ?? u.price) || 0,
+        areaM2: Number(u.totalAreaM2 ?? u.areaM2 ?? u.surfaceM2) || 0,
+        floor: Number(u.level ?? u.floor) || 1,
+        status,
+        client,
+        deliveryDate: u.deliveryDate || dbProj.estimatedDeliveryDate || "",
+        bedrooms: u.bedrooms != null ? Number(u.bedrooms) : undefined,
+        bathrooms: u.bathrooms != null ? Number(u.bathrooms) : undefined,
+        parkingSpots: u.parkingSpaces != null ? Number(u.parkingSpaces) : u.parkingSpots != null ? Number(u.parkingSpots) : 0,
+        storageUnits: u.storageRooms != null ? Number(u.storageRooms) : u.storageUnits != null ? Number(u.storageUnits) : 0,
+        floorPlan: u.floorPlan || undefined,
+        images: Array.isArray(u.renderUrls) ? u.renderUrls : Array.isArray(u.images) ? u.images : [],
+        priceHistory: u.priceHistory || [],
+      };
+    });
+
+    const rawAdditionals = Array.isArray(dbProj.additionals) ? dbProj.additionals : [];
+    const additionals: ProjectAdditional[] = rawAdditionals.map((a: any, idx: number) => {
+      const rawType = (a.type || a.category || "PARKING").toUpperCase();
+      const category: "estacionamiento" | "bodega" | "acabados" | "terraza" | "otro" =
+        rawType === "PARKING" || rawType === "ESTACIONAMIENTO"
+          ? "estacionamiento"
+          : rawType === "STORAGE" || rawType === "BODEGA"
+          ? "bodega"
+          : rawType === "ROOF_GARDEN" || rawType === "TERRAZA"
+          ? "terraza"
+          : rawType === "ACABADOS"
+          ? "acabados"
+          : "otro";
+
+      const rawStatus = (a.status || "AVAILABLE").toUpperCase();
+      const status: "DISPONIBLE" | "ASIGNADO" | "VENDIDO" =
+        rawStatus === "SOLD" || rawStatus === "VENDIDO"
+          ? "VENDIDO"
+          : rawStatus === "RESERVED" || rawStatus === "ASSIGNED" || rawStatus === "ASIGNADO"
+          ? "ASIGNADO"
+          : "DISPONIBLE";
+
+      return {
+        id: a.id || `add-${idx + 1}`,
+        name: a.name || `Adicional ${idx + 1}`,
+        category,
+        price: Number(a.price) || 0,
+        status,
+        assignedToUnit: a.unit?.unitNumber || a.assignedToUnit,
+        notes: a.notes || "",
+      };
+    });
+
+    const totalUnits = unitsInventory.length || Number(dbProj.totalUnits) || 0;
+    const soldUnits = unitsInventory.filter((u) => u.status === "VENDIDA").length || Number(dbProj.soldUnits) || 0;
+    const availableUnits = unitsInventory.filter((u) => u.status === "DISPONIBLE").length || Number(dbProj.availableUnits) || 0;
+    const blockedUnits = unitsInventory.filter((u) => u.status === "BLOQUEADA" || u.status === "APARTADA").length || Number(dbProj.blockedUnits) || 0;
+
+    const valorComercialTotal = unitsInventory.reduce((acc, u) => acc + (u.price || 0), 0);
+    const valorComercialVendido = unitsInventory.filter((u) => u.status === "VENDIDA").reduce((acc, u) => acc + (u.price || 0), 0);
+    const porVenderMonto = valorComercialTotal - valorComercialVendido;
+    const precioPromedio = totalUnits > 0 ? Math.round(valorComercialTotal / totalUnits) : 0;
+    const avanceVentasPct = totalUnits > 0 ? Math.round((soldUnits / totalUnits) * 100) : 0;
+
+    const metrics: ProjectMetric = dbProj.metrics || {
+      totalCobrado: Math.round(valorComercialVendido * 0.4),
+      porCobrar: valorComercialVendido - Math.round(valorComercialVendido * 0.4),
+      pagosAtrasados: 0,
+      avanceVentasPct,
+      unidadesVendidasCount: soldUnits,
+      unidadesTotalesCount: totalUnits,
+      porVenderUnidades: availableUnits + blockedUnits,
+      valorComercialVendido,
+      valorComercialTotal,
+      porVenderMonto,
+      flujoFuturoMonto: porVenderMonto,
+      precioPromedio,
+      inventarioMonetarioPct: valorComercialTotal > 0 ? Math.round((valorComercialVendido / valorComercialTotal) * 100) : 0,
+      totalFacturado: valorComercialVendido,
+      distribucionPct: 0,
+    };
+
+    const image =
+      dbProj.coverImagePath ||
+      dbProj.image ||
+      "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80";
+
+    return {
+      id: dbProj.id,
+      name: dbProj.name,
+      type: dbProj.projectType || dbProj.type || "VERTICAL",
+      currency: dbProj.baseCurrency || dbProj.currency || "MXN",
+      image,
+      progressPct: Number(dbProj.progressPct) || 0,
+      totalUnits,
+      soldUnits,
+      availableUnits,
+      blockedUnits,
+      legalName: dbProj.legalName || dbProj.name,
+      description: dbProj.description || "",
+      googleMapsUrl: dbProj.googleMapsUrl || "",
+      websiteUrl: dbProj.websiteUrl || "",
+      totalSurfaceM2: Number(dbProj.totalSurfaceM2) || undefined,
+      estimatedDeliveryDate: dbProj.estimatedDeliveryDate || "",
+      logoFileName: dbProj.logoFileName || "",
+      logoUrl: dbProj.logoPath || dbProj.logoUrl || dbProj.logo || "",
+      logo: dbProj.logoPath || dbProj.logoUrl || dbProj.logo || "",
+      coverFileName: dbProj.coverFileName || "",
+      metrics,
+      monthlyBilling: dbProj.monthlyBilling || [
+        { month: "Ene", cobrado: 0, porCobrar: 0 },
+        { month: "Feb", cobrado: 0, porCobrar: 0 },
+        { month: "Mar", cobrado: 0, porCobrar: 0 },
+        { month: "Abr", cobrado: 0, porCobrar: 0 },
+        { month: "May", cobrado: 0, porCobrar: 0 },
+        { month: "Jun", cobrado: 0, porCobrar: 0 },
+        { month: "Jul", cobrado: 0, porCobrar: 0 },
+        { month: "Ago", cobrado: 0, porCobrar: 0 },
+        { month: "Sep", cobrado: 0, porCobrar: 0 },
+        { month: "Oct", cobrado: 0, porCobrar: 0 },
+        { month: "Nov", cobrado: 0, porCobrar: 0 },
+        { month: "Dic", cobrado: 0, porCobrar: 0 },
+      ],
+      overdueClients: dbProj.overdueClients || [],
+      unitsInventory,
+      additionals,
+      sales: dbProj.sales || [],
+      quotes: dbProj.quotes || [],
+      floorPlans: dbProj.floorPlans || [],
+      documents: dbProj.documents || [],
+      clientDocuments: dbProj.clientDocuments || [],
+      paymentPlans: dbProj.paymentPlans || [],
+      team: dbProj.team || [],
+    };
+  };
+
   const loadFromStorage = () => {
     if (typeof window === "undefined") return;
 
     const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
     const storedLogo = localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo");
     const storedUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
+    const storedProjects = localStorage.getItem("devio_projects_state") || sessionStorage.getItem("devio_projects_state");
+    const storedPlans = localStorage.getItem("devio_developer_payment_plans") || sessionStorage.getItem("devio_developer_payment_plans");
 
     if (storedLogo) {
       setDeveloperLogo(storedLogo);
+    }
+
+    if (storedProjects) {
+      try {
+        const parsed = JSON.parse(storedProjects);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setProjects(parsed.map(mapDbProjectToProjectItem));
+        }
+      } catch (e) {}
+    }
+
+    if (storedPlans) {
+      try {
+        const parsed = JSON.parse(storedPlans);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setPaymentPlans(parsed);
+        }
+      } catch (e) {}
     }
 
     if (storedDev) {
@@ -285,7 +476,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           }
           if (parsedImp.role) setUserRole(parsedImp.role as UserRole);
           if (Array.isArray(parsedImp.projects) && parsedImp.projects.length > 0) {
-            setProjects(parsedImp.projects);
+            setProjects(parsedImp.projects.map(mapDbProjectToProjectItem));
           }
         }
       } catch (e) {}
@@ -320,68 +511,93 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Fetch live developer and projects data from Supabase / API
-    fetch("/api/developers")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && data.success && Array.isArray(data.developers) && data.developers.length > 0) {
-          const storedUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
-          const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
-          const storedImp = localStorage.getItem("devio_impersonation") || sessionStorage.getItem("devio_impersonation");
+    Promise.all([
+      fetch("/api/developers").then((res) => (res.ok ? res.json() : null)).catch(() => null),
+      fetch("/api/projects").then((res) => (res.ok ? res.json() : null)).catch(() => null),
+    ])
+      .then(([devData, projData]) => {
+        let matchedDev: any = null;
+        let activeDevId = "";
+        let activeDevName = "";
+        let currentEmail = "";
 
-          let currentEmail = "";
-          let activeDevName = "";
-          let activeDevId = "";
+        const storedUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
+        const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
+        const storedImp = localStorage.getItem("devio_impersonation") || sessionStorage.getItem("devio_impersonation");
 
-          if (storedImp) {
-            try {
-              const imp = JSON.parse(storedImp);
-              if (imp.active) {
-                currentEmail = imp.userEmail || "";
-                activeDevName = imp.developerName || "";
-                activeDevId = imp.developerId || "";
-              }
-            } catch (e) {}
-          }
+        if (storedImp) {
+          try {
+            const imp = JSON.parse(storedImp);
+            if (imp.active) {
+              currentEmail = imp.userEmail || "";
+              activeDevName = imp.developerName || "";
+              activeDevId = imp.developerId || "";
+            }
+          } catch (e) {}
+        }
 
-          if (!currentEmail && storedUser) {
-            try {
-              const u = JSON.parse(storedUser);
-              currentEmail = u.email || "";
-              activeDevName = u.activeDeveloper || "";
-            } catch (e) {}
-          }
+        if (!currentEmail && storedUser) {
+          try {
+            const u = JSON.parse(storedUser);
+            currentEmail = u.email || "";
+            activeDevName = u.activeDeveloper || "";
+          } catch (e) {}
+        }
 
-          if (!activeDevName && storedDev) {
-            try {
-              const d = JSON.parse(storedDev);
-              activeDevName = d.name || d.commercialName || "";
-              activeDevId = d.id || "";
-            } catch (e) {}
-          }
+        if (!activeDevName && storedDev) {
+          try {
+            const d = JSON.parse(storedDev);
+            activeDevName = d.name || d.commercialName || "";
+            activeDevId = d.id || "";
+          } catch (e) {}
+        }
 
-          // Find matching developer strictly by active session credentials
-          let matched = data.developers.find((d: any) => {
+        if (devData && devData.success && Array.isArray(devData.developers) && devData.developers.length > 0) {
+          matchedDev = devData.developers.find((d: any) => {
             if (activeDevId && d.id === activeDevId) return true;
             if (activeDevName && d.name.toLowerCase() === activeDevName.toLowerCase()) return true;
             if (currentEmail) {
-              return (d.memberships || []).some((m: any) => m.user?.email?.toLowerCase().trim() === currentEmail.toLowerCase().trim()) ||
-                     d.email?.toLowerCase().trim() === currentEmail.toLowerCase().trim();
+              return (
+                (d.memberships || []).some((m: any) => m.user?.email?.toLowerCase().trim() === currentEmail.toLowerCase().trim()) ||
+                d.email?.toLowerCase().trim() === currentEmail.toLowerCase().trim()
+              );
             }
             return false;
           });
 
-          if (matched) {
-            setDeveloperName(matched.name);
-            const dLogo = matched.logoPath || matched.logo || matched.logoUrl || "";
+          // Fallback to first developer if single developer exists
+          if (!matchedDev && devData.developers.length === 1) {
+            matchedDev = devData.developers[0];
+          }
+
+          if (matchedDev) {
+            setDeveloperName(matchedDev.name);
+            const dLogo = matchedDev.logoPath || matchedDev.logo || matchedDev.logoUrl || "";
             if (dLogo) {
               setDeveloperLogo(dLogo);
               localStorage.setItem("devio_developer_logo", dLogo);
               sessionStorage.setItem("devio_developer_logo", dLogo);
             }
-            if (Array.isArray(matched.projects)) {
-              setProjects(matched.projects);
-            }
           }
+        }
+
+        // Process projects from either /api/projects or developer projects
+        let candidateProjects: any[] = [];
+        if (projData && projData.success && Array.isArray(projData.projects) && projData.projects.length > 0) {
+          candidateProjects = projData.projects;
+          if (matchedDev) {
+            const filtered = candidateProjects.filter((p: any) => p.developerId === matchedDev.id);
+            if (filtered.length > 0) candidateProjects = filtered;
+          }
+        } else if (matchedDev && Array.isArray(matchedDev.projects) && matchedDev.projects.length > 0) {
+          candidateProjects = matchedDev.projects;
+        }
+
+        if (candidateProjects.length > 0) {
+          const mapped = candidateProjects.map(mapDbProjectToProjectItem);
+          setProjects(mapped);
+          localStorage.setItem("devio_projects_state", JSON.stringify(mapped));
+          sessionStorage.setItem("devio_projects_state", JSON.stringify(mapped));
         }
       })
       .catch((err) => console.warn("Could not sync projects from API:", err));
@@ -441,13 +657,21 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addProject = (newProject: ProjectItem) => {
-    setProjects((prev) => [newProject, ...prev.filter((p) => p.id !== newProject.id)]);
+    const mappedNew = mapDbProjectToProjectItem(newProject);
+    setProjects((prev) => {
+      const updated = [mappedNew, ...prev.filter((p) => p.id !== mappedNew.id)];
+      if (typeof window !== "undefined") {
+        localStorage.setItem("devio_projects_state", JSON.stringify(updated));
+        sessionStorage.setItem("devio_projects_state", JSON.stringify(updated));
+      }
+      return updated;
+    });
 
     // Persistir en Supabase (Prisma)
     let devId = (newProject as any).developerId;
     if (!devId && typeof window !== "undefined") {
       try {
-        const storedDev = localStorage.getItem("devio_active_developer") || sessionStorage.getItem("devio_active_developer");
+        const storedDev = localStorage.getItem("devio_active_developer") || sessionStorage.getItem("devio_active_developer") || localStorage.getItem("devio_developer_onboarding");
         if (storedDev) {
           const parsed = JSON.parse(storedDev);
           if (parsed?.id && !parsed.id.startsWith("dev-")) devId = parsed.id;
@@ -464,13 +688,28 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         developerName: developerName,
         userEmail: userEmail || undefined,
       }),
-    }).catch((err) => console.warn("Could not save project to API:", err));
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((resData) => {
+        if (resData?.project?.id) {
+          setProjects((prev) =>
+            prev.map((p) => (p.id === newProject.id ? { ...p, id: resData.project.id } : p))
+          );
+        }
+      })
+      .catch((err) => console.warn("Could not save project to API:", err));
   };
 
   const resetToCleanState = () => {
     setProjects([]);
     setPaymentPlans([]);
     setDeveloperName("Mi Desarrolladora");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("devio_projects_state");
+      sessionStorage.removeItem("devio_projects_state");
+      localStorage.removeItem("devio_developer_payment_plans");
+      sessionStorage.removeItem("devio_developer_payment_plans");
+    }
     showToast("Cuenta Limpia", "Se restableció el estado a limpio.", "info");
   };
 
