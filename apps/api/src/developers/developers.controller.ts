@@ -24,6 +24,12 @@ export class DevelopersController {
     return this.developersService.updateDeveloper(body);
   }
 
+  @Post("members")
+  @HttpCode(HttpStatus.CREATED)
+  async addMember(@Body() body: any) {
+    return this.developersService.addMember(body);
+  }
+
   @Get(":id")
   async findById(@Param("id") id: string) {
     return this.developersService.findById(id);

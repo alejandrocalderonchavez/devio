@@ -462,6 +462,52 @@ export default function SettingsPage() {
       );
     }
 
+    // Persistir en Supabase y enviar invitación por Postmark
+    try {
+      let devId: string | undefined = undefined;
+      let devName: string | undefined = undefined;
+      let currentUserEmail: string | undefined = undefined;
+      const storedDev = localStorage.getItem("devio_developer_onboarding") || sessionStorage.getItem("devio_developer_onboarding");
+      if (storedDev) {
+        const p = JSON.parse(storedDev);
+        devId = p.id;
+        devName = p.name || p.commercialName;
+      }
+      const storedUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
+      if (storedUser) {
+        const pu = JSON.parse(storedUser);
+        currentUserEmail = pu.email;
+        if (!devName) devName = pu.activeDeveloper;
+      }
+
+      fetch("/api/developers/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          developerId: devId,
+          developerName: devName || developerName,
+          userEmail: currentUserEmail,
+          member: {
+            name: newUserForm.name,
+            fullName: newUserForm.name,
+            email: newUserForm.email,
+            role: newUserForm.role,
+            permissions: activePerms,
+          },
+        }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.emailSent) {
+            showToast(
+              "Accesos Enviados",
+              `Se enviaron las credenciales de acceso por correo a ${newUserForm.email} vía Postmark.`
+            );
+          }
+        })
+        .catch((err) => console.warn("Error creating member in Supabase / Postmark:", err));
+    } catch (_) {}
+
     setShowAddUserModal(false);
     setEditingUserId(null);
     setNewUserForm({ name: "", email: "", role: "Asesor de Ventas" });

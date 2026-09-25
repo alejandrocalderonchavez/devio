@@ -1145,13 +1145,19 @@ export default function ProjectOnboardingPage() {
       let activeUserEmail: string | undefined = undefined;
       if (typeof window !== "undefined") {
         try {
-          const devRaw = localStorage.getItem("devio_active_developer") || sessionStorage.getItem("devio_active_developer");
+          const devRaw = localStorage.getItem("devio_active_developer") || sessionStorage.getItem("devio_active_developer") || localStorage.getItem("devio_developer_onboarding");
           if (devRaw) {
             const parsed = JSON.parse(devRaw);
             if (parsed?.id && !parsed.id.startsWith("dev-")) activeDevId = parsed.id;
             activeDevName = parsed.name || parsed.commercialName || parsed.legalName;
+            if (!activeUserEmail && parsed.email) activeUserEmail = parsed.email;
           }
-          activeUserEmail = localStorage.getItem("devio_user_email") || sessionStorage.getItem("devio_user_email") || undefined;
+          const userRaw = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
+          if (userRaw) {
+            const parsedU = JSON.parse(userRaw);
+            if (parsedU?.email) activeUserEmail = parsedU.email;
+            if (!activeDevName && parsedU?.activeDeveloper) activeDevName = parsedU.activeDeveloper;
+          }
         } catch (_) {}
       }
 
@@ -1161,8 +1167,15 @@ export default function ProjectOnboardingPage() {
         body: JSON.stringify({
           name: newProject.name,
           type: newProject.type,
+          currency: (newProject as any).currency || "MXN",
+          description: projectGeneralData.description || undefined,
+          googleMapsUrl: projectGeneralData.googleMapsUrl || undefined,
+          websiteUrl: projectGeneralData.websiteUrl || undefined,
+          estimatedDeliveryDate: projectGeneralData.estimatedDeliveryDate || undefined,
           image: newProject.image,
-          unitsInventory: newProject.unitsInventory,
+          coverImagePath: newProject.image,
+          units: mappedUnits,
+          additionals: mappedAdditionals,
           developerId: activeDevId,
           developerName: activeDevName,
           userEmail: activeUserEmail,

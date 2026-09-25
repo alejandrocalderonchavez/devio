@@ -10,11 +10,20 @@ export class ProjectsService {
     const {
       name,
       type,
+      currency,
+      addressLine1,
+      address,
+      neighborhood,
+      city,
+      state,
+      postalCode,
+      zipCode,
       developerId,
       developerName,
       userEmail,
       unitsInventory,
       units,
+      additionals,
       image,
       coverImagePath,
       coverFileName,
@@ -68,7 +77,18 @@ export class ProjectsService {
       }
     }
 
-    const projType = (type || "VERTICAL").toUpperCase() === "HORIZONTAL" ? "HORIZONTAL" : "VERTICAL";
+    const projType =
+      (type || "VERTICAL").toUpperCase() === "HORIZONTAL"
+        ? "HORIZONTAL"
+        : (type || "VERTICAL").toUpperCase() === "COMMERCIAL"
+        ? "COMMERCIAL"
+        : (type || "VERTICAL").toUpperCase() === "INDUSTRIAL"
+        ? "INDUSTRIAL"
+        : (type || "VERTICAL").toUpperCase() === "MIXED"
+        ? "MIXED"
+        : "VERTICAL";
+
+    const baseCurr = (currency || "MXN").toUpperCase() === "USD" ? "USD" : "MXN";
 
     // 2. Create Project
     const project = await this.prisma.project.create({
@@ -77,25 +97,95 @@ export class ProjectsService {
         developerId: targetDevId,
         name: name.trim(),
         projectType: projType as any,
+        baseCurrency: baseCurr as any,
         status: "ACTIVE",
+        addressLine1: addressLine1 || address || null,
+        neighborhood: neighborhood || null,
+        city: city || null,
+        state: state || null,
+        postalCode: postalCode || zipCode || null,
         coverImagePath: coverFileName || coverImagePath || image || null,
       },
     });
 
     // 3. Create Units if provided
-    const unitsList = unitsInventory || units;
-    if (Array.isArray(unitsList) && unitsList.length > 0) {
+    const unitsList = Array.isArray(units) && units.length > 0 ? units : Array.isArray(unitsInventory) ? unitsInventory : [];
+    if (unitsList.length > 0) {
       await this.prisma.unit.createMany({
-        data: unitsList.map((u: any, idx: number) => ({
-          id: randomUUID(),
-          projectId: project.id,
-          unitNumber: String(u.unit || u.unitNumber || `U-${idx + 1}`),
-          category: u.type === "Casa" ? "HOUSE" : "APARTMENT",
-          status: u.status === "VENDIDA" ? "SOLD" : u.status === "BLOQUEADA" ? "BLOCKED" : "AVAILABLE",
-          basePrice: Number(u.price) || 3500000,
-          totalAreaM2: Number(u.areaM2 || u.area) || 85,
-          level: Number(u.floor || u.level) || 1,
-        })),
+        data: unitsList.map((u: any, idx: number) => {
+          const uNum = String(u.unitNumber || u.unit || `U-${idx + 1}`).trim();
+          const uStatus =
+            u.status?.toUpperCase() === "VENDIDA" || u.status?.toUpperCase() === "SOLD"
+              ? "SOLD"
+              : u.status?.toUpperCase() === "BLOQUEADA" || u.status?.toUpperCase() === "BLOCKED"
+              ? "BLOCKED"
+              : u.status?.toUpperCase() === "APARTADA" || u.status?.toUpperCase() === "RESERVED"
+              ? "RESERVED"
+              : "AVAILABLE";
+
+          const uCategory =
+            u.type === "Casa" || u.category === "HOUSE"
+              ? "HOUSE"
+              : u.type === "Local" || u.category === "COMMERCIAL_SPACE"
+              ? "COMMERCIAL_SPACE"
+              : u.type === "Bodega" || u.category === "INDUSTRIAL_WAREHOUSE"
+              ? "INDUSTRIAL_WAREHOUSE"
+              : u.type === "Terreno" || u.category === "LAND_LOT"
+              ? "LAND_LOT"
+              : "APARTMENT";
+
+          const price = Number(u.price || u.basePrice) || 3500000;
+          const area = Number(u.surfaceM2 || u.areaM2 || u.totalAreaM2 || u.area) || 85;
+          const floor = Number(u.level || u.floor) || 1;
+
+          return {
+            id: randomUUID(),
+            projectId: project.id,
+            unitNumber: uNum,
+            category: uCategory as any,
+            status: uStatus as any,
+            basePrice: price,
+            totalAreaM2: area,
+            level: floor,
+            currency: baseCurr as any,
+          };
+        }),
+        skipDuplicates: true,
+      });
+    }
+
+    // 4. Create Additionals if provided
+    if (Array.isArray(additionals) && additionals.length > 0) {
+      await this.prisma.unitAdditional.createMany({
+        data: additionals.map((a: any, idx: number) => {
+          const aType =
+            a.type === "Estacionamiento" || a.category === "estacionamiento"
+              ? "PARKING"
+              : a.type === "Bodega" || a.category === "bodega"
+              ? "STORAGE"
+              : a.type === "Roof Garden" || a.category === "terraza"
+              ? "ROOF_GARDEN"
+              : a.type === "Alberca"
+              ? "PRIVATE_POOL"
+              : "OTHER";
+
+          const aStatus =
+            a.status?.toUpperCase() === "VENDIDO"
+              ? "SOLD"
+              : a.status?.toUpperCase() === "ASIGNADO"
+              ? "RESERVED"
+              : "AVAILABLE";
+
+          return {
+            id: randomUUID(),
+            projectId: project.id,
+            name: a.name || `Adicional ${idx + 1}`,
+            type: aType as any,
+            status: aStatus as any,
+            price: Number(a.price) || 0,
+            currency: baseCurr as any,
+          };
+        }),
         skipDuplicates: true,
       });
     }

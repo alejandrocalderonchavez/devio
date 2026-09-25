@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { randomUUID } from "crypto";
 
 export interface CreateDeveloperDto {
@@ -30,7 +31,10 @@ export interface CreateDeveloperDto {
 
 @Injectable()
 export class DevelopersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService
+  ) {}
 
   async create(dto: CreateDeveloperDto) {
     const developerId = randomUUID();
@@ -358,12 +362,156 @@ export class DevelopersService {
                 role: roleEnum as any,
               },
             }).catch(() => {});
+
+            // Send Postmark access email (bienvenida-user)
+            const tempPassword = "Devio2026!";
+            await this.notificationsService.send({
+              to: tmEmail,
+              templateAlias: "bienvenida-user",
+              templateModel: {
+                nombre: user.fullName || "Colaborador",
+                correo: tmEmail,
+                password_temporal: tempPassword,
+                login_link: "https://devio-web-six.vercel.app/login",
+                desarrolladora: devRecord.name || devName,
+                rol: tm.role || "Colaborador",
+                año: new Date().getFullYear().toString(),
+                anio: new Date().getFullYear().toString(),
+              },
+            }).catch((err) => console.warn(`Error sending welcome email to ${tmEmail}:`, err));
           }
         }
       }
     }
 
     return { success: true, developer: devRecord };
+  }
+
+  async addMember(body: {
+    developerId?: string;
+    developerName?: string;
+    userEmail?: string;
+    member: {
+      name?: string;
+      fullName?: string;
+      email: string;
+      phone?: string;
+      role?: string;
+      permissions?: string[];
+    };
+  }) {
+    const { developerId, developerName, userEmail, member } = body;
+    if (!member || !member.email) {
+      throw new BadRequestException("El correo del nuevo usuario es requerido.");
+    }
+
+    const tmEmail = member.email.toLowerCase().trim();
+    const tmName = (member.fullName || member.name || "Colaborador").trim();
+    const tmPhone = member.phone || null;
+    const tmRole = member.role || "Asesor de Ventas";
+
+    // 1. Resolve Developer
+    let devRecord: any = null;
+    if (developerId && developerId.length > 10 && !developerId.startsWith("dev-")) {
+      devRecord = await this.prisma.developer.findUnique({ where: { id: developerId } }).catch(() => null);
+    }
+    if (!devRecord && userEmail) {
+      const u = await this.prisma.user.findUnique({
+        where: { email: userEmail.toLowerCase().trim() },
+        include: { memberships: { include: { developer: true } } },
+      }).catch(() => null);
+      if (u?.memberships?.[0]?.developer) {
+        devRecord = u.memberships[0].developer;
+      }
+    }
+    if (!devRecord && developerName) {
+      devRecord = await this.prisma.developer.findFirst({
+        where: { name: { equals: developerName.trim(), mode: "insensitive" } },
+      }).catch(() => null);
+    }
+    if (!devRecord) {
+      devRecord = await this.prisma.developer.findFirst();
+    }
+
+    if (!devRecord) {
+      throw new NotFoundException("No se encontró una desarrolladora para asociar al usuario.");
+    }
+
+    // 2. Create or find User
+    let user = await this.prisma.user.findUnique({ where: { email: tmEmail } }).catch(() => null);
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          authUserId: randomUUID(),
+          email: tmEmail,
+          fullName: tmName,
+          phone: tmPhone,
+        },
+      });
+    } else {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          fullName: tmName,
+          phone: tmPhone || user.phone,
+        },
+      });
+    }
+
+    // 3. Upsert Membership
+    const roleEnum = tmRole.toLowerCase().includes("super")
+      ? "SUPER_ADMIN"
+      : tmRole.toLowerCase().includes("director") || tmRole.toLowerCase().includes("admin")
+      ? "ADMIN"
+      : "COMMERCIAL";
+
+    await this.prisma.membership.upsert({
+      where: {
+        userId_developerId: {
+          userId: user.id,
+          developerId: devRecord.id,
+        },
+      },
+      update: { role: roleEnum as any },
+      create: {
+        userId: user.id,
+        developerId: devRecord.id,
+        role: roleEnum as any,
+      },
+    });
+
+    // 4. Send Postmark Invitation Email
+    const tempPassword = "Devio2026!";
+    const emailResult = await this.notificationsService.send({
+      to: tmEmail,
+      templateAlias: "bienvenida-user",
+      templateModel: {
+        nombre: tmName,
+        correo: tmEmail,
+        password_temporal: tempPassword,
+        login_link: "https://devio-web-six.vercel.app/login",
+        desarrolladora: devRecord.name,
+        rol: tmRole,
+        año: new Date().getFullYear().toString(),
+        anio: new Date().getFullYear().toString(),
+      },
+    }).catch((err) => {
+      console.warn(`Error sending welcome email to ${tmEmail}:`, err);
+      return { success: false, error: err?.message };
+    });
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        role: tmRole,
+        status: "ACTIVO",
+      },
+      emailSent: Boolean(emailResult && (emailResult as any).success !== false),
+    };
   }
 
   async findById(id: string) {
