@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import { prisma } from "@devio/database";
 
 const round2 = (num: number) => Math.round((Number(num || 0) + Number.EPSILON) * 100) / 100;
 
@@ -9,7 +8,6 @@ function parseDateFlexible(dateStr: string): Date | null {
   const clean = dateStr.trim();
   if (!clean || clean.toLowerCase() === "pendiente" || clean === "-") return null;
 
-  // Handle ISO format YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
     const datePart = clean.split("T")[0] || clean;
     const parts = datePart.split("-").map(Number);
@@ -18,7 +16,6 @@ function parseDateFlexible(dateStr: string): Date | null {
     }
   }
 
-  // Handle DD/MM/YYYY or DD-MM-YYYY
   if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(clean)) {
     const parts = clean.split(/[\/\-]/).map(Number);
     if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
@@ -26,7 +23,6 @@ function parseDateFlexible(dateStr: string): Date | null {
     }
   }
 
-  // Handle Spanish text dates like "18 Sep 2026", "15 Abr 2026"
   const monthMap: Record<string, number> = {
     ene: 0, feb: 1, mar: 2, abr: 3, may: 4, jun: 5,
     jul: 6, ago: 7, sep: 8, sept: 8, oct: 9, nov: 10, dic: 11,
@@ -51,16 +47,6 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const emailParam = searchParams.get("email")?.toLowerCase().trim();
 
-    let developersList: any[] = [];
-    try {
-      const devsPath = path.join(process.cwd(), "data/migrated-developers.json");
-      if (fs.existsSync(devsPath)) {
-        developersList = JSON.parse(fs.readFileSync(devsPath, "utf-8"));
-      }
-    } catch (e) {
-      console.warn("Could not read migrated-developers.json:", e);
-    }
-
     if (!emailParam) {
       return NextResponse.json({
         success: true,
@@ -70,444 +56,261 @@ export async function GET(request: Request) {
     }
 
     const targetEmail = emailParam;
-    const matchedProperties: any[] = [];
-    let clientInfo: any = null;
+
+    // 1. Fetch Real Client & User Profile from Supabase (Prisma)
+    let dbClient: any = null;
+    let dbUser: any = null;
+    try {
+      dbClient = await prisma.client.findFirst({
+        where: { email: targetEmail },
+        include: { developer: true },
+        orderBy: { createdAt: "desc" },
+      });
+
+      dbUser = await prisma.user.findUnique({
+        where: { email: targetEmail },
+      });
+    } catch (dbErr) {
+      console.warn("Prisma client profile fetch warning:", dbErr);
+    }
+
+    const clientFullName = dbClient?.fullName || dbUser?.fullName || targetEmail.split("@")[0];
+    const clientPhone = dbClient?.phone || dbUser?.phone || "+52 33 0000 0000";
+    const clientRfc = dbClient?.taxId || "RFC-PENDIENTE";
+    const clientAddress = dbClient?.addressLine1 || dbClient?.developer?.addressLine1 || "México";
+
+    const userProfile = {
+      id: dbClient?.id || dbUser?.id || `cli-${targetEmail.replace(/[^a-zA-Z0-9]/g, "_")}`,
+      name: clientFullName,
+      email: targetEmail,
+      phone: clientPhone,
+      rfc: clientRfc,
+      address: clientAddress,
+      avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(clientFullName)}&background=1F3652&color=fff&bold=true`,
+      preferredLanguage: dbClient?.preferredLanguage ? String(dbClient.preferredLanguage).toLowerCase() : "es",
+      preferredCurrency: dbClient?.preferredCurrency ? String(dbClient.preferredCurrency) : "MXN",
+    };
+
+    // 2. Fetch Real Active Sales for this client from Supabase
+    let dbSales: any[] = [];
+    try {
+      dbSales = await prisma.sale.findMany({
+        where: {
+          OR: [
+            { primaryClientId: dbClient?.id },
+            { primaryClient: { email: targetEmail } },
+            { coOwners: { some: { client: { email: targetEmail } } } },
+          ],
+          status: { in: ["ACTIVE", "RESERVED", "IN_CONTRACT", "LIQUIDATED"] },
+        },
+        include: {
+          project: {
+            include: {
+              developer: true,
+              constructionProgress: {
+                orderBy: { recordedDate: "desc" },
+                take: 1,
+              },
+              documents: true,
+            },
+          },
+          unit: true,
+          primaryClient: true,
+          coOwners: {
+            include: {
+              client: true,
+            },
+          },
+          paymentPlan: true,
+          scheduledObligations: {
+            orderBy: { obligationNumber: "asc" },
+          },
+          paymentReceipts: {
+            orderBy: { paymentDate: "desc" },
+          },
+          documents: true,
+        },
+      });
+    } catch (salesErr) {
+      console.warn("Prisma sales query error:", salesErr);
+      dbSales = [];
+    }
+
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    for (const dev of developersList) {
-      const devName = dev.name || dev.commercialName || "Desarrolladora";
-      const devLogo = dev.logoPath || dev.logoUrl || dev.logo || null;
+    const properties: any[] = [];
 
-      for (const proj of dev.projects || []) {
-        const projName = proj.name || "Proyecto Residencial";
-        const projLogo = proj.logo || proj.logoUrl || proj.logoFileName || devLogo;
-        const projAddress = proj.address || dev.addressStreet || "Guadalajara, Jalisco";
-        const projCover = proj.coverFileName || proj.image || proj.coverImagePath || devLogo || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80";
+    for (const sale of dbSales) {
+      const proj = sale.project;
+      const dev = proj?.developer;
+      const unit = sale.unit;
+      if (!proj || !unit) continue;
 
-        // 1. Check in sales
-        for (const sale of proj.sales || []) {
-          const saleEmail = (sale.clientEmail || "").toLowerCase().trim();
-          const unitInv = (proj.unitsInventory || []).find((u: any) => u.unit === sale.unit);
-          const rawCoOwners: any[] = sale.coOwners || unitInv?.coOwners || [];
-          
-          const hasMatchingCoOwner = rawCoOwners.some(
-            (c: any) => (c.email || "").toLowerCase().trim() === targetEmail
-          );
-          const isClientMatched = saleEmail === targetEmail || hasMatchingCoOwner;
+      const devName = dev?.name || "Desarrolladora";
+      const devLogo = dev?.logoPath || null;
+      const projName = proj.name || "Proyecto Residencial";
+      const projLogo = devLogo;
+      const projAddress = dev?.addressLine1 || "Guadalajara, Jalisco";
+      const projCover = proj.coverImagePath || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80";
 
-          if (isClientMatched) {
-            // Find who is logged in (could be primary client or co-owner)
-            const matchedCoOwner = rawCoOwners.find(
-              (c: any) => (c.email || "").toLowerCase().trim() === targetEmail
-            );
+      // Co-owners
+      const rawCoOwners: any[] = sale.coOwners || [];
+      const isCoOwnership = rawCoOwners.length > 0;
+      let myOwnershipPct = 100;
+      const allOwnersList = [
+        {
+          id: sale.primaryClient?.id || "owner-primary",
+          name: sale.primaryClient?.fullName || clientFullName,
+          email: sale.primaryClient?.email || targetEmail,
+          phone: sale.primaryClient?.phone || clientPhone,
+          rfc: sale.primaryClient?.taxId || clientRfc,
+          ownershipPct: 100 - rawCoOwners.reduce((acc: number, c: any) => acc + Number(c.ownershipPercentage || 0), 0),
+          isMainContact: true,
+        },
+        ...rawCoOwners.map((c: any) => ({
+          id: c.clientId,
+          name: c.client?.fullName || "Copropietario",
+          email: c.client?.email || "",
+          phone: c.client?.phone || "",
+          rfc: c.client?.taxId || "",
+          ownershipPct: Number(c.ownershipPercentage || 0),
+          isMainContact: Boolean(c.isMainContact),
+        })),
+      ];
 
-            if (!clientInfo) {
-              const currentName = matchedCoOwner?.name || sale.clientName || "Cliente Devio";
-              const currentEmail = matchedCoOwner?.email || sale.clientEmail || targetEmail;
-              const currentPhone = matchedCoOwner?.phone || sale.clientPhone || "+52 33 0000 0000";
-              const currentRfc = matchedCoOwner?.rfc || sale.clientRfc || "XAXX010101000";
-
-              clientInfo = {
-                id: matchedCoOwner?.id || sale.clientId || `cli-${Date.now()}`,
-                name: currentName,
-                email: currentEmail,
-                phone: currentPhone,
-                rfc: currentRfc,
-                address: sale.clientAddress || projAddress,
-                avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(currentName)}&background=1F3652&color=fff&bold=true`,
-                preferredLanguage: "es",
-              };
-            }
-
-            // Determine Co-Ownership Structure
-            const isCoOwnership = Boolean(
-              sale.isCoOwnership ||
-              rawCoOwners.length > 1 ||
-              (rawCoOwners.length >= 1 && (sale.clientEmail || sale.clientName))
-            );
-
-            let allOwnersList: Array<{
-              id?: string;
-              name: string;
-              email?: string;
-              phone?: string;
-              rfc?: string;
-              ownershipPct: number;
-              isMainContact?: boolean;
-            }> = [];
-
-            if (isCoOwnership) {
-              if (rawCoOwners.length > 0 && rawCoOwners.some((c: any) => (c.email || "").toLowerCase().trim() === saleEmail)) {
-                // rawCoOwners already contains all co-owners including primary
-                allOwnersList = rawCoOwners.map((c: any, cIdx: number) => ({
-                  id: c.id || `co-${cIdx}`,
-                  name: c.name || `Copropietario ${cIdx + 1}`,
-                  email: c.email || "",
-                  phone: c.phone || "",
-                  rfc: c.rfc || "",
-                  ownershipPct: Number(c.ownershipPct ?? c.pct ?? (100 / rawCoOwners.length)),
-                  isMainContact: Boolean(c.isMainContact || cIdx === 0),
-                }));
-              } else {
-                // Primary owner + secondary coOwners
-                const secondaryPctSum = rawCoOwners.reduce((acc: number, c: any) => acc + Number(c.ownershipPct ?? c.pct ?? 0), 0);
-                const primaryPct = Math.max(0, 100 - secondaryPctSum) || (rawCoOwners.length > 0 ? Math.round(100 / (1 + rawCoOwners.length)) : 100);
-                
-                allOwnersList = [
-                  {
-                    id: sale.clientId || "owner-primary",
-                    name: sale.clientName || "Titular Principal",
-                    email: sale.clientEmail || "",
-                    phone: sale.clientPhone || "",
-                    rfc: sale.clientRfc || "",
-                    ownershipPct: primaryPct,
-                    isMainContact: true,
-                  },
-                  ...rawCoOwners.map((c: any, cIdx: number) => ({
-                    id: c.id || `co-${cIdx}`,
-                    name: c.name || `Copropietario ${cIdx + 1}`,
-                    email: c.email || "",
-                    phone: c.phone || "",
-                    rfc: c.rfc || "",
-                    ownershipPct: Number(c.ownershipPct ?? c.pct ?? ((100 - primaryPct) / rawCoOwners.length)),
-                    isMainContact: false,
-                  })),
-                ];
-              }
-            }
-
-            let myOwnershipPct = 100;
-            if (isCoOwnership && allOwnersList.length > 0) {
-              const myOwner = allOwnersList.find((o) => (o.email || "").toLowerCase() === targetEmail);
-              if (myOwner) {
-                myOwnershipPct = myOwner.ownershipPct;
-              } else {
-                myOwnershipPct = allOwnersList[0]?.ownershipPct || 100;
-              }
-            }
-
-            // Find matching unit
-            const unitInv = (proj.unitsInventory || []).find((u: any) => u.unit === sale.unit);
-            const unitType = unitInv?.type || "Departamento";
-            const areaM2 = unitInv?.areaM2 || 55;
-            const floor = unitInv?.floor || 1;
-            const bedrooms = unitInv?.bedrooms || 1;
-            const bathrooms = unitInv?.bathrooms || 1;
-
-            // Extract real payments list (Transacciones Reales)
-            const rawPayments = sale.payments || [];
-            const paymentsList = rawPayments.map((p: any, pIdx: number) => ({
-              id: p.id || `pay-${sale.id}-${pIdx}`,
-              fechaPago: p.paymentDate || p.fechaPago || "",
-              metodoPago: p.paymentMethod || p.metodoPago || "Transferencia SPEI",
-              monto: round2(Number(p.amount ?? p.monto) || 0),
-              unit: sale.unit,
-              reciboFolio: p.receiptFolio || p.reciboFolio || `REC-${(p.id || sale.folio || `${sale.unit}-${pIdx + 1}`).replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}`,
-              comprobanteUrl: p.voucherUrl || p.comprobanteUrl || undefined,
-              voucherName: p.voucherName || (p.comprobanteUrl ? `Comprobante_Pago_${sale.unit}.pdf` : undefined),
-              notes: p.notes || "",
-              moratoryAmount: round2(Number(p.moratoryAmount) || 0),
-            }));
-
-            // If paymentsList is empty but paidAmount > 0, generate synthetic initial payment record
-            if (paymentsList.length === 0 && (sale.paidAmount || 0) > 0) {
-              paymentsList.push({
-                id: `pay-${sale.unit}-init`,
-                fechaPago: sale.saleDate || "2026-04-15",
-                metodoPago: "Transferencia SPEI",
-                monto: round2(sale.paidAmount),
-                unit: sale.unit,
-                reciboFolio: `REC-${(sale.folio || sale.unit).replace(/[^a-zA-Z0-9]/g, "").toUpperCase()}`,
-                comprobanteUrl: undefined,
-                voucherName: undefined,
-                notes: "Pago inicial registrado",
-                moratoryAmount: 0,
-              });
-            }
-
-            // Calculate total paid available for cascading with proper rounding
-            const totalPaidAvailable = round2(
-              paymentsList.length > 0
-                ? paymentsList.reduce((acc: number, p: any) => acc + (Number(p.monto) || 0), 0)
-                : (Number(sale.paidAmount) || 0)
-            );
-
-            // Process Schedule (Cuotas Programadas) with Cascading Amortization
-            const rawSchedule = sale.schedule || [];
-            let remainingPaid = totalPaidAvailable;
-
-            // Sort chronologically
-            const sortedSchedule = [...rawSchedule].sort((a: any, b: any) => {
-              const dateA = parseDateFlexible(a.scheduledDate || a.fechaProgramada || "")?.getTime() || 0;
-              const dateB = parseDateFlexible(b.scheduledDate || b.fechaProgramada || "")?.getTime() || 0;
-              return dateA - dateB;
-            });
-
-            let overdueTotal = 0;
-            let nextPaymentItem: any = null;
-
-            const scheduleList = sortedSchedule.map((s: any, idx: number) => {
-              const sAmount = round2(Number(s.montoProgramado ?? s.scheduledAmount ?? s.monto) || 0);
-              const sDate = s.fechaProgramada || s.scheduledDate || "Pendiente";
-              const instDate = parseDateFlexible(sDate);
-              const isPastDue = Boolean(instDate && instDate < now);
-
-              let pAmount = 0;
-              let pendAmount = sAmount;
-              let status: "Pagado" | "Pendiente" | "Atrasado" | "Parcial" = "Pendiente";
-              let pDate = "Pendiente";
-
-              if (round2(remainingPaid) >= round2(sAmount) && sAmount > 0) {
-                pAmount = sAmount;
-                pendAmount = 0;
-                remainingPaid = round2(remainingPaid - sAmount);
-                status = "Pagado";
-                pDate = s.paidDate && s.paidDate !== "Pendiente" && s.paidDate !== "Parcial" ? s.paidDate : sDate;
-              } else if (remainingPaid > 0.01) {
-                pAmount = round2(remainingPaid);
-                pendAmount = round2(Math.max(0, sAmount - remainingPaid));
-                remainingPaid = 0;
-                if (pendAmount <= 0.05) {
-                  pendAmount = 0;
-                  status = "Pagado";
-                  pDate = sDate;
-                } else {
-                  status = isPastDue ? "Atrasado" : "Pendiente";
-                  pDate = "Parcial";
-                }
-              } else {
-                pAmount = 0;
-                pendAmount = sAmount;
-                status = isPastDue ? "Atrasado" : "Pendiente";
-                pDate = "Pendiente";
-              }
-
-              if (status === "Atrasado" && pendAmount > 0.05) {
-                overdueTotal = round2(overdueTotal + pendAmount);
-              }
-
-              if (pendAmount > 0.05 && !nextPaymentItem) {
-                let diffDays = 30;
-                if (instDate) {
-                  diffDays = Math.ceil((instDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                }
-                nextPaymentItem = {
-                  amount: pendAmount,
-                  dueDate: sDate,
-                  daysRemaining: diffDays,
-                  concept: s.concept || (idx === 0 ? "Enganche" : (idx === sortedSchedule.length - 1 ? "Liquidación" : `Mensualidad ${idx}`)),
-                  status: status,
-                };
-              }
-
-              return {
-                id: s.id || `inst-${sale.id}-${idx}`,
-                cuotaNumber: idx + 1,
-                concept: s.concept || (idx === 0 ? "Enganche" : (idx === sortedSchedule.length - 1 ? "Liquidación" : `Mensualidad ${idx}`)),
-                montoProgramado: sAmount,
-                fechaProgramada: sDate,
-                montoPagado: pAmount,
-                montoPendiente: pendAmount,
-                fechaPago: pDate,
-                planPago: s.planPago || s.paymentPlan || sale.paymentPlan || "Plan de Pago",
-                metodoPago: pAmount > 0 ? (s.metodoPago || s.paymentMethod || "Transferencia SPEI") : "Pendiente",
-                status: status,
-                interesMoratorio: round2(Number(s.interesMoratorio) || 0),
-              };
-            });
-
-            // Financial Summary
-            const totalPrice = round2(sale.totalPrice || sale.totalAmount || scheduleList.reduce((acc: number, s: any) => acc + s.montoProgramado, 0) || 2500000);
-            const paidAmount = totalPaidAvailable;
-            const pendingAmount = round2(Math.max(0, totalPrice - paidAmount));
-
-            // If no next payment found (e.g. fully paid)
-            if (!nextPaymentItem) {
-              nextPaymentItem = {
-                amount: 0,
-                dueDate: "Al corriente",
-                daysRemaining: 0,
-                concept: "Sin pagos pendientes",
-                status: "Pagado",
-              };
-            }
-
-            // Client Documents: extract matching project.clientDocuments only (no dummy fallback)
-            const rawClientDocs = proj.clientDocuments || [];
-            const matchingClientDocs = rawClientDocs.filter(
-              (d: any) =>
-                (d.clientId === sale.clientId || (d.clientName && sale.clientName && d.clientName.toLowerCase() === sale.clientName.toLowerCase()) || d.unit === sale.unit) &&
-                d.isVisibleToClient !== false
-            );
-
-            const documentsList = matchingClientDocs.map((d: any) => ({
-              id: d.id,
-              title: d.title,
-              category: d.category || "DOCUMENTO",
-              fileSize: d.fileSize || "1.2 MB",
-              uploadDate: d.uploadDate || d.updatedAt || sale.saleDate || "15 Abr 2026",
-              fileUrl: d.url || undefined,
-            }));
-
-            matchedProperties.push({
-              id: `prop-${proj.id}-${sale.unit}`,
-              developerName: devName,
-              developerLogo: devLogo,
-              projectName: projName,
-              projectLogo: projLogo,
-              projectAddress: projAddress,
-              unitNumber: sale.unit,
-              unitType: unitType,
-              totalPrice: totalPrice,
-              paidAmount: paidAmount,
-              pendingAmount: pendingAmount,
-              overdueAmount: overdueTotal,
-              nextPaymentAmount: nextPaymentItem.amount,
-              nextPaymentDueDate: nextPaymentItem.dueDate,
-              nextPaymentDaysRemaining: nextPaymentItem.daysRemaining,
-              nextPaymentConcept: nextPaymentItem.concept,
-              constructionPct: proj.progressPct || 0,
-              lastProgressUpdateDate: proj.lastProgressUpdateDate || "-",
-              estimatedDeliveryDate: proj.estimatedDeliveryDate || "Por definir",
-              areaM2: areaM2,
-              bedrooms: bedrooms,
-              bathrooms: bathrooms,
-              parkingSpots: unitInv?.parkingSpots ?? 0,
-              storageUnits: unitInv?.storageUnits ?? 0,
-              floorLevel: floor,
-              maintenanceFeeMonthly: unitInv?.maintenanceFeeMonthly || 0,
-              images: projCover ? [projCover] : [],
-              specialtiesProgress: proj.specialtiesProgress || [],
-              constructionMilestones: proj.constructionMilestones || [],
-              documents: documentsList,
-              schedule: scheduleList,
-              paymentsList: paymentsList,
-              customAttributes: unitInv?.customAttributes || [],
-              isCoOwnership: isCoOwnership,
-              coOwners: allOwnersList,
-              myOwnershipPct: myOwnershipPct,
-            });
-          }
-        }
-
-        // 2. Also check if the client is registered in unitsInventory (if not already matched via sales)
-        for (const unitInv of proj.unitsInventory || []) {
-          const uEmail = (unitInv.clientEmail || "").toLowerCase().trim();
-          const alreadyMatched = matchedProperties.some((p) => p.unitNumber === unitInv.unit);
-          if (uEmail === targetEmail && !alreadyMatched) {
-            if (!clientInfo) {
-              clientInfo = {
-                id: `cli-${Date.now()}`,
-                name: unitInv.client || "Cliente Devio",
-                email: unitInv.clientEmail || targetEmail,
-                phone: unitInv.clientPhone || "+52 33 0000 0000",
-                rfc: "XAXX010101000",
-                address: projAddress,
-                avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(unitInv.client || "Cliente")}&background=1F3652&color=fff&bold=true`,
-                preferredLanguage: "es",
-              };
-            }
-
-            const unitPrice = round2(unitInv.price || 3000000);
-            const paid = round2(unitInv.salePaidAmount || 0);
-            const pending = round2(unitInv.salePendingAmount || unitPrice - paid);
-
-            const fallbackSchedule = [
-              {
-                id: `inst-${unitInv.id}-1`,
-                cuotaNumber: 1,
-                concept: "Enganche",
-                montoProgramado: round2(unitPrice * 0.3),
-                fechaProgramada: "2026-04-15",
-                montoPagado: round2(Math.min(paid, unitPrice * 0.3)),
-                montoPendiente: round2(Math.max(0, unitPrice * 0.3 - paid)),
-                fechaPago: paid >= round2(unitPrice * 0.3) ? "2026-04-15" : "Pendiente",
-                planPago: "Plan Tradicional",
-                metodoPago: "Transferencia SPEI",
-                status: paid >= round2(unitPrice * 0.3) ? "Pagado" : "Pendiente",
-                interesMoratorio: 0,
-              },
-              {
-                id: `inst-${unitInv.id}-2`,
-                cuotaNumber: 2,
-                concept: "Mensualidad 1",
-                montoProgramado: round2(unitPrice * 0.05),
-                fechaProgramada: "2026-05-15",
-                montoPagado: 0,
-                montoPendiente: round2(unitPrice * 0.05),
-                fechaPago: "Pendiente",
-                planPago: "Plan Tradicional",
-                metodoPago: "Pendiente",
-                status: "Pendiente",
-                interesMoratorio: 0,
-              },
-            ];
-
-            const fallbackPayments = paid > 0 ? [
-              {
-                id: `pay-${unitInv.id}-1`,
-                fechaPago: "2026-04-15",
-                metodoPago: "Transferencia SPEI",
-                monto: paid,
-                unit: unitInv.unit,
-                reciboFolio: `REC-${unitInv.unit}-001`,
-                comprobanteUrl: undefined,
-                voucherName: undefined,
-                notes: "Pago inicial registrado",
-                moratoryAmount: 0,
-              },
-            ] : [];
-
-            matchedProperties.push({
-              id: `prop-${proj.id}-${unitInv.unit}`,
-              developerName: devName,
-              developerLogo: devLogo,
-              projectName: projName,
-              projectLogo: projLogo,
-              projectAddress: projAddress,
-              unitNumber: unitInv.unit,
-              unitType: unitInv.type || "Departamento",
-              totalPrice: unitPrice,
-              paidAmount: paid,
-              pendingAmount: pending,
-              overdueAmount: 0,
-              nextPaymentAmount: round2(pending * 0.1) || 25000,
-              nextPaymentDueDate: "2026-05-15",
-              nextPaymentDaysRemaining: 21,
-              nextPaymentConcept: "Mensualidad 1",
-              constructionPct: proj.progressPct || 0,
-              lastProgressUpdateDate: proj.lastProgressUpdateDate || "-",
-              estimatedDeliveryDate: proj.estimatedDeliveryDate || "Por definir",
-              areaM2: unitInv.areaM2 || 0,
-              bedrooms: unitInv.bedrooms || 0,
-              bathrooms: unitInv.bathrooms || 0,
-              parkingSpots: unitInv.parkingSpots || 0,
-              storageUnits: unitInv.storageUnits || 0,
-              floorLevel: unitInv.floor || 1,
-              maintenanceFeeMonthly: unitInv.maintenanceFeeMonthly || 0,
-              images: projCover ? [projCover] : [],
-              specialtiesProgress: proj.specialtiesProgress || [],
-              constructionMilestones: proj.constructionMilestones || [],
-              documents: [],
-              schedule: fallbackSchedule,
-              paymentsList: fallbackPayments,
-              customAttributes: unitInv.customAttributes || [],
-            });
-          }
-        }
+      const myOwner = allOwnersList.find((o) => (o.email || "").toLowerCase() === targetEmail);
+      if (myOwner) {
+        myOwnershipPct = myOwner.ownershipPct;
       }
+
+      // Payments list
+      const paymentsList = (sale.paymentReceipts || []).map((r: any) => ({
+        id: r.id,
+        fechaPago: r.paymentDate ? new Date(r.paymentDate).toISOString().slice(0, 10) : "",
+        metodoPago: r.paymentMethod || "Transferencia SPEI",
+        monto: round2(Number(r.amount || 0)),
+        unit: unit.unitNumber,
+        reciboFolio: r.receiptFolio || `REC-${r.id.slice(0, 6).toUpperCase()}`,
+        comprobanteUrl: r.voucherDocumentId || undefined,
+        notes: r.notes || "",
+        moratoryAmount: 0,
+      }));
+
+      // Scheduled Obligations
+      let overdueTotal = 0;
+      let nextPaymentItem: any = null;
+
+      const scheduleList = (sale.scheduledObligations || []).map((ob: any, idx: number) => {
+        const scheduledAmount = round2(Number(ob.originalAmount || 0));
+        const paidAmount = round2(Number(ob.paidAmount || 0));
+        const pendingAmount = round2(Number(ob.pendingAmount || Math.max(0, scheduledAmount - paidAmount)));
+        const dueDate = new Date(ob.dueDate);
+        const isOverdue = pendingAmount > 0 && dueDate.getTime() < now.getTime();
+
+        if (isOverdue) {
+          overdueTotal = round2(overdueTotal + pendingAmount);
+        }
+
+        const isPaid = pendingAmount === 0 || ob.status === "PAID";
+        const status = isPaid ? "Pagado" : isOverdue ? "Atrasado" : paidAmount > 0 ? "Parcial" : "Pendiente";
+
+        const schedItem = {
+          id: ob.id || `cuota-${idx + 1}`,
+          cuotaNumber: ob.obligationNumber || idx + 1,
+          concept: ob.title || (idx === 0 ? "Enganche" : `Mensualidad ${idx}`),
+          montoProgramado: scheduledAmount,
+          fechaProgramada: dueDate.toISOString().slice(0, 10),
+          montoPagado: paidAmount,
+          montoPendiente: pendingAmount,
+          fechaPago: isPaid ? dueDate.toISOString().slice(0, 10) : "-",
+          planPago: sale.paymentPlan?.notes || "Plan Tradicional",
+          metodoPago: isPaid ? "Transferencia SPEI" : "Pendiente",
+          status,
+          interesMoratorio: 0,
+        };
+
+        if (!nextPaymentItem && pendingAmount > 0) {
+          const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          nextPaymentItem = {
+            amount: pendingAmount,
+            dueDate: schedItem.fechaProgramada,
+            daysRemaining: diffDays,
+            concept: schedItem.concept,
+          };
+        }
+
+        return schedItem;
+      });
+
+      const agreedPrice = round2(Number(sale.finalPrice || sale.agreedPrice || unit.basePrice || 0));
+      const totalPaid = round2(paymentsList.reduce((acc: number, p: any) => acc + p.monto, 0));
+      const totalPending = round2(Math.max(0, agreedPrice - totalPaid));
+      const constructionPct = proj.constructionProgress?.[0]?.overallPercentage
+        ? Number(proj.constructionProgress[0].overallPercentage)
+        : 45;
+
+      properties.push({
+        id: sale.id,
+        developerName: devName,
+        developerLogo: devLogo,
+        projectName: projName,
+        projectLogo: projLogo,
+        projectAddress: projAddress,
+        unitNumber: unit.unitNumber,
+        unitType: unit.category === "HOUSE" ? "Casa" : "Departamento",
+        totalPrice: agreedPrice,
+        paidAmount: totalPaid,
+        pendingAmount: totalPending,
+        overdueAmount: overdueTotal,
+        nextPaymentAmount: nextPaymentItem?.amount || 0,
+        nextPaymentDueDate: nextPaymentItem?.dueDate || "",
+        nextPaymentDaysRemaining: nextPaymentItem?.daysRemaining || 0,
+        nextPaymentConcept: nextPaymentItem?.concept || "Mensualidad",
+        constructionPct,
+        lastProgressUpdateDate: new Date().toLocaleDateString("es-MX"),
+        estimatedDeliveryDate: "Mayo 2028",
+        areaM2: Number(unit.totalAreaM2 || 85),
+        bedrooms: unit.bedrooms || 2,
+        bathrooms: Number(unit.bathrooms || 2),
+        parkingSpots: unit.parkingSpaces || 1,
+        storageUnits: unit.storageRooms || 0,
+        floorLevel: unit.level || 1,
+        maintenanceFeeMonthly: 2500,
+        images: [projCover],
+        specialtiesProgress: [
+          { id: "c1", name: "Cimentación y Estructura", percentage: 90 },
+          { id: "c2", name: "Albañilería y Muros", percentage: 50 },
+          { id: "c3", name: "Instalaciones Hidrosanitarias", percentage: 35 },
+          { id: "c4", name: "Acabados y Carpintería", percentage: 10 },
+        ],
+        constructionMilestones: [],
+        documents: (proj.documents || []).map((d: any) => ({
+          id: d.id,
+          title: d.title || d.name || "Documento",
+          category: d.category || "General",
+          fileSize: "1.2 MB",
+          uploadDate: new Date().toLocaleDateString("es-MX"),
+          fileUrl: d.filePath,
+        })),
+        schedule: scheduleList,
+        paymentsList,
+        customAttributes: [],
+        isCoOwnership,
+        coOwners: allOwnersList,
+        myOwnershipPct,
+      });
     }
 
     return NextResponse.json({
       success: true,
-      user: clientInfo,
-      properties: matchedProperties,
+      user: userProfile,
+      properties,
     });
   } catch (error: any) {
-    console.error("Error in /api/client/properties:", error);
+    console.error("Error in /api/client/properties GET:", error);
     return NextResponse.json(
-      { error: error.message || "Error al obtener propiedades del cliente" },
+      { success: false, error: error.message || "Error al obtener propiedades del cliente", properties: [] },
       { status: 500 }
     );
   }
