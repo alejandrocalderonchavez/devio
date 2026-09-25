@@ -838,6 +838,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
     saveProjects(updated);
     showToast("Adicionales Guardados", `Se guardaron ${additionals.length} adicionales en el catálogo.`);
+
+    // Persist to Supabase
+    fetch("/api/additionals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, additionals }),
+    }).catch((err) => console.warn("Could not sync additionals with backend:", err));
   };
 
   const addSale = (salePayload: any) => {
@@ -1727,6 +1734,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
 
     saveProjects(updated);
+    // Persist additionals changes to Supabase
+    if (targetProject) {
+      const updatedProj = updated.find((p) => p.id === targetProject.id);
+      if (updatedProj && updatedProj.additionals) {
+        updateProjectAdditionals(targetProject.id, updatedProj.additionals);
+      }
+    }
     showToast("Venta y Adicionales Actualizados", `Se actualizaron los adicionales y el precio de la unidad ${unitNumber}.`, "success");
   };
 
@@ -2025,6 +2039,24 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         ? `Avance del ${advanceData.pct}% aplicado a ${advanceData.targetUnits?.length || 0} unidades.`
         : `Avance general de obra registrado al ${advanceData.pct}%.`
     );
+
+    // Persist to Supabase
+    fetch("/api/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        title: `Avance de Obra - ${advanceData.date}`,
+        overallPercentage: advanceData.pct,
+        specialtyDetails: {
+          cimentacionPct: advanceData.cimentacionPct,
+          estructuraPct: advanceData.estructuraPct,
+          instalacionesPct: advanceData.instalacionesPct,
+          acabadosPct: advanceData.acabadosPct,
+        },
+        mediaUrls: advanceData.photos?.map((p) => p.url) || (advanceData.image ? [advanceData.image] : []),
+      }),
+    }).catch((err) => console.warn("Could not sync progress with backend:", err));
   };
 
   const updateProjectProgress = (projectId: string, progressPct: number) => {
@@ -2037,6 +2069,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
     saveProjects(updated);
     showToast("Avance Registrado", `Avance de obra actualizado a ${progressPct}%.`);
+
+    fetch("/api/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        title: `Actualización de Avance General (${progressPct}%)`,
+        overallPercentage: progressPct,
+      }),
+    }).catch(() => {});
   };
 
   const updateProjectFloorPlans = (projectId: string, floorPlans: ProjectFloorPlan[]) => {
@@ -2214,6 +2256,18 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
     saveProjects(updated);
     showToast("Documento Guardado", `Se guardó "${doc.title}" en el expediente.`);
+
+    // Persist to Supabase
+    fetch("/api/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        title: doc.title,
+        category: doc.category,
+        filePath: doc.url,
+      }),
+    }).catch((err) => console.warn("Could not sync document with backend:", err));
   };
 
   const deleteProjectDocument = (projectId: string, docId: string) => {
@@ -2227,6 +2281,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
     saveProjects(updated);
     showToast("Documento Eliminado", "El documento fue eliminado del expediente.", "info");
+
+    fetch(`/api/documents?id=${encodeURIComponent(docId)}`, {
+      method: "DELETE",
+    }).catch(() => {});
   };
 
   const addClientDocument = (projectId: string, doc: ClientDocument) => {
@@ -2240,6 +2298,17 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
     saveProjects(updated);
     showToast("Documento Guardado", `Se guardó "${doc.title}" en el expediente.`);
+
+    fetch("/api/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        title: doc.title,
+        category: doc.category,
+        filePath: doc.url,
+      }),
+    }).catch(() => {});
   };
 
   const updateClientDocument = (projectId: string, doc: ClientDocument) => {
@@ -2253,6 +2322,17 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
     saveProjects(updated);
     showToast("Documento Actualizado", `Se actualizó "${doc.title}".`);
+
+    fetch("/api/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        title: doc.title,
+        category: doc.category,
+        filePath: doc.url,
+      }),
+    }).catch(() => {});
   };
 
   const deleteClientDocument = (projectId: string, docId: string) => {
@@ -2266,6 +2346,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
     saveProjects(updated);
     showToast("Documento Eliminado", "El documento fue eliminado del expediente.", "info");
+
+    fetch(`/api/documents?id=${encodeURIComponent(docId)}`, {
+      method: "DELETE",
+    }).catch(() => {});
   };
 
   const savePostventaIncidents = (newIncidents: PostventaIncident[]) => {

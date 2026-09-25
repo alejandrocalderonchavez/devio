@@ -143,8 +143,25 @@ function mapProjectFromDb(p: any, devLogo?: string | null) {
     monthlyBilling: [],
     overdueClients: [],
     paymentPlans: [],
-    documents: p.documents || [],
-    additionals: p.additionals || [],
+    documents: (p.documents || []).map((d: any) => ({
+      id: d.id,
+      title: d.title || d.name || "Documento",
+      category: d.type || d.category || "General",
+      fileUrl: d.storagePath || d.filePath || d.fileUrl || "/documents/general.pdf",
+      uploadDate: d.createdAt ? new Date(d.createdAt).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX"),
+      size: d.fileSizeBytes ? `${(d.fileSizeBytes / 1024 / 1024).toFixed(1)} MB` : "1.2 MB",
+    })),
+    additionals: (p.additionals || []).map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      type: a.type === "PARKING" ? "Cajón de Estacionamiento" : a.type === "STORAGE" ? "Bodega" : "Otro",
+      category: a.type === "PARKING" ? "cajon" : a.type === "STORAGE" ? "bodega" : "otro",
+      price: Number(a.price || 0),
+      status: a.status === "SOLD" ? "VENDIDO" : a.status === "ASSIGNED" ? "ASIGNADO" : "DISPONIBLE",
+    })),
+    progressPct: p.constructionProgress?.[0]?.overallPercentage
+      ? Number(p.constructionProgress[0].overallPercentage)
+      : 0,
   };
 }
 
@@ -185,6 +202,9 @@ export async function GET(request: Request) {
                 sales: salesIncludeClause,
                 documents: true,
                 additionals: true,
+                constructionProgress: {
+                  orderBy: { progressDate: "desc" },
+                },
               },
             },
             memberships: {
@@ -220,6 +240,9 @@ export async function GET(request: Request) {
               sales: salesIncludeClause,
               documents: true,
               additionals: true,
+              constructionProgress: {
+                orderBy: { progressDate: "desc" },
+              },
             },
           },
           memberships: {

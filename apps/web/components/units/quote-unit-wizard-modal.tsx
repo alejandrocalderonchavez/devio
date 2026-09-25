@@ -764,6 +764,19 @@ export default function QuoteUnitWizardModal({
       addQuote(targetProjId, newQuoteRecord);
     }
 
+    // Persist quotation to Supabase documents
+    fetch("/api/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: targetProjId,
+        title: `Cotización ${unit.unit} - ${primaryClient.name || "Cliente"} (${quoteFolio})`,
+        type: "QUOTE",
+        storagePath: `/quotes/${quoteFolio}.pdf`,
+        status: "APPROVED",
+      }),
+    }).catch((err) => console.error("Error saving quote document to Supabase:", err));
+
     if (sendEmail) {
       const targets = isCoOwnership
         ? allOwnersCombined.filter((o) => o.email && o.email.trim())

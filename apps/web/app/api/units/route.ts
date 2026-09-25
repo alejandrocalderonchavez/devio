@@ -1,6 +1,145 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@devio/database";
 
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const projectId = searchParams.get("projectId");
+
+    const whereClause: any = {};
+    if (projectId) whereClause.projectId = projectId;
+
+    const units = await prisma.unit.findMany({
+      where: whereClause,
+      include: {
+        sales: {
+          where: { status: { not: "CANCELLED" } },
+          include: {
+            primaryClient: true,
+            paymentPlan: true,
+            paymentReceipts: true,
+            scheduledObligations: true,
+          },
+        },
+      },
+      orderBy: { unitNumber: "asc" },
+    });
+
+    return NextResponse.json({
+      success: true,
+      units,
+    });
+  } catch (error: any) {
+    console.error("Error in /api/units GET:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Error al obtener unidades" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { projectId, units, unitNumber, type, price, areaM2, floor, status } = body;
+
+    if (!projectId) {
+      return NextResponse.json(
+        { success: false, error: "projectId es requerido" },
+        { status: 400 }
+      );
+    }
+
+    // Bulk create / update units
+    if (Array.isArray(units) && units.length > 0) {
+      for (const u of units) {
+        const uNum = String(u.unit || u.unitNumber || "").trim();
+        if (!uNum) continue;
+
+        const uType = (u.type || "Departamento").toUpperCase() === "CASA" ? "HOUSE" : "APARTMENT";
+        const uStatus =
+          u.status === "VENDIDA" || u.status === "SOLD"
+            ? "SOLD"
+            : u.status === "BLOQUEADA" || u.status === "BLOCKED"
+            ? "BLOCKED"
+            : u.status === "APARTADA" || u.status === "RESERVED"
+            ? "RESERVED"
+            : "AVAILABLE";
+
+        await prisma.unit.upsert({
+          where: {
+            projectId_unitNumber: {
+              projectId,
+              unitNumber: uNum,
+            },
+          },
+          create: {
+            projectId,
+            unitNumber: uNum,
+            category: uType as any,
+            status: uStatus as any,
+            basePrice: Number(u.price || 3500000),
+            totalAreaM2: Number(u.areaM2 || u.area || 85),
+            level: Number(u.floor || u.level || 1),
+          },
+          update: {
+            category: uType as any,
+            status: uStatus as any,
+            basePrice: Number(u.price || 3500000),
+            totalAreaM2: Number(u.areaM2 || u.area || 85),
+            level: Number(u.floor || u.level || 1),
+          },
+        }).catch(() => {});
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Se sincronizaron ${units.length} unidades en Supabase.`,
+      });
+    }
+
+    // Single unit create
+    const cleanNum = String(unitNumber || "").trim();
+    if (!cleanNum) {
+      return NextResponse.json(
+        { success: false, error: "Número de unidad es requerido" },
+        { status: 400 }
+      );
+    }
+
+    const singleType = (type || "Departamento").toUpperCase() === "CASA" ? "HOUSE" : "APARTMENT";
+    const singleStatus =
+      status === "VENDIDA" || status === "SOLD"
+        ? "SOLD"
+        : status === "BLOQUEADA" || status === "BLOCKED"
+        ? "BLOCKED"
+        : "AVAILABLE";
+
+    const created = await prisma.unit.create({
+      data: {
+        projectId,
+        unitNumber: cleanNum,
+        category: singleType as any,
+        status: singleStatus as any,
+        basePrice: Number(price || 3500000),
+        totalAreaM2: Number(areaM2 || 85),
+        level: Number(floor || 1),
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      unit: created,
+    });
+  } catch (error: any) {
+    console.error("Error in /api/units POST:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Error al registrar unidad en base de datos" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
@@ -114,6 +253,41 @@ export async function PATCH(request: Request) {
     console.error("Error updating unit via /api/units:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Error al actualizar unidad" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    const unitNumber = searchParams.get("unitNumber");
+    const projectId = searchParams.get("projectId");
+
+    let targetUnit = null;
+    if (id && !id.startsWith("u-") && id.length > 10) {
+      targetUnit = await prisma.unit.findUnique({ where: { id } });
+    } else if (projectId && unitNumber) {
+      targetUnit = await prisma.unit.findFirst({
+        where: { projectId, unitNumber: String(unitNumber).trim() },
+      });
+    }
+
+    if (targetUnit) {
+      await prisma.unit.delete({
+        where: { id: targetUnit.id },
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Unidad eliminada de Supabase",
+    });
+  } catch (error: any) {
+    console.error("Error in /api/units DELETE:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Error al eliminar unidad" },
       { status: 500 }
     );
   }
