@@ -390,4 +390,38 @@ export class AuthService {
       },
     };
   }
+
+  async validateSession(dto: { email?: string; token?: string }) {
+    if (!dto.email && !dto.token) {
+      return { valid: false, reason: "NO_CREDENTIALS_PROVIDED" };
+    }
+
+    const cleanEmail = dto.email?.trim().toLowerCase();
+
+    if (cleanEmail) {
+      const dbUser = await this.prisma.user.findUnique({
+        where: { email: cleanEmail },
+      });
+
+      const dbDev = !dbUser
+        ? await this.prisma.developer.findFirst({
+            where: { email: cleanEmail },
+          })
+        : null;
+
+      const dbClient = !dbUser && !dbDev
+        ? await this.prisma.client.findFirst({
+            where: { email: cleanEmail },
+          })
+        : null;
+
+      if (!dbUser && !dbDev && !dbClient) {
+        return { valid: false, reason: "USER_NOT_FOUND_IN_DB" };
+      }
+
+      return { valid: true, user: { id: dbUser?.id || dbDev?.id || dbClient?.id, email: cleanEmail } };
+    }
+
+    return { valid: false, reason: "INVALID_CREDENTIALS" };
+  }
 }

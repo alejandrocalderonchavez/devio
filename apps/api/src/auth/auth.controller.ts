@@ -21,4 +21,10 @@ export class AuthController {
   async getSuperAdmins() {
     return this.authService.getSuperAdmins();
   }
+
+  @Post("validate")
+  @HttpCode(HttpStatus.OK)
+  async validateSession(@Body() body: { email?: string; token?: string }) {
+    return this.authService.validateSession(body);
+  }
 }

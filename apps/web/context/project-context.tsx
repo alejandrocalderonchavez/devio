@@ -296,6 +296,29 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadFromStorage();
 
+    // Verify session existence against database
+    const storedUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        if (parsed?.email) {
+          fetch("/api/auth/validate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: parsed.email }),
+          })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((resData) => {
+              if (resData && resData.valid === false) {
+                // User was deleted from DB / tables wiped!
+                logout();
+              }
+            })
+            .catch(() => {});
+        }
+      } catch (e) {}
+    }
+
     // Fetch live developer and projects data from Supabase / API
     fetch("/api/developers")
       .then((res) => (res.ok ? res.json() : null))
@@ -2316,6 +2339,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       sessionStorage.removeItem("devio_postventa_incidents");
       
       document.cookie = "devio_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0";
+      document.cookie = "devio_user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0";
       setProjects([]);
       setDeveloperName("");
       setDeveloperLogo("");
