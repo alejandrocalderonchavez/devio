@@ -337,12 +337,15 @@ export class ProjectsService {
   async update(id: string, body: any) {
     const {
       name,
+      legalName,
       description,
       googleMapsUrl,
       websiteUrl,
       totalSurfaceM2,
+      estimatedDeliveryDate,
       addressLine1,
       address,
+      neighborhood,
       coverFileName,
       coverImagePath,
       image,
@@ -362,12 +365,22 @@ export class ProjectsService {
     }
 
     const updateData: any = {};
-    if (name) updateData.name = name;
-    if (description !== undefined) updateData.description = description;
-    if (googleMapsUrl || addressLine1 || address) updateData.addressLine1 = googleMapsUrl || addressLine1 || address;
-    if (websiteUrl !== undefined) updateData.addressLine2 = websiteUrl;
-    if (totalSurfaceM2 !== undefined) updateData.postalCode = totalSurfaceM2 ? String(totalSurfaceM2) : null;
-    if (coverFileName || coverImagePath || image) updateData.coverImagePath = coverFileName || coverImagePath || image;
+    if (name) updateData.name = name.trim();
+    if (legalName !== undefined) updateData.code = legalName ? legalName.trim() : null;
+    if (description !== undefined) updateData.description = description ? description.trim() : null;
+    if (googleMapsUrl !== undefined || addressLine1 !== undefined || address !== undefined) {
+      updateData.addressLine1 = googleMapsUrl || addressLine1 || address || null;
+    }
+    if (websiteUrl !== undefined) updateData.addressLine2 = websiteUrl || null;
+    if (estimatedDeliveryDate !== undefined || neighborhood !== undefined) {
+      updateData.neighborhood = estimatedDeliveryDate || neighborhood || null;
+    }
+    if (totalSurfaceM2 !== undefined) {
+      updateData.postalCode = totalSurfaceM2 ? String(totalSurfaceM2) : null;
+    }
+    if (coverFileName || coverImagePath || image) {
+      updateData.coverImagePath = coverFileName || coverImagePath || image;
+    }
     if (logoUrl || logo || logoPath || logoFileName) {
       updateData.galleryPaths = [logoUrl || logo || logoPath || logoFileName];
     }

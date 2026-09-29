@@ -86,10 +86,10 @@ export default function EditProjectModal({
 
   // Sync initial project data
   useEffect(() => {
-    if (activeProject) {
+    if (activeProject && isOpen) {
       setProjectGeneralData({
         name: activeProject.name || "",
-        legalName: activeProject.legalName || "",
+        legalName: activeProject.legalName || activeProject.name || "",
         googleMapsUrl: activeProject.googleMapsUrl || "",
         description: activeProject.description || "",
         websiteUrl: activeProject.websiteUrl || "",
@@ -175,7 +175,7 @@ export default function EditProjectModal({
         setTeamMembers([]);
       }
     }
-  }, [activeProject]);
+  }, [activeProject, isOpen]);
 
   if (!isOpen) return null;
 
@@ -546,13 +546,24 @@ export default function EditProjectModal({
                       gap: "0.25rem",
                     }}
                   >
-                    <Upload size={18} style={{ color: "var(--devio-blue-matte)" }} />
-                    <p style={{ fontSize: "0.8rem", color: "var(--devio-neutral-4)", fontWeight: 700, margin: 0 }}>
-                      {logoFileName || "Click para subir logo (.PNG)"}
-                    </p>
-                    <span style={{ fontSize: "0.7rem", color: "var(--devio-neutral-3)" }}>
-                      Dimensiones: 400x400 px o proporción horizontal
-                    </span>
+                    {logoFileName ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <Upload size={16} style={{ color: "var(--devio-blue-matte)" }} />
+                        <span style={{ fontSize: "0.82rem", color: "var(--devio-blue-dark)", fontWeight: 700 }}>
+                          {logoFileName}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload size={18} style={{ color: "var(--devio-blue-matte)" }} />
+                        <p style={{ fontSize: "0.8rem", color: "var(--devio-neutral-4)", fontWeight: 700, margin: 0 }}>
+                          Click para subir logo (.PNG)
+                        </p>
+                        <span style={{ fontSize: "0.7rem", color: "var(--devio-neutral-3)" }}>
+                          Dimensiones: 400x400 px o proporción horizontal
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -577,7 +588,7 @@ export default function EditProjectModal({
                       overflow: "hidden",
                     }}
                   >
-                    {coverImageUrl ? (
+                    {coverImageUrl && (coverImageUrl.startsWith("http") || coverImageUrl.startsWith("data:") || coverImageUrl.startsWith("/")) ? (
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                         <img src={coverImageUrl} alt="portada" style={{ width: "45px", height: "30px", objectFit: "cover", borderRadius: "4px" }} />
                         <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
@@ -585,13 +596,12 @@ export default function EditProjectModal({
                         </span>
                       </div>
                     ) : (
-                      <>
-                        <Upload size={18} style={{ color: "var(--devio-blue-matte)" }} />
-                        <p style={{ fontSize: "0.8rem", color: "var(--devio-neutral-4)", fontWeight: 700, margin: 0 }}>
-                          Click para subir imagen del proyecto
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <Upload size={16} style={{ color: "var(--devio-blue-matte)" }} />
+                        <p style={{ fontSize: "0.8rem", color: "var(--devio-blue-dark)", fontWeight: 700, margin: 0 }}>
+                          {coverFileName || "Click para subir imagen del proyecto"}
                         </p>
-                        <span style={{ fontSize: "0.7rem", color: "var(--devio-neutral-3)" }}>JPG o PNG en alta resolución</span>
-                      </>
+                      </div>
                     )}
                   </div>
                 </div>
