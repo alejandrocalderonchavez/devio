@@ -1150,3 +1150,412 @@ export function openStatementInNewTab(data: StatementPDFData) {
   printWindow.document.close();
 }
 
+// -----------------------------------------------------------------------------
+// 4. REPORTE DE AVANCE DE OBRA PDF & PREVIEW
+// -----------------------------------------------------------------------------
+export interface ConstructionProgressPDFData {
+  folio?: string;
+  projectName: string;
+  projectType?: string;
+  developerName?: string;
+  developerLogoUrl?: string;
+  projectLogoUrl?: string;
+  projectCoverUrl?: string;
+  advanceTitle: string;
+  advanceDate: string;
+  description: string;
+  overallPercentage: number;
+  cimentacionPct?: number;
+  estructuraPct?: number;
+  instalacionesPct?: number;
+  acabadosPct?: number;
+  targetScope: "PROJECT" | "UNITS";
+  targetUnits?: string[];
+  photos?: Array<{ name: string; url: string }>;
+  estimatedDeliveryDate?: string;
+  totalUnits?: number;
+}
+
+export function getConstructionProgressHTML(data: ConstructionProgressPDFData): string {
+  const emissionDate = new Date().toLocaleDateString("es-MX", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const advanceDateStr = data.advanceDate
+    ? new Date(data.advanceDate + "T12:00:00").toLocaleDateString("es-MX", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : emissionDate;
+
+  const devLogo =
+    data.developerLogoUrl && (data.developerLogoUrl.startsWith("http") || data.developerLogoUrl.startsWith("data:"))
+      ? data.developerLogoUrl
+      : DEFAULT_DEV_LOGO;
+
+  const projLogo =
+    data.projectLogoUrl && (data.projectLogoUrl.startsWith("http") || data.projectLogoUrl.startsWith("data:"))
+      ? data.projectLogoUrl
+      : DEFAULT_PROJ_LOGO;
+
+  const coverImg =
+    data.projectCoverUrl && (data.projectCoverUrl.startsWith("http") || data.projectCoverUrl.startsWith("data:"))
+      ? data.projectCoverUrl
+      : data.photos?.[0]?.url || "https://images.unsplash.com/photo-1541888946425-d0fbb18f15f6?auto=format&fit=crop&w=600&q=80";
+
+  const folioStr = data.folio || `AV-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
+  const isUnitsScope = data.targetScope === "UNITS" && data.targetUnits && data.targetUnits.length > 0;
+  const photosList = (data.photos || []).slice(0, 6);
+
+  return `
+    <div id="avance-pdf-container" style="
+      width: 794px;
+      min-height: 1080px;
+      max-width: 794px;
+      overflow: hidden;
+      background: #ffffff;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-size: 10px;
+      color: #1F2937;
+      box-sizing: border-box;
+      position: relative;
+    ">
+      <!-- TOP GRADIENT BAND -->
+      <div style="height: 6px; background: linear-gradient(90deg, #1B3047 0%, #00C48C 50%, #2F80ED 100%); flex-shrink: 0;"></div>
+
+      <!-- HEADER WITH OFFICIAL LOGOS -->
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1.5px solid #E2E8F0; padding: 14px 24px; background: #FFFFFF; flex-shrink: 0; gap: 16px;">
+        <!-- Left Logo: Developer -->
+        <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0; max-width: 170px;">
+          <img src="${devLogo}" style="max-height: 44px; max-width: 150px; object-fit: contain;" crossorigin="anonymous" alt="${data.developerName || "Desarrollador"}" />
+        </div>
+
+        <!-- Center: Title & Main Info -->
+        <div style="flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+          <div style="font-size: 9px; font-weight: 800; color: #00C48C; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px;">
+            Reporte Oficial de Construcción
+          </div>
+          <div style="font-size: 18px; font-weight: 900; color: #1B3047; letter-spacing: -0.3px; line-height: 1.1;">
+            Bitácora de Avance de Obra
+          </div>
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 5px; flex-wrap: wrap;">
+            <span style="background: #F1F5F9; color: #1E293B; font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 4px; border: 1px solid #E2E8F0;">
+              Folio: <strong>${folioStr}</strong>
+            </span>
+            <span style="background: #ECFDF5; color: #047857; font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 4px; border: 1px solid #A7F3D0;">
+              Proyecto: <strong>${data.projectName}</strong>
+            </span>
+            <span style="font-size: 9px; color: #64748B; font-weight: 600;">
+              Fecha de Registro: ${advanceDateStr}
+            </span>
+          </div>
+        </div>
+
+        <!-- Right Logo: Project -->
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; max-width: 170px;">
+          <img src="${projLogo}" style="max-height: 44px; max-width: 150px; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" alt="${data.projectName}" />
+        </div>
+      </div>
+
+      <!-- MAIN CONTENT -->
+      <div style="padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; flex: 1;">
+        
+        <!-- HERO BANNER: OVERALL PROGRESS & SCOPE -->
+        <div style="display: grid; grid-template-columns: 240px 1fr; gap: 16px; background: #F8FAFC; border: 1.5px solid #E2E8F0; border-radius: 12px; padding: 16px; box-sizing: border-box;">
+          
+          <!-- Big Progress Meter -->
+          <div style="background: linear-gradient(135deg, #1F3652 0%, #162B3F 100%); border-radius: 10px; padding: 18px 14px; text-align: center; color: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(31,54,82,0.15);">
+            <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #00C48C; margin-bottom: 4px;">
+              Avance General Registrado
+            </div>
+            <div style="font-size: 42px; font-weight: 900; line-height: 1; letter-spacing: -1px; color: #FFFFFF; margin: 4px 0;">
+              ${data.overallPercentage}%
+            </div>
+            <div style="font-size: 9px; opacity: 0.85; margin-top: 4px;">
+              ${isUnitsScope ? "Promedio en Unidades Seleccionadas" : "Avance Global del Desarrollo"}
+            </div>
+          </div>
+
+          <!-- Project & Scope Meta Details -->
+          <div style="display: flex; flex-direction: column; justify-content: space-between; gap: 8px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <span style="font-size: 14px; font-weight: 800; color: #1B3047;">${data.advanceTitle}</span>
+                ${
+                  isUnitsScope
+                    ? `<span style="background: #FEF3C7; color: #92400E; font-size: 8px; font-weight: 800; padding: 2px 6px; border-radius: 4px; border: 1px solid #FCD34D;">Alcance por Unidad</span>`
+                    : `<span style="background: #EFF6FF; color: #1D4ED8; font-size: 8px; font-weight: 800; padding: 2px 6px; border-radius: 4px; border: 1px solid #BFDBFE;">Alcance Proyecto Completo</span>`
+                }
+              </div>
+              <p style="font-size: 9.5px; color: #475569; line-height: 1.45; margin: 0;">
+                ${data.description || "Actualización ejecutiva y fotográfica del avance constructivo correspondiente al período reportado."}
+              </p>
+            </div>
+
+            ${
+              isUnitsScope
+                ? `
+              <div style="background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 6px; padding: 8px 10px;">
+                <span style="font-size: 8.5px; font-weight: 800; color: #1F3652; text-transform: uppercase; display: block; margin-bottom: 3px;">
+                  Unidades Impactadas (${data.targetUnits?.length || 0}):
+                </span>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                  ${(data.targetUnits || [])
+                    .map(
+                      (u) =>
+                        `<span style="background: #F1F5F9; color: #0F172A; font-weight: 700; font-size: 8.5px; padding: 1px 5px; border-radius: 3px; border: 1px solid #E2E8F0;">${u}</span>`
+                    )
+                    .join("")}
+                </div>
+              </div>
+            `
+                : `
+              <div style="display: flex; gap: 12px; font-size: 9px; color: #64748B; background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 6px; padding: 6px 10px;">
+                <span>Tipología: <strong>${data.projectType || "Vertical"}</strong></span>
+                ${data.estimatedDeliveryDate ? `<span>Entrega Estimada: <strong>${data.estimatedDeliveryDate}</strong></span>` : ""}
+                ${data.totalUnits ? `<span>Total Unidades: <strong>${data.totalUnits}</strong></span>` : ""}
+              </div>
+            `
+            }
+          </div>
+        </div>
+
+        <!-- SPECIALTY BREAKDOWN PROGRESS BARS -->
+        <div style="background: #FFFFFF; border: 1.5px solid #E2E8F0; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-size: 10px; font-weight: 800; color: #1B3047; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+            <span>Desglose por Especialidad Constructiva</span>
+            <span style="font-size: 8.5px; color: #64748B; font-weight: 600;">Valores ponderados</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px;">
+            <!-- 1. Cimentación -->
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 9px; font-weight: 700; color: #334155; margin-bottom: 4px;">
+                <span>Cimentación y Trabajos Preliminares</span>
+                <span style="color: #00C48C; font-weight: 800;">${data.cimentacionPct ?? 0}%</span>
+              </div>
+              <div style="height: 7px; background: #E2E8F0; border-radius: 999px; overflow: hidden;">
+                <div style="height: 100%; width: ${Math.min(100, Math.max(0, data.cimentacionPct ?? 0))}%; background: #00C48C; border-radius: 999px;"></div>
+              </div>
+            </div>
+
+            <!-- 2. Estructura -->
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 9px; font-weight: 700; color: #334155; margin-bottom: 4px;">
+                <span>Estructura y Albañilería</span>
+                <span style="color: #2F80ED; font-weight: 800;">${data.estructuraPct ?? 0}%</span>
+              </div>
+              <div style="height: 7px; background: #E2E8F0; border-radius: 999px; overflow: hidden;">
+                <div style="height: 100%; width: ${Math.min(100, Math.max(0, data.estructuraPct ?? 0))}%; background: #2F80ED; border-radius: 999px;"></div>
+              </div>
+            </div>
+
+            <!-- 3. Instalaciones -->
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 9px; font-weight: 700; color: #334155; margin-bottom: 4px;">
+                <span>Instalaciones Hidráulicas / Eléctricas</span>
+                <span style="color: #F2994A; font-weight: 800;">${data.instalacionesPct ?? 0}%</span>
+              </div>
+              <div style="height: 7px; background: #E2E8F0; border-radius: 999px; overflow: hidden;">
+                <div style="height: 100%; width: ${Math.min(100, Math.max(0, data.instalacionesPct ?? 0))}%; background: #F2994A; border-radius: 999px;"></div>
+              </div>
+            </div>
+
+            <!-- 4. Acabados -->
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 9px; font-weight: 700; color: #334155; margin-bottom: 4px;">
+                <span>Acabados, Cancelería y Detalles</span>
+                <span style="color: #9B51E0; font-weight: 800;">${data.acabadosPct ?? 0}%</span>
+              </div>
+              <div style="height: 7px; background: #E2E8F0; border-radius: 999px; overflow: hidden;">
+                <div style="height: 100%; width: ${Math.min(100, Math.max(0, data.acabadosPct ?? 0))}%; background: #9B51E0; border-radius: 999px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PHOTOGRAPHIC EVIDENCE GALLERY -->
+        ${
+          photosList.length > 0
+            ? `
+          <div style="background: #FFFFFF; border: 1.5px solid #E2E8F0; border-radius: 12px; padding: 14px 16px;">
+            <div style="font-size: 10px; font-weight: 800; color: #1B3047; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">
+              Evidencia Fotográfica de Campo (${photosList.length} ${photosList.length === 1 ? "foto" : "fotos"})
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(${photosList.length === 1 ? 1 : photosList.length === 2 ? 2 : 3}, 1fr); gap: 10px;">
+              ${photosList
+                .map(
+                  (p, idx) => `
+                <div style="border: 1px solid #CBD5E1; border-radius: 8px; overflow: hidden; background: #F1F5F9; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                  <div style="height: 120px; overflow: hidden; background: #E2E8F0;">
+                    <img src="${p.url}" style="width: 100%; height: 100%; object-fit: cover;" crossorigin="anonymous" alt="${p.name}" />
+                  </div>
+                  <div style="padding: 4px 6px; font-size: 8px; font-weight: 700; color: #475569; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #FFFFFF;">
+                    ${p.name || `Evidencia ${idx + 1}`}
+                  </div>
+                </div>
+              `
+                )
+                .join("")}
+            </div>
+          </div>
+        `
+            : ""
+        }
+
+      </div>
+
+      <!-- FOOTER -->
+      <div style="border-top: 1.5px solid #E2E8F0; padding: 12px 24px; background: #FAFBFD; display: flex; justify-content: space-between; align-items: center; font-size: 8.5px; color: #64748B; margin-top: auto;">
+        <div>
+          Reporte generado automáticamente por <strong>Devio Real Estate Cloud</strong> • ${emissionDate}
+        </div>
+        <div>
+          Desarrollador: <strong>${data.developerName || "Desarrolladora Inmobiliaria"}</strong>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export async function generateConstructionProgressPDF(data: ConstructionProgressPDFData): Promise<{ success: boolean; base64?: string }> {
+  await loadPDFLibraries();
+
+  const html = getConstructionProgressHTML(data);
+  const tempDiv = document.createElement("div");
+  tempDiv.style.position = "fixed";
+  tempDiv.style.top = "-9999px";
+  tempDiv.style.left = "0";
+  tempDiv.style.width = "800px";
+  tempDiv.style.background = "#fff";
+  tempDiv.innerHTML = html;
+  document.body.appendChild(tempDiv);
+
+  try {
+    await waitForImagesToLoad(tempDiv);
+
+    const container = tempDiv.querySelector("#avance-pdf-container") as HTMLElement;
+    const safeProject = (data.projectName || "proyecto").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const safeDate = (data.advanceDate || "fecha").replace(/[^a-zA-Z0-9_-]/g, "_");
+
+    const opt = {
+      margin: 0,
+      filename: `Avance_Obra_${safeProject}_${safeDate}.pdf`,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        scrollY: 0,
+        width: 794,
+      },
+      jsPDF: { unit: "pt", format: "letter", orientation: "portrait" },
+    };
+
+    if (window.html2pdf) {
+      await window.html2pdf().set(opt).from(container).save();
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("Error generating construction progress PDF:", err);
+    return { success: false };
+  } finally {
+    tempDiv.remove();
+  }
+}
+
+export function openConstructionProgressInNewTab(data: ConstructionProgressPDFData): void {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return;
+
+  const html = getConstructionProgressHTML(data);
+  const fullDocument = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8" />
+      <title>Avance de Obra - ${data.projectName}</title>
+      <style>
+        body {
+          margin: 0;
+          padding: 20px;
+          background: #E2E8F0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .top-toolbar {
+          width: 794px;
+          max-width: 100%;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 15px;
+          background: #ffffff;
+          padding: 10px 20px;
+          border-radius: 8px;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+          box-sizing: border-box;
+        }
+        .action-btn {
+          padding: 8px 16px;
+          border-radius: 9999px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          border: none;
+        }
+        .btn-print {
+          background-color: #1F3652;
+          color: #ffffff;
+        }
+        .document-wrapper {
+          width: 794px;
+          max-width: 100%;
+          background: #ffffff;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        @media print {
+          body {
+            background: #ffffff;
+            padding: 0;
+          }
+          .top-toolbar {
+            display: none !important;
+          }
+          .document-wrapper {
+            box-shadow: none !important;
+            border-radius: 0 !important;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="top-toolbar">
+        <span style="font-size: 14px; font-weight: 700; color: #1F3652;">Reporte de Avance de Obra</span>
+        <button class="action-btn btn-print" onclick="window.print()">
+          Imprimir / Guardar PDF
+        </button>
+      </div>
+      <div class="document-wrapper">
+        ${html}
+      </div>
+    </body>
+    </html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(fullDocument);
+  printWindow.document.close();
+}
+

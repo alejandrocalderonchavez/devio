@@ -498,6 +498,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         u.client ||
         "-";
 
+      const customAttrs = (u.customAttributes as Record<string, any>) || {};
+      const unitConstructionPct =
+        u.constructionPct != null
+          ? Number(u.constructionPct)
+          : customAttrs.constructionPct != null
+          ? Number(customAttrs.constructionPct)
+          : undefined;
+
       return {
         id: u.id || `u-${idx + 1}`,
         unit: uNum,
@@ -521,6 +529,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         floorPlan: u.floorPlan || undefined,
         images: Array.isArray(u.renderUrls) ? u.renderUrls : Array.isArray(u.images) ? u.images : [],
         priceHistory: u.priceHistory || [],
+        constructionPct: unitConstructionPct,
       };
     });
 
@@ -640,13 +649,47 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    if (Array.isArray(dbProj.clientDocuments)) {
-      dbProj.clientDocuments.forEach((cd: any) => {
-        if (!mappedClientDocs.some((m) => m.id === cd.id || (m.title === cd.title && m.unit === cd.unit))) {
-          mappedClientDocs.push(cd);
-        }
-      });
-    }
+    const rawHistory = Array.isArray(dbProj.constructionProgress)
+      ? dbProj.constructionProgress
+      : Array.isArray(dbProj.constructionHistory)
+      ? dbProj.constructionHistory
+      : [];
+
+    const mappedConstructionHistory: ProjectConstructionAdvance[] = rawHistory.map((cp: any, hIdx: number) => {
+      const details = (cp.specialtyDetails as Record<string, any>) || {};
+      const photos = Array.isArray(cp.mediaUrls)
+        ? cp.mediaUrls.map((url: string, pIdx: number) => ({
+            name: `Foto ${pIdx + 1}`,
+            url,
+            size: "1.5 MB",
+          }))
+        : Array.isArray(cp.photos)
+        ? cp.photos
+        : [];
+
+      return {
+        id: cp.id || `adv-${hIdx + 1}`,
+        title: cp.title || `Avance de Obra - ${new Date(cp.progressDate || cp.createdAt || Date.now()).toLocaleDateString("es-MX")}`,
+        date: cp.progressDate ? new Date(cp.progressDate).toISOString().split("T")[0] : cp.date || new Date().toISOString().split("T")[0],
+        pct: Number(cp.overallPercentage ?? cp.pct ?? 0),
+        description: cp.description || "",
+        cimentacionPct: details.cimentacionPct != null ? Number(details.cimentacionPct) : cp.cimentacionPct,
+        estructuraPct: details.estructuraPct != null ? Number(details.estructuraPct) : cp.estructuraPct,
+        instalacionesPct: details.instalacionesPct != null ? Number(details.instalacionesPct) : cp.instalacionesPct,
+        acabadosPct: details.acabadosPct != null ? Number(details.acabadosPct) : cp.acabadosPct,
+        photos,
+        image: photos[0]?.url || cp.image || undefined,
+        targetScope: details.targetScope || cp.targetScope || "PROJECT",
+        targetUnits: Array.isArray(details.targetUnits) ? details.targetUnits : cp.targetUnits,
+        emailSent: cp.emailSent ?? true,
+        createdAt: cp.createdAt ? new Date(cp.createdAt).toISOString() : new Date().toISOString(),
+      };
+    });
+
+    const latestProgressPct =
+      mappedConstructionHistory.length > 0 && mappedConstructionHistory[0]
+        ? mappedConstructionHistory[0].pct
+        : Number(dbProj.progressPct) || 0;
 
     return {
       id: dbProj.id,
@@ -654,7 +697,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       type: dbProj.projectType || dbProj.type || "VERTICAL",
       currency: dbProj.baseCurrency || dbProj.currency || "MXN",
       image,
-      progressPct: Number(dbProj.progressPct) || 0,
+      progressPct: latestProgressPct,
       totalUnits,
       soldUnits,
       availableUnits,
@@ -693,6 +736,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       documents: mappedDocuments,
       clientDocuments: mappedClientDocs,
       paymentPlans: dbProj.paymentPlans || [],
+      constructionHistory: mappedConstructionHistory,
       team: dbProj.team || [],
     };
   };
@@ -2513,13 +2557,19 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         projectId,
-        title: `Avance de Obra - ${advanceData.date}`,
+        title: advanceData.title || `Avance de Obra - ${advanceData.date}`,
+        description: advanceData.description || "",
+        progressDate: advanceData.date,
         overallPercentage: advanceData.pct,
+        targetScope: advanceData.targetScope,
+        targetUnits: advanceData.targetUnits,
         specialtyDetails: {
           cimentacionPct: advanceData.cimentacionPct,
           estructuraPct: advanceData.estructuraPct,
           instalacionesPct: advanceData.instalacionesPct,
           acabadosPct: advanceData.acabadosPct,
+          targetScope: advanceData.targetScope,
+          targetUnits: advanceData.targetUnits,
         },
         mediaUrls: advanceData.photos?.map((p) => p.url) || (advanceData.image ? [advanceData.image] : []),
       }),

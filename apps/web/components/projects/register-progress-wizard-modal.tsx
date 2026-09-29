@@ -18,10 +18,18 @@ import {
   Search,
   Filter,
   Users,
+  Download,
+  Eye,
 } from "lucide-react";
 import { DevioDatePicker } from "../ui/devio-date-picker";
 import { ProjectItem, ProjectConstructionAdvance } from "../../data/projects-data";
 import { useProject } from "../../context/project-context";
+import { sendAndLogNotification } from "../../lib/notifications";
+import {
+  generateConstructionProgressPDF,
+  openConstructionProgressInNewTab,
+  ConstructionProgressPDFData,
+} from "../../lib/pdf-generator";
 
 export interface RegisterProgressWizardModalProps {
   isOpen: boolean;
@@ -40,7 +48,7 @@ export default function RegisterProgressWizardModal({
   currentProgressPct = 0,
   onProgressSaved,
 }: RegisterProgressWizardModalProps) {
-  const { registerConstructionProgress, getProject } = useProject();
+  const { registerConstructionProgress, getProject, developerName, developerLogo } = useProject();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
 
@@ -55,6 +63,8 @@ export default function RegisterProgressWizardModal({
   const [showHistory, setShowHistory] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState<boolean>(false);
+  const [savedPDFData, setSavedPDFData] = useState<ConstructionProgressPDFData | null>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState<boolean>(false);
 
   // Form states - Step 1: Bitácora & Alcance
   const [targetScope, setTargetScope] = useState<"PROJECT" | "UNITS">("PROJECT");
@@ -180,8 +190,114 @@ export default function RegisterProgressWizardModal({
       createdAt: new Date().toISOString(),
     };
 
+    // Prepare PDF Data
+    const pdfData: ConstructionProgressPDFData = {
+      folio: `AV-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+      projectName: targetProjectName,
+      projectType: activeProject?.type || "Vertical",
+      developerName: developerName || "Desarrolladora Inmobiliaria",
+      developerLogoUrl: developerLogo || "",
+      projectLogoUrl: activeProject?.logoUrl || activeProject?.logo || "",
+      projectCoverUrl: activeProject?.image || photos[0]?.url || "",
+      advanceTitle: title.trim(),
+      advanceDate: String(date || new Date().toISOString().split("T")[0]),
+      description: description.trim() || `Avance de obra registrado al ${overallPct}%.`,
+      overallPercentage: overallPct,
+      cimentacionPct,
+      estructuraPct,
+      instalacionesPct,
+      acabadosPct,
+      targetScope,
+      targetUnits: targetScope === "UNITS" ? selectedUnitNumbers : undefined,
+      photos: photos.map((p) => ({ name: p.name, url: p.url })),
+      estimatedDeliveryDate: activeProject?.estimatedDeliveryDate,
+      totalUnits: activeProject?.totalUnits || unitsInventory.length,
+    };
+    setSavedPDFData(pdfData);
+
     // Persist in Project Context
     registerConstructionProgress(targetProjectId, newAdvance);
+
+    // Send notifications to clients if checked
+    if (sendEmailToClients) {
+      const recipientsMap = new Map<string, string>(); // email -> name
+      const sales = activeProject?.sales || [];
+      const units = activeProject?.unitsInventory || [];
+
+      if (targetScope === "UNITS") {
+        const targetSet = new Set(selectedUnitNumbers.map((u) => u.toLowerCase().trim()));
+        sales.forEach((s) => {
+          if (s.unit && targetSet.has(s.unit.toLowerCase().trim())) {
+            if (s.clientEmail && s.clientEmail.includes("@")) {
+              recipientsMap.set(s.clientEmail.toLowerCase().trim(), s.clientName || "Propietario");
+            }
+            s.coOwners?.forEach((co) => {
+              if (co.email && co.email.includes("@")) {
+                recipientsMap.set(co.email.toLowerCase().trim(), co.name || s.clientName || "Co-propietario");
+              }
+            });
+          }
+        });
+        units.forEach((u) => {
+          if (targetSet.has(u.unit.toLowerCase().trim())) {
+            u.coOwners?.forEach((co) => {
+              if (co.email && co.email.includes("@")) {
+                recipientsMap.set(co.email.toLowerCase().trim(), co.name || u.client || "Propietario");
+              }
+            });
+          }
+        });
+      } else {
+        sales.forEach((s) => {
+          if (s.clientEmail && s.clientEmail.includes("@")) {
+            recipientsMap.set(s.clientEmail.toLowerCase().trim(), s.clientName || "Propietario");
+          }
+          s.coOwners?.forEach((co) => {
+            if (co.email && co.email.includes("@")) {
+              recipientsMap.set(co.email.toLowerCase().trim(), co.name || s.clientName || "Co-propietario");
+            }
+          });
+        });
+        units.forEach((u) => {
+          u.coOwners?.forEach((co) => {
+            if (co.email && co.email.includes("@")) {
+              recipientsMap.set(co.email.toLowerCase().trim(), co.name || u.client || "Propietario");
+            }
+          });
+        });
+      }
+
+      recipientsMap.forEach((recipientName, recipientEmail) => {
+        sendAndLogNotification({
+          to: recipientEmail,
+          recipientName,
+          developerName: developerName || "Desarrolladora Inmobiliaria",
+          triggerKey: "obra.progress_report",
+          triggerName: "Avance de Obra",
+          templateAlias: "avance-proyecto",
+          templateModel: {
+            nombre: recipientName,
+            correo: recipientEmail,
+            proyecto: targetProjectName,
+            titulo_avance: title.trim(),
+            fecha_avance: date,
+            descripcion_avance: description.trim() || `Avance de obra registrado al ${overallPct}%.`,
+            porcentaje_general: overallPct,
+            pct_cimentacion: cimentacionPct,
+            pct_estructura: estructuraPct,
+            pct_instalaciones: instalacionesPct,
+            pct_acabados: acabadosPct,
+            foto_1: photos[0]?.url || "",
+            foto_2: photos[1]?.url || "",
+            foto_3: photos[2]?.url || "",
+            login_link: typeof window !== "undefined" ? window.location.origin : "https://deviomx.com",
+            logo_proyecto: activeProject?.logoUrl || activeProject?.logo || "",
+            logo_desarrolladora: developerLogo || "",
+            año: new Date().getFullYear().toString(),
+          },
+        }).catch((err) => console.warn("Error sending progress email to client:", err));
+      });
+    }
 
     if (onProgressSaved) {
       onProgressSaved(newAdvance);
@@ -1271,32 +1387,95 @@ export default function RegisterProgressWizardModal({
             <h3 style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.3rem" }}>
               ¡Avance Publicado con Éxito!
             </h3>
-            <p style={{ fontSize: "0.85rem", color: "var(--devio-neutral-3)", marginBottom: "1.25rem" }}>
+            <p style={{ fontSize: "0.85rem", color: "var(--devio-neutral-3)", marginBottom: "1.5rem" }}>
               El avance de obra se ha registrado al <strong>{overallPct}%</strong>{" "}
               {targetScope === "UNITS"
                 ? `para las ${selectedUnitNumbers.length} unidades seleccionadas.`
                 : "para todo el desarrollo."}
+              {sendEmailToClients && " Las notificaciones fueron enviadas a los compradores."}
             </p>
 
-            <button
-              type="button"
-              onClick={() => {
-                setIsSuccessModalOpen(false);
-                onClose();
-              }}
-              style={{
-                padding: "0.65rem 1.75rem",
-                borderRadius: "9999px",
-                backgroundColor: "var(--devio-blue-dark)",
-                color: "var(--devio-white)",
-                fontSize: "0.875rem",
-                fontWeight: 700,
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              Aceptar y Volver
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
+                <button
+                  type="button"
+                  disabled={isGeneratingPDF}
+                  onClick={async () => {
+                    if (!savedPDFData) return;
+                    setIsGeneratingPDF(true);
+                    try {
+                      await generateConstructionProgressPDF(savedPDFData);
+                    } catch (e) {
+                      console.error("Error generating PDF:", e);
+                    } finally {
+                      setIsGeneratingPDF(false);
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.5rem",
+                    padding: "0.75rem 1.25rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "var(--devio-green)",
+                    color: "#ffffff",
+                    fontSize: "0.85rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: isGeneratingPDF ? "not-allowed" : "pointer",
+                    boxShadow: "0 4px 14px rgba(0, 196, 140, 0.3)",
+                  }}
+                >
+                  <Download size={16} /> {isGeneratingPDF ? "Generando..." : "Descargar Reporte PDF"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (savedPDFData) {
+                      openConstructionProgressInNewTab(savedPDFData);
+                    }
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.5rem",
+                    padding: "0.75rem 1.25rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "rgba(31, 54, 82, 0.08)",
+                    color: "var(--devio-blue-dark)",
+                    fontSize: "0.85rem",
+                    fontWeight: 700,
+                    border: "1px solid rgba(31, 54, 82, 0.15)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Eye size={16} /> Ver en Pestaña
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSuccessModalOpen(false);
+                  onClose();
+                }}
+                style={{
+                  padding: "0.65rem 1.75rem",
+                  borderRadius: "9999px",
+                  backgroundColor: "var(--devio-blue-dark)",
+                  color: "var(--devio-white)",
+                  fontSize: "0.875rem",
+                  fontWeight: 700,
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Aceptar y Volver
+              </button>
+            </div>
           </div>
         </div>
       )}
