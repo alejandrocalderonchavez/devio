@@ -272,6 +272,7 @@ export interface SaleRecord {
   paidAmount: number;
   pendingAmount: number;
   saleDate: string; // ISO or DD/MM/YY
+  isCoOwnership?: boolean;
   coOwners?: CoOwner[];
   additionals?: ProjectAdditional[];
   schedule?: SaleScheduleInstallment[];

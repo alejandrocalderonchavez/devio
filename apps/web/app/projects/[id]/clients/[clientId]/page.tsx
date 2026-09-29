@@ -243,15 +243,25 @@ export default function ClientDetailPage() {
 
       const ownedUnits: ClientOwnedUnit[] = matchingSales.map((s) => {
         const uObj = soldUnitsMap.get(s.unit);
-        const coMatch = s.coOwners?.find((co) => co.name.toLowerCase() === clientName.toLowerCase());
-        const ownershipPct = coMatch ? coMatch.ownershipPct : (s.coOwners && s.coOwners.length > 0 ? (s.coOwners[0]?.ownershipPct || 100) : 100);
+        const coMatch = s.coOwners?.find(
+          (co) =>
+            co.name.toLowerCase() === clientName.toLowerCase() ||
+            (co.email && clientEmail && co.email.toLowerCase() === clientEmail.toLowerCase())
+        );
+        const hasActualCoOwners = Boolean(
+          s.isCoOwnership === true ||
+          (Array.isArray(s.coOwners) && s.coOwners.length > 0 && (s as any).isCoOwnership !== false)
+        );
+        const ownershipPct = hasActualCoOwners
+          ? (coMatch ? Number(coMatch.ownershipPct) : (s.coOwners && s.coOwners.length > 0 ? (Number(s.coOwners[0]?.ownershipPct) || 100) : 100))
+          : 100;
         return {
           unit: s.unit,
           type: uObj?.type || "Departamento",
           price: s.totalPrice,
-          ownershipPct,
-          isPrimary: coMatch ? coMatch.isPrimary : true,
-          coOwners: s.coOwners,
+          ownershipPct: isNaN(ownershipPct) || ownershipPct <= 0 ? 100 : ownershipPct,
+          isPrimary: coMatch ? Boolean(coMatch.isPrimary) : true,
+          coOwners: hasActualCoOwners ? s.coOwners : [],
           additionals: (project.additionals || []).filter((a) => a.assignedToUnit === s.unit),
         };
       });
@@ -458,8 +468,21 @@ export default function ClientDetailPage() {
     );
   }, [rawClient, selectedUnit, currentSale]);
 
+  const formatPaymentMethodFriendly = (method?: string): string => {
+    if (!method) return "Transferencia SPEI";
+    const m = String(method).toUpperCase().trim();
+    if (m === "TRANSFER" || m === "TRANSFERENCIA" || m === "SPEI" || m === "TRANSFERENCIA SPEI" || m === "SPEI INTERBANCARIO") {
+      return "Transferencia SPEI";
+    }
+    if (m === "CHECK" || m === "CHEQUE") return "Cheque";
+    if (m === "CARD" || m === "TARJETA" || m === "CREDIT_CARD" || m === "DEBIT_CARD") return "Tarjeta";
+    if (m === "CASH" || m === "EFECTIVO") return "Efectivo";
+    if (m === "DIRECT_DEBIT" || m === "DOMICILIACION") return "Domiciliación";
+    return method;
+  };
+
   const isCoOwned = Boolean(
-    (currentUnitObj?.coOwners && currentUnitObj.coOwners.length > 1) ||
+    ((currentSale?.isCoOwnership === true) || (currentUnitObj?.coOwners && currentUnitObj.coOwners.length > 0)) &&
     (currentUnitObj?.ownershipPct !== undefined && currentUnitObj.ownershipPct < 100)
   );
   const clientShareRatio = (isCoOwned && coOwnershipViewMode === "proportional")
@@ -472,7 +495,7 @@ export default function ClientDetailPage() {
       return currentSale.payments.map((p: any) => ({
         id: p.id,
         fechaPago: p.paymentDate || p.fechaPago || "",
-        metodoPago: p.paymentMethod || p.metodoPago || "Transferencia SPEI",
+        metodoPago: formatPaymentMethodFriendly(p.paymentMethod || p.metodoPago),
         monto: Number(p.amount ?? p.monto) || 0,
         unit: selectedUnit,
         reciboFolio: p.receiptFolio || p.reciboFolio || "",
@@ -1144,7 +1167,8 @@ export default function ClientDetailPage() {
       amount: Number(editPaymentForm.monto),
       paymentDate: editPaymentForm.fechaPago,
       paymentMethod: editPaymentForm.metodoPago,
-      notes: editPaymentForm.notes,
+      receiptFolio: editPaymentForm.reciboFolio,
+      notes: editPaymentForm.notes || editPaymentForm.editReason,
     });
 
     setShowEditPaymentModal(false);
@@ -1742,8 +1766,8 @@ export default function ClientDetailPage() {
           </button>
         </div>
 
-        {/* CONTENIDO PRINCIPAL: VISTA ESTADO DE CUENTA vs VISTA PAGOS */}
-        {activeTab === "statement" ? (
+        {/* CONTENIDO PRINCIPAL: VISTA ESTADO DE CUENTA vs VISTA PAGOS vs COTIZACIONES */}
+        {activeTab === "statement" && (
           /* ============================================================== */
           /* PESTAÑA 1: ESTADO DE CUENTA (CON ORDENAMIENTO POR COLUMNA)     */
           /* ============================================================== */
@@ -2248,7 +2272,9 @@ export default function ClientDetailPage() {
               </table>
             </div>
           </div>
-        ) : (
+        )}
+
+        {activeTab === "payments" && (
           /* ============================================================== */
           /* PESTAÑA 2: PAGOS RECIBIDOS CON EDICIÓN Y COMPROBANTES          */
           /* ============================================================== */
@@ -3757,9 +3783,11 @@ export default function ClientDetailPage() {
                         fontWeight: 600,
                       }}
                     >
+                      <option value="Transferencia SPEI">Transferencia SPEI</option>
                       <option value="Transferencia">Transferencia</option>
                       <option value="SPEI">SPEI Interbancario</option>
                       <option value="Cheque">Cheque</option>
+                      <option value="Tarjeta">Tarjeta</option>
                       <option value="Efectivo">Efectivo</option>
                     </select>
                   </div>

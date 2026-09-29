@@ -634,7 +634,8 @@ export default function ProjectPaymentsPage() {
       amount: Number(editAbonoForm.monto),
       paymentDate: editAbonoForm.fechaPago,
       paymentMethod: editAbonoForm.metodoPago,
-      notes: editAbonoForm.notes,
+      receiptFolio: editAbonoForm.reciboFolio,
+      notes: editAbonoForm.notes || editAbonoForm.editReason,
     });
 
     setShowEditAbonoModal(false);
@@ -2323,9 +2324,11 @@ export default function ProjectPaymentsPage() {
                         fontWeight: 600,
                       }}
                     >
+                      <option value="Transferencia SPEI">Transferencia SPEI</option>
                       <option value="Transferencia">Transferencia</option>
                       <option value="SPEI">SPEI Interbancario</option>
                       <option value="Cheque">Cheque</option>
+                      <option value="Tarjeta">Tarjeta</option>
                       <option value="Efectivo">Efectivo</option>
                     </select>
                   </div>

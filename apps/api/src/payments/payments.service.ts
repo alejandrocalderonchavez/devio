@@ -66,20 +66,7 @@ export class PaymentsService {
     }
 
     // 2. Map Payment Method Enum
-    const rawMethod = String(paymentMethod || "TRANSFER").toUpperCase();
-    let validMethod: "TRANSFER" | "CHECK" | "CARD" | "CASH" | "DIRECT_DEBIT" | "OTHER" = "TRANSFER";
-    if (["TRANSFER", "SPEI", "TRANSFERENCIA"].includes(rawMethod)) {
-      validMethod = "TRANSFER";
-    } else if (["CHECK", "CHEQUE"].includes(rawMethod)) {
-      validMethod = "CHECK";
-    } else if (["CARD", "TARJETA"].includes(rawMethod)) {
-      validMethod = "CARD";
-    } else if (["CASH", "EFECTIVO"].includes(rawMethod)) {
-      validMethod = "CASH";
-    } else {
-      validMethod = "OTHER";
-    }
-
+    const validMethod = this.mapPaymentMethod(paymentMethod);
     const receiptFolio = reference || `REC-${Date.now().toString().slice(-6)}`;
     const parsedDate = paymentDate ? new Date(paymentDate) : new Date();
 
@@ -99,49 +86,8 @@ export class PaymentsService {
       },
     });
 
-    // 4. Allocate payment amount to pending obligations
-    let remaining = payAmount;
-    const allocations: any[] = [];
-
-    for (const ob of sale.scheduledObligations) {
-      if (remaining <= 0) break;
-
-      const paidSoFarRes = await this.prisma.paymentAllocation.aggregate({
-        where: { obligationId: ob.id },
-        _sum: { amountApplied: true },
-      });
-      const paidSoFar = Number(paidSoFarRes._sum?.amountApplied || 0);
-      const obTotal = Number(ob.originalAmount);
-      const pendingForOb = Math.max(0, obTotal - paidSoFar);
-
-      if (pendingForOb <= 0) continue;
-
-      const allocateThis = Math.min(remaining, pendingForOb);
-      const allocation = await this.prisma.paymentAllocation.create({
-        data: {
-          paymentReceiptId: receipt.id,
-          obligationId: ob.id,
-          amountApplied: allocateThis,
-          amountToPrincipal: allocateThis,
-          amountToInterest: 0,
-        },
-      });
-
-      allocations.push(allocation);
-      remaining -= allocateThis;
-
-      // Update obligation status
-      const newPaidTotal = paidSoFar + allocateThis;
-      const newStatus = newPaidTotal >= obTotal ? "PAID" : "PARTIALLY_PAID";
-      await this.prisma.scheduledObligation.update({
-        where: { id: ob.id },
-        data: {
-          status: newStatus,
-          paidAmount: newPaidTotal,
-          pendingAmount: Math.max(0, obTotal - newPaidTotal),
-        },
-      });
-    }
+    // 4. Recalculate all allocations for this sale
+    await this.recalculateSaleObligations(sale.id);
 
     return {
       success: true,
@@ -152,11 +98,179 @@ export class PaymentsService {
         paymentDate: receipt.paymentDate,
         paymentMethod: receipt.paymentMethod,
         saleId: sale.id,
-        clientName: sale.primaryClient.fullName,
+        clientName: sale.primaryClient?.fullName || "Cliente",
       },
-      allocationsCount: allocations.length,
-      remainingUnallocated: remaining,
     };
+  }
+
+  async update(id: string, body: any) {
+    const receipt = await this.prisma.paymentReceipt.findUnique({
+      where: { id },
+      include: { sale: true },
+    });
+
+    if (!receipt) {
+      throw new NotFoundException(`Recibo de pago con id ${id} no encontrado.`);
+    }
+
+    const dataToUpdate: any = {};
+    if (body.amount !== undefined) {
+      const amt = Number(body.amount);
+      if (amt <= 0) throw new BadRequestException("El monto debe ser mayor a 0.");
+      dataToUpdate.amount = amt;
+      dataToUpdate.equivalentAmountInSaleCurrency = amt;
+    }
+    if (body.paymentDate !== undefined) {
+      const parsed = new Date(body.paymentDate);
+      if (!isNaN(parsed.getTime())) {
+        dataToUpdate.paymentDate = parsed;
+      }
+    }
+    if (body.paymentMethod !== undefined) {
+      dataToUpdate.paymentMethod = this.mapPaymentMethod(body.paymentMethod);
+    }
+    if (body.receiptFolio !== undefined) {
+      dataToUpdate.receiptFolio = String(body.receiptFolio).trim();
+    }
+    if (body.reference !== undefined || body.transactionReference !== undefined) {
+      dataToUpdate.transactionReference = String(body.reference || body.transactionReference).trim();
+    }
+    if (body.notes !== undefined) {
+      dataToUpdate.notes = String(body.notes);
+    }
+
+    const updated = await this.prisma.paymentReceipt.update({
+      where: { id },
+      data: dataToUpdate,
+    });
+
+    // Recalculate allocations for the sale
+    await this.recalculateSaleObligations(receipt.saleId);
+
+    return {
+      success: true,
+      receipt: updated,
+    };
+  }
+
+  async remove(id: string) {
+    const receipt = await this.prisma.paymentReceipt.findUnique({
+      where: { id },
+    });
+
+    if (!receipt) {
+      return { success: true, message: "Recibo ya eliminado o no encontrado." };
+    }
+
+    const saleId = receipt.saleId;
+
+    // Delete allocations first
+    await this.prisma.paymentAllocation.deleteMany({
+      where: { paymentReceiptId: id },
+    });
+
+    // Delete receipt
+    await this.prisma.paymentReceipt.delete({
+      where: { id },
+    });
+
+    // Recalculate obligations for this sale
+    await this.recalculateSaleObligations(saleId);
+
+    return { success: true, message: `Recibo ${id} eliminado con éxito.` };
+  }
+
+  public mapPaymentMethod(paymentMethod?: string): "TRANSFER" | "CHECK" | "CARD" | "CASH" | "DIRECT_DEBIT" | "OTHER" {
+    const rawMethod = String(paymentMethod || "TRANSFER").toUpperCase().trim();
+    if (["TRANSFER", "SPEI", "TRANSFERENCIA", "TRANSFERENCIA SPEI", "SPEI INTERBANCARIO"].some((m) => rawMethod.includes(m) || m.includes(rawMethod))) {
+      return "TRANSFER";
+    }
+    if (["CHECK", "CHEQUE"].some((m) => rawMethod.includes(m))) {
+      return "CHECK";
+    }
+    if (["CARD", "TARJETA", "CREDIT_CARD", "DEBIT_CARD"].some((m) => rawMethod.includes(m))) {
+      return "CARD";
+    }
+    if (["CASH", "EFECTIVO"].some((m) => rawMethod.includes(m))) {
+      return "CASH";
+    }
+    if (["DIRECT_DEBIT", "DOMICILIACION"].some((m) => rawMethod.includes(m))) {
+      return "DIRECT_DEBIT";
+    }
+    return "OTHER";
+  }
+
+  public async recalculateSaleObligations(saleId: string) {
+    // 1. Fetch obligations ordered by obligationNumber
+    const obligations = await this.prisma.scheduledObligation.findMany({
+      where: { saleId },
+      orderBy: { obligationNumber: "asc" },
+    });
+
+    if (obligations.length === 0) return;
+
+    // 2. Fetch all receipts for this sale ordered by paymentDate asc
+    const receipts = await this.prisma.paymentReceipt.findMany({
+      where: { saleId },
+      orderBy: { paymentDate: "asc" },
+    });
+
+    // 3. Clear existing allocations for all obligations of this sale
+    const obligationIds = obligations.map((o) => o.id);
+    await this.prisma.paymentAllocation.deleteMany({
+      where: { obligationId: { in: obligationIds } },
+    });
+
+    // 4. Track remaining balances
+    const obBalances = obligations.map((ob) => ({
+      id: ob.id,
+      originalAmount: Number(ob.originalAmount),
+      paidAmount: 0,
+      dueDate: ob.dueDate,
+    }));
+
+    // 5. Allocate each receipt in chronological order
+    for (const rec of receipts) {
+      let receiptRemaining = Number(rec.amount);
+
+      for (const ob of obBalances) {
+        if (receiptRemaining <= 0) break;
+        const pendingForOb = Math.max(0, ob.originalAmount - ob.paidAmount);
+        if (pendingForOb <= 0) continue;
+
+        const alloc = Math.min(receiptRemaining, pendingForOb);
+        await this.prisma.paymentAllocation.create({
+          data: {
+            paymentReceiptId: rec.id,
+            obligationId: ob.id,
+            amountApplied: alloc,
+            amountToPrincipal: alloc,
+            amountToInterest: 0,
+          },
+        });
+
+        ob.paidAmount += alloc;
+        receiptRemaining -= alloc;
+      }
+    }
+
+    // 6. Update all obligations in DB
+    const now = new Date();
+    for (const ob of obBalances) {
+      const isPaid = ob.paidAmount >= ob.originalAmount && ob.originalAmount > 0;
+      const isOverdue = Boolean(ob.dueDate && new Date(ob.dueDate) < now && ob.paidAmount < ob.originalAmount);
+      const newStatus = isPaid ? "PAID" : isOverdue ? "OVERDUE" : ob.paidAmount > 0 ? "PARTIALLY_PAID" : "PENDING";
+      const pendingAmount = Math.max(0, ob.originalAmount - ob.paidAmount);
+
+      await this.prisma.scheduledObligation.update({
+        where: { id: ob.id },
+        data: {
+          paidAmount: ob.paidAmount,
+          pendingAmount,
+          status: newStatus as any,
+        },
+      });
+    }
   }
 
   async findAll(saleId?: string) {

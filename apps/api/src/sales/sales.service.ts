@@ -178,11 +178,15 @@ export class SalesService {
     });
 
     // 6. Handle Co-owners
-    if (Array.isArray(coOwners) && coOwners.length > 0) {
+    const isCoOp = body.isCoOwnership === true || (Array.isArray(coOwners) && coOwners.length > 0 && body.isCoOwnership !== false);
+    if (isCoOp && Array.isArray(coOwners) && coOwners.length > 0) {
       for (const co of coOwners) {
         if (!co.email && !co.name) continue;
         const coEmail = (co.email || "").toLowerCase().trim();
         const coName = (co.name || "Co-propietario").trim();
+
+        // If this coOwner is the primary client, do not duplicate as a separate coOwner record
+        if ((primaryEmail && coEmail === primaryEmail.toLowerCase()) || (primaryClient && coEmail && primaryClient.email?.toLowerCase() === coEmail)) continue;
 
         let coUser = null;
         if (coEmail) {
@@ -220,11 +224,13 @@ export class SalesService {
           });
         }
 
+        const pct = Number(co.percentage ?? co.ownershipPct ?? co.ownershipPercentage ?? (100 / (coOwners.length + 1)));
+
         await this.prisma.saleCoOwner.create({
           data: {
             saleId: sale.id,
             clientId: coClient.id,
-            ownershipPercentage: Number(co.percentage || (100 / (coOwners.length + 1))),
+            ownershipPercentage: pct,
           },
         });
       }

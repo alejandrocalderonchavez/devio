@@ -1135,7 +1135,13 @@ export default function CreateSaleWizardModal({
           rfc: primaryClient.rfc,
         },
         isCoOwnership,
-        coOwners: finalCoOwners,
+        coOwners: isCoOwnership
+          ? coOwnersList.map((co) => ({
+              ...co,
+              percentage: Number(co.ownershipPct),
+              ownershipPercentage: Number(co.ownershipPct),
+            }))
+          : [],
         project: {
           id: targetProjId,
           name: currentProject?.name || "Proyecto",

@@ -287,14 +287,29 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const primaryClientRfc =
         s.primaryClient?.taxId || s.clientRfc || s.client?.rfc || "";
 
+      const cleanPrimEmail = primaryClientEmail.toLowerCase().trim();
+      const cleanPrimName = primaryClientName.toLowerCase().trim();
+      const primaryClientId = s.primaryClientId || s.clientId;
+
       const mappedCoOwners: CoOwner[] = Array.isArray(s.coOwners)
-        ? s.coOwners.map((c: any) => ({
-            name: c.client?.fullName || c.name || "Co-propietario",
-            email: c.client?.email || c.email || "",
-            phone: c.client?.phone || c.phone || "",
-            rfc: c.client?.taxId || c.rfc || "",
-            ownershipPct: Number(c.ownershipPercentage ?? c.ownershipPct ?? 50),
-          }))
+        ? s.coOwners
+            .filter((c: any) => {
+              const cEmail = (c.client?.email || c.email || "").toLowerCase().trim();
+              const cName = (c.client?.fullName || c.name || "").toLowerCase().trim();
+              const cId = c.clientId || c.client?.id || c.id;
+              if (primaryClientId && cId && cId === primaryClientId) return false;
+              if (cleanPrimEmail && cEmail && cEmail === cleanPrimEmail) return false;
+              if (cleanPrimName && cName && cName === cleanPrimName) return false;
+              return true;
+            })
+            .map((c: any) => ({
+              id: c.clientId || c.client?.id || c.id,
+              name: c.client?.fullName || c.name || "Co-propietario",
+              email: c.client?.email || c.email || "",
+              phone: c.client?.phone || c.phone || "",
+              rfc: c.client?.taxId || c.rfc || "",
+              ownershipPct: Number(c.ownershipPercentage ?? c.ownershipPct ?? 50),
+            }))
         : [];
 
       const rawReceipts = Array.isArray(s.paymentReceipts)
@@ -428,6 +443,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         paidAmount: totalPaid,
         pendingAmount: totalPending,
         saleDate: saleDateIso,
+        isCoOwnership: Boolean(s.isCoOwnership || (mappedCoOwners.length > 0)),
         coOwners: mappedCoOwners,
         additionals: matchingAddons.length > 0 ? matchingAddons : Array.isArray(s.additionals) ? s.additionals : [],
         schedule: mappedSchedule,
@@ -2214,6 +2230,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
     saveProjects(updated);
     showToast("Pago Actualizado", "Se guardaron los cambios del pago y se recalcularon las cuotas.");
+
+    // Persist payment update to backend/Supabase
+    fetch(`/api/payments/${encodeURIComponent(paymentId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...updatedFields,
+        paymentId,
+      }),
+    }).catch((err) => console.warn("Could not sync payment update with backend:", err));
   };
 
   const deleteSalePayment = (projectId: string, unitNumber: string, paymentId: string) => {
@@ -2288,6 +2314,11 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
     saveProjects(updated);
     showToast("Pago Eliminado", "Se revirtió el registro de pago y se recalcularon las cuotas.");
+
+    // Persist payment deletion to backend/Supabase
+    fetch(`/api/payments/${encodeURIComponent(paymentId)}`, {
+      method: "DELETE",
+    }).catch((err) => console.warn("Could not delete payment from backend:", err));
   };
 
   const unsellUnit = (projectId: string, unitNumber: string) => {
