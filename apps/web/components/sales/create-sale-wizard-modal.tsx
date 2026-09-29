@@ -179,11 +179,39 @@ export default function CreateSaleWizardModal({
     }
     const trimmedEmail = primaryClient.email.trim().toLowerCase();
     const trimmedName = primaryClient.name.trim().toLowerCase();
-    const found = existingClients.find(
+    let found = existingClients.find(
       (c) =>
         (trimmedEmail && c.email && c.email.toLowerCase() === trimmedEmail) ||
         (trimmedName && c.name && c.name.toLowerCase() === trimmedName)
     );
+
+    if (!found && typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
+        if (stored) {
+          const list = JSON.parse(stored);
+          if (Array.isArray(list)) {
+            const inUsers = list.find(
+              (u: any) =>
+                (trimmedEmail && u.email && u.email.toLowerCase() === trimmedEmail) ||
+                (trimmedName && u.name && u.name.toLowerCase() === trimmedName)
+            );
+            if (inUsers) {
+              found = {
+                name: inUsers.name || inUsers.fullName || "",
+                email: inUsers.email || "",
+                phone: inUsers.phone || "",
+                rfc: inUsers.rfc || "",
+                isExisting: true,
+              };
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     if (found) {
       setIsPrimaryFound(true);
       setPrimaryClient((prev) => ({
@@ -198,15 +226,40 @@ export default function CreateSaleWizardModal({
     }
   }, [primaryClient.email, primaryClient.name, existingClients]);
 
-  const isClientInCatalog = (email: string, name: string) => {
+  const isClientInCatalog = (email?: string, name?: string) => {
     const trimmedEmail = (email || "").trim().toLowerCase();
     const trimmedName = (name || "").trim().toLowerCase();
     if (!trimmedEmail && !trimmedName) return false;
-    return existingClients.some(
+
+    // 1. Check existingClients from projects
+    const inProjects = (existingClients || []).some(
       (c) =>
         (trimmedEmail && c.email && c.email.toLowerCase() === trimmedEmail) ||
         (trimmedName && c.name && c.name.toLowerCase() === trimmedName)
     );
+    if (inProjects) return true;
+
+    // 2. Check devio_system_users in storage
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
+        if (stored) {
+          const list = JSON.parse(stored);
+          if (Array.isArray(list)) {
+            const inUsers = list.some(
+              (u: any) =>
+                (trimmedEmail && u.email && u.email.toLowerCase() === trimmedEmail) ||
+                (trimmedName && u.name && u.name.toLowerCase() === trimmedName)
+            );
+            if (inUsers) return true;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return false;
   };
 
   const hasAnyNewBuyer = useMemo(() => {
@@ -1255,13 +1308,10 @@ export default function CreateSaleWizardModal({
       // ----------------------------------------------------------------------
       allOwnersCombined.forEach(async (owner) => {
         if (!owner.email) return;
-        const ownerEmailKey = owner.email.toLowerCase().trim();
-        const clientsDict = (existingClients || {}) as Record<string, any>;
-        const isExistingUser = Boolean(
-          clientsDict[ownerEmailKey] ||
-          (owner.name && clientsDict[owner.name.toLowerCase().trim()]) ||
-          (owner as any).isExisting
-        );
+        const isExistingUser =
+          (owner.isPrimary && isPrimaryFound) ||
+          isClientInCatalog(owner.email, owner.name) ||
+          Boolean((owner as any).isExisting);
 
         const tempPassword = `Devio-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
         const loginLink = typeof window !== "undefined" ? `${window.location.origin}/login` : "https://devio.lat/login";
@@ -3339,36 +3389,38 @@ export default function CreateSaleWizardModal({
                     Notificaciones Automáticas por Correo:
                   </span>
 
-                  {/* Notificación Obligatoria 1: Credenciales de acceso al portal */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: "0.65rem",
-                      padding: "0.75rem 0.9rem",
-                      borderRadius: "0.65rem",
-                      backgroundColor: "rgba(111, 172, 156, 0.1)",
-                      border: "1.5px solid rgba(111, 172, 156, 0.35)",
-                      fontSize: "0.82rem",
-                      fontWeight: 600,
-                      color: "var(--devio-blue-dark)",
-                    }}
-                  >
-                    <Mail size={17} color="#2F80ED" style={{ flexShrink: 0, marginTop: "2px" }} />
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.15rem" }}>
-                        <strong style={{ color: "#1F3652" }}>
-                          Credenciales de Acceso al Portal de Clientes
-                        </strong>
-                        <span style={{ fontSize: "0.68rem", fontWeight: 800, padding: "0.15rem 0.45rem", borderRadius: "9999px", backgroundColor: "#00C48C", color: "#FFFFFF" }}>
-                          Automático
+                  {/* Notificación de Credenciales de acceso al portal (Solo si hay compradores nuevos) */}
+                  {hasAnyNewBuyer && (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: "0.65rem",
+                        padding: "0.75rem 0.9rem",
+                        borderRadius: "0.65rem",
+                        backgroundColor: "rgba(111, 172, 156, 0.1)",
+                        border: "1.5px solid rgba(111, 172, 156, 0.35)",
+                        fontSize: "0.82rem",
+                        fontWeight: 600,
+                        color: "var(--devio-blue-dark)",
+                      }}
+                    >
+                      <Mail size={17} color="#2F80ED" style={{ flexShrink: 0, marginTop: "2px" }} />
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.15rem" }}>
+                          <strong style={{ color: "#1F3652" }}>
+                            Credenciales de Acceso al Portal de Clientes
+                          </strong>
+                          <span style={{ fontSize: "0.68rem", fontWeight: 800, padding: "0.15rem 0.45rem", borderRadius: "9999px", backgroundColor: "#00C48C", color: "#FFFFFF" }}>
+                            Automático (Nuevos Compradores)
+                          </span>
+                        </div>
+                        <span style={{ fontSize: "0.78rem", color: "#475569", lineHeight: 1.4 }}>
+                          Se enviarán las credenciales de acceso al portal de clientes de Devio por correo a los nuevos compradores dados de alta.
                         </span>
                       </div>
-                      <span style={{ fontSize: "0.78rem", color: "#475569", lineHeight: 1.4 }}>
-                        Se enviarán las credenciales de acceso al portal de clientes de Devio por correo a todos los compradores registrados.
-                      </span>
                     </div>
-                  </div>
+                  )}
 
                   {/* Checkbox 2: Welcome / Sale Confirmation */}
                   <label
