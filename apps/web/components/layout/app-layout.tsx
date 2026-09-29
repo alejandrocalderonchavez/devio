@@ -448,25 +448,31 @@ export default function AppLayout({
 
               {/* Nombre y Logotipo del Proyecto Activo */}
               <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", padding: "0.5rem 0.65rem", marginBottom: "0.75rem", backgroundColor: "rgba(47, 128, 237, 0.08)", borderRadius: "0.6rem", color: "#2F80ED" }}>
-                {(activeProject.logoFileName || (activeProject as any).logo || (activeProject as any).logoUrl) ? (
-                  <img
-                    src={activeProject.logoFileName || (activeProject as any).logo || (activeProject as any).logoUrl}
-                    alt={activeProject.name}
-                    style={{
-                      height: "26px",
-                      width: "26px",
-                      objectFit: "contain",
-                      borderRadius: "5px",
-                      backgroundColor: "#FFFFFF",
-                      padding: "2px",
-                      border: "1px solid rgba(47, 128, 237, 0.2)",
-                      flexShrink: 0,
-                    }}
-                    onError={(e) => { (e.currentTarget as HTMLElement).style.display = "none"; }}
-                  />
-                ) : (
-                  <BarChart3 size={18} style={{ flexShrink: 0 }} />
-                )}
+                {(() => {
+                  const rawLogo = (activeProject as any).logoUrl || (activeProject as any).logo || (activeProject as any).logoPath || activeProject.logoFileName;
+                  const validLogo = typeof rawLogo === "string" && (rawLogo.startsWith("http") || rawLogo.startsWith("data:") || rawLogo.startsWith("/")) ? rawLogo : null;
+
+                  if (validLogo) {
+                    return (
+                      <img
+                        src={validLogo}
+                        alt={activeProject.name}
+                        style={{
+                          height: "26px",
+                          width: "26px",
+                          objectFit: "contain",
+                          borderRadius: "5px",
+                          backgroundColor: "#FFFFFF",
+                          padding: "2px",
+                          border: "1px solid rgba(47, 128, 237, 0.2)",
+                          flexShrink: 0,
+                        }}
+                        onError={(e) => { (e.currentTarget as HTMLElement).style.display = "none"; }}
+                      />
+                    );
+                  }
+                  return <BarChart3 size={18} style={{ flexShrink: 0 }} />;
+                })()}
                 <span style={{ fontSize: "0.82rem", fontWeight: 700, lineHeight: 1.2, color: "#1F3652", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {activeProject.name}
                 </span>

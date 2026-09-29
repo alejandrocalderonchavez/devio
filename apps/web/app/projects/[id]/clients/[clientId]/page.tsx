@@ -48,7 +48,7 @@ import AppLayout from "../../../../../components/layout/app-layout";
 import { useProject } from "../../../../../context/project-context";
 import { INITIAL_CLIENTS, ClientProfile, ClientOwnedUnit, QuoteRecord, ClientDocument } from "../../../../../data/projects-data";
 import { exportTableToExcel, exportTableToPDF } from "../../../../../lib/export-utils";
-import { generateQuotePDF, openQuoteInNewTab, generateReceiptPDF, openReceiptInNewTab } from "../../../../../lib/pdf-generator";
+import { generateQuotePDF, openQuoteInNewTab, generateReceiptPDF, openReceiptInNewTab, resolveProjectLogo } from "../../../../../lib/pdf-generator";
 import { sendAndLogNotification } from "../../../../../lib/notifications";
 import { InfoTooltip } from "../../../../../components/ui/tooltip";
 import CurrencyInput from "../../../../../components/ui/currency-input";
@@ -2668,11 +2668,7 @@ export default function ClientDetailPage() {
                                 developerLogo ||
                                 (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
                                 "";
-                              const projLogoUrl =
-                                project?.logoFileName ||
-                                project?.logoUrl ||
-                                project?.logo ||
-                                (project?.image && project.image.startsWith("http") ? project.image : devLogoUrl);
+                              const projLogoUrl = resolveProjectLogo(project, devLogoUrl);
 
                               const unitObj = project.unitsInventory?.find((u) => u.unit === q.unit);
                               const unitPhoto = (unitObj?.images && unitObj.images.length > 0 && unitObj.images[0])
@@ -4997,11 +4993,7 @@ export default function ClientDetailPage() {
                       developerLogo ||
                       (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
                       "";
-                    const projLogoUrl =
-                      project?.logoFileName ||
-                      project?.logoUrl ||
-                      project?.logo ||
-                      (project?.image && project.image.startsWith("http") ? project.image : devLogoUrl);
+                    const projLogoUrl = resolveProjectLogo(project, devLogoUrl);
 
                     openReceiptInNewTab({
                       folio: selectedReceiptForView.reciboFolio || `REC-${Date.now().toString().slice(-6)}`,
@@ -5046,11 +5038,7 @@ export default function ClientDetailPage() {
                         developerLogo ||
                         (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
                         "";
-                      const projLogoUrl =
-                        project?.logoFileName ||
-                        project?.logoUrl ||
-                        project?.logo ||
-                        (project?.image && project.image.startsWith("http") ? project.image : devLogoUrl);
+                      const projLogoUrl = resolveProjectLogo(project, devLogoUrl);
 
                       await generateReceiptPDF({
                         folio: selectedReceiptForView.reciboFolio || `REC-${Date.now().toString().slice(-6)}`,

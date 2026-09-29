@@ -38,6 +38,7 @@ import CurrencyInput from "../ui/currency-input";
 import { CoOwner, ProjectItem, ProjectAdditional, QuoteRecord } from "../../data/projects-data";
 import { useProject } from "../../context/project-context";
 import { sendAndLogNotification } from "../../lib/notifications";
+import { resolveProjectLogo } from "../../lib/pdf-generator";
 
 export interface CreateSaleWizardModalProps {
   isOpen: boolean;
@@ -1337,12 +1338,10 @@ export default function CreateSaleWizardModal({
         const projName = currentProject?.name || "Proyecto Inmobiliario";
         const devName = currentProject?.name ? `${currentProject.name} (Desarrolladora)` : "Desarrolladora Inmobiliaria";
 
-        const projLogo =
-          currentProject?.image && currentProject.image.startsWith("http")
-            ? currentProject.image
-            : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
         const devLogo =
-          "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+          (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+          "";
+        const projLogo = resolveProjectLogo(currentProject, devLogo);
 
         // 1. Envío obligatorio de credenciales de acceso SOLO SI ES USUARIO NUEVO
         if (!isExistingUser) {

@@ -90,6 +90,12 @@ export class ClientPortalService {
       const devName = dev?.name || "Desarrolladora";
       const devLogo = dev?.logoPath || null;
       const projName = proj.name || "Proyecto Residencial";
+      const projLogo =
+        (Array.isArray(proj.galleryPaths) && proj.galleryPaths.length > 0 && typeof proj.galleryPaths[0] === "string" && (proj.galleryPaths[0].startsWith("http") || proj.galleryPaths[0].startsWith("data:")))
+          ? proj.galleryPaths[0]
+          : ((proj as any).logoPath && (proj as any).logoPath.startsWith("http"))
+          ? (proj as any).logoPath
+          : devLogo;
       const projAddress = dev?.addressLine1 || "Guadalajara, Jalisco";
       const projCover = proj.coverImagePath || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80";
 
@@ -191,7 +197,7 @@ export class ClientPortalService {
         developerName: devName,
         developerLogo: devLogo,
         projectName: projName,
-        projectLogo: devLogo,
+        projectLogo: projLogo,
         projectAddress: projAddress,
         unitNumber: unit.unitNumber,
         unitType: unit.category === "HOUSE" ? "Casa" : "Departamento",

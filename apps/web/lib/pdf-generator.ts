@@ -83,8 +83,30 @@ export interface ReceiptPDFData {
 
 const DEFAULT_DEV_LOGO =
   "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
-const DEFAULT_PROJ_LOGO =
-  "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg";
+
+/**
+ * Safely resolves a project's logo URL or data URI.
+ * Only returns valid URLs/data URIs and avoids filename strings like "logo.png".
+ */
+export function resolveProjectLogo(project?: any, fallbackLogo?: string): string {
+  if (!project) return fallbackLogo || "";
+
+  const candidate =
+    project.logoUrl ||
+    project.logo ||
+    project.logoPath ||
+    (Array.isArray(project.galleryPaths) && project.galleryPaths.length > 0 ? project.galleryPaths[0] : undefined);
+
+  if (typeof candidate === "string" && (candidate.startsWith("http") || candidate.startsWith("data:") || candidate.startsWith("/"))) {
+    return candidate;
+  }
+
+  if (typeof project.logoFileName === "string" && (project.logoFileName.startsWith("http") || project.logoFileName.startsWith("data:") || project.logoFileName.startsWith("/"))) {
+    return project.logoFileName;
+  }
+
+  return fallbackLogo || "";
+}
 
 export function getReceiptHTML(data: ReceiptPDFData): string {
   const fechaEmision =
@@ -107,14 +129,14 @@ export function getReceiptHTML(data: ReceiptPDFData): string {
   const capital = data.capitalAmount ?? (data.totalAmount - (data.interestAmount || 0));
 
   const devLogo =
-    data.developerLogoUrl && (data.developerLogoUrl.startsWith("http") || data.developerLogoUrl.startsWith("data:"))
+    data.developerLogoUrl && (data.developerLogoUrl.startsWith("http") || data.developerLogoUrl.startsWith("data:") || data.developerLogoUrl.startsWith("/"))
       ? data.developerLogoUrl
       : DEFAULT_DEV_LOGO;
 
   const projLogo =
-    data.projectLogoUrl && (data.projectLogoUrl.startsWith("http") || data.projectLogoUrl.startsWith("data:"))
+    data.projectLogoUrl && (data.projectLogoUrl.startsWith("http") || data.projectLogoUrl.startsWith("data:") || data.projectLogoUrl.startsWith("/"))
       ? data.projectLogoUrl
-      : DEFAULT_PROJ_LOGO;
+      : "";
 
   return `
     <div id="rp-pdf-container" style="
@@ -131,9 +153,13 @@ export function getReceiptHTML(data: ReceiptPDFData): string {
       <!-- HEADER CON LOGOS REALES -->
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1F3652; padding-bottom: 18px; margin-bottom: 22px;">
         <div style="display: flex; align-items: center; gap: 14px;">
-          <img src="${devLogo}" style="height: 42px; max-width: 140px; object-fit: contain;" alt="${data.developerName || "Desarrolladora"}" onerror="this.onerror=null; this.src='https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg';" />
-          <div style="width: 1.5px; height: 32px; background: #CBD5E1;"></div>
-          <img src="${projLogo}" style="height: 42px; max-width: 140px; object-fit: contain; border-radius: 4px;" alt="${data.projectName}" onerror="this.onerror=null; this.src='https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg';" />
+          <img src="${devLogo}" style="height: 42px; max-width: 140px; object-fit: contain;" alt="${data.developerName || "Desarrolladora"}" />
+          ${
+            projLogo
+              ? `<div style="width: 1.5px; height: 32px; background: #CBD5E1;"></div>
+                 <img src="${projLogo}" style="height: 42px; max-width: 140px; object-fit: contain; border-radius: 4px;" alt="${data.projectName}" />`
+              : ""
+          }
         </div>
 
         <div style="text-align: right; font-size: 12px; line-height: 1.6; color: #4b5563;">
@@ -452,24 +478,22 @@ export function getQuoteHTML(data: QuotePDFData): string {
     }).format(val || 0);
 
   const devLogo =
-    data.developerLogoUrl && (data.developerLogoUrl.startsWith("http") || data.developerLogoUrl.startsWith("data:"))
+    data.developerLogoUrl && (data.developerLogoUrl.startsWith("http") || data.developerLogoUrl.startsWith("data:") || data.developerLogoUrl.startsWith("/"))
       ? data.developerLogoUrl
       : DEFAULT_DEV_LOGO;
 
   const projLogo =
-    data.projectLogoUrl && (data.projectLogoUrl.startsWith("http") || data.projectLogoUrl.startsWith("data:"))
+    data.projectLogoUrl && (data.projectLogoUrl.startsWith("http") || data.projectLogoUrl.startsWith("data:") || data.projectLogoUrl.startsWith("/"))
       ? data.projectLogoUrl
-      : DEFAULT_PROJ_LOGO;
+      : "";
 
   // Fallback for unit image: if unit has no photo, use project cover / image
   const unitPhoto =
-    data.unitImageUrl && (data.unitImageUrl.startsWith("http") || data.unitImageUrl.startsWith("data:"))
+    data.unitImageUrl && (data.unitImageUrl.startsWith("http") || data.unitImageUrl.startsWith("data:") || data.unitImageUrl.startsWith("/"))
       ? data.unitImageUrl
-      : data.projectCoverUrl && (data.projectCoverUrl.startsWith("http") || data.projectCoverUrl.startsWith("data:"))
+      : data.projectCoverUrl && (data.projectCoverUrl.startsWith("http") || data.projectCoverUrl.startsWith("data:") || data.projectCoverUrl.startsWith("/"))
       ? data.projectCoverUrl
-      : data.projectLogoUrl && (data.projectLogoUrl.startsWith("http") || data.projectLogoUrl.startsWith("data:"))
-      ? data.projectLogoUrl
-      : DEFAULT_PROJ_LOGO;
+      : projLogo || devLogo;
 
   // Co-ownership calculation
   const isCoprop = data.isCoOwnership || (data.coOwners && data.coOwners.length > 0);
@@ -524,7 +548,11 @@ export function getQuoteHTML(data: QuotePDFData): string {
 
         <!-- Right Logo: Project -->
         <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; max-width: 170px;">
-          <img src="${projLogo}" style="max-height: 42px; max-width: 150px; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" alt="${data.projectName}" />
+          ${
+            projLogo
+              ? `<img src="${projLogo}" style="max-height: 42px; max-width: 150px; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" alt="${data.projectName}" />`
+              : `<div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 800; color: #1D4ED8;">${data.projectName}</div>`
+          }
         </div>
       </div>
 
@@ -1192,17 +1220,17 @@ export function getConstructionProgressHTML(data: ConstructionProgressPDFData): 
     : emissionDate;
 
   const devLogo =
-    data.developerLogoUrl && (data.developerLogoUrl.startsWith("http") || data.developerLogoUrl.startsWith("data:"))
+    data.developerLogoUrl && (data.developerLogoUrl.startsWith("http") || data.developerLogoUrl.startsWith("data:") || data.developerLogoUrl.startsWith("/"))
       ? data.developerLogoUrl
       : DEFAULT_DEV_LOGO;
 
   const projLogo =
-    data.projectLogoUrl && (data.projectLogoUrl.startsWith("http") || data.projectLogoUrl.startsWith("data:"))
+    data.projectLogoUrl && (data.projectLogoUrl.startsWith("http") || data.projectLogoUrl.startsWith("data:") || data.projectLogoUrl.startsWith("/"))
       ? data.projectLogoUrl
-      : DEFAULT_PROJ_LOGO;
+      : "";
 
   const coverImg =
-    data.projectCoverUrl && (data.projectCoverUrl.startsWith("http") || data.projectCoverUrl.startsWith("data:"))
+    data.projectCoverUrl && (data.projectCoverUrl.startsWith("http") || data.projectCoverUrl.startsWith("data:") || data.projectCoverUrl.startsWith("/"))
       ? data.projectCoverUrl
       : data.photos?.[0]?.url || "https://images.unsplash.com/photo-1541888946425-d0fbb18f15f6?auto=format&fit=crop&w=600&q=80";
 
@@ -1259,7 +1287,11 @@ export function getConstructionProgressHTML(data: ConstructionProgressPDFData): 
 
         <!-- Right Logo: Project -->
         <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; max-width: 170px;">
-          <img src="${projLogo}" style="max-height: 44px; max-width: 150px; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" alt="${data.projectName}" />
+          ${
+            projLogo
+              ? `<img src="${projLogo}" style="max-height: 44px; max-width: 150px; object-fit: contain; border-radius: 4px;" crossorigin="anonymous" alt="${data.projectName}" />`
+              : `<div style="background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 800; color: #047857;">${data.projectName}</div>`
+          }
         </div>
       </div>
 

@@ -51,7 +51,7 @@ import CreateSaleWizardModal from "../../../../components/sales/create-sale-wiza
 import { EditSaleModal } from "../../../../components/sales/edit-sale-modal";
 import QuoteUnitWizardModal from "../../../../components/units/quote-unit-wizard-modal";
 import { exportTableToExcel, exportTableToPDF } from "../../../../lib/export-utils";
-import { generateQuotePDF } from "../../../../lib/pdf-generator";
+import { generateQuotePDF, resolveProjectLogo } from "../../../../lib/pdf-generator";
 
 export default function ProjectSalesPage() {
   const params = useParams();
@@ -437,11 +437,7 @@ export default function ProjectSalesPage() {
       developerLogo ||
       (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
       "";
-    const projLogoUrl =
-      project?.logoFileName ||
-      project?.logoUrl ||
-      project?.logo ||
-      (project?.image && project.image.startsWith("http") ? project.image : devLogoUrl);
+    const projLogoUrl = resolveProjectLogo(project, devLogoUrl);
 
     const unitObj = project.unitsInventory?.find((u) => u.unit === quote.unit);
     const unitPhoto = (unitObj?.images && unitObj.images.length > 0 && unitObj.images[0])
@@ -525,11 +521,7 @@ export default function ProjectSalesPage() {
       developerLogo ||
       (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
       "";
-    const projLogoUrl =
-      project?.logoFileName ||
-      project?.logoUrl ||
-      project?.logo ||
-      (project?.image && project.image.startsWith("http") ? project.image : devLogoUrl);
+    const projLogoUrl = resolveProjectLogo(project, devLogoUrl);
 
     setResendingQuoteId(quote.id);
     try {

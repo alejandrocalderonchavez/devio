@@ -36,7 +36,7 @@ import { exportTableToExcel, exportTableToPDF } from "../../../../lib/export-uti
 import { InfoTooltip } from "../../../../components/ui/tooltip";
 import { DevioDatePicker } from "../../../../components/ui/devio-date-picker";
 import { UploadPaymentsModal } from "../../../../components/payments/upload-payments-modal";
-import { generateReceiptPDF, openReceiptInNewTab } from "../../../../lib/pdf-generator";
+import { generateReceiptPDF, openReceiptInNewTab, resolveProjectLogo } from "../../../../lib/pdf-generator";
 import { sendAndLogNotification } from "../../../../lib/notifications";
 
 // Date range formatters
@@ -2665,11 +2665,7 @@ export default function ProjectPaymentsPage() {
                       developerLogo ||
                       (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
                       "";
-                    const projLogoUrl =
-                      project?.logoFileName ||
-                      project?.logoUrl ||
-                      project?.logo ||
-                      (project?.image && project.image.startsWith("http") ? project.image : devLogoUrl);
+                    const projLogoUrl = resolveProjectLogo(project, devLogoUrl);
 
                     openReceiptInNewTab({
                       folio: selectedReceiptForView.folio || selectedReceiptForView.receiptFolio || `REC-DEV-${selectedReceiptForView.unit}-${Date.now().toString().slice(-4)}`,
@@ -2712,11 +2708,7 @@ export default function ProjectPaymentsPage() {
                         developerLogo ||
                         (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
                         "";
-                      const projLogoUrl =
-                        project?.logoFileName ||
-                        project?.logoUrl ||
-                        project?.logo ||
-                        (project?.image && project.image.startsWith("http") ? project.image : devLogoUrl);
+                      const projLogoUrl = resolveProjectLogo(project, devLogoUrl);
 
                       await generateReceiptPDF({
                         folio: selectedReceiptForView.folio || selectedReceiptForView.receiptFolio || `REC-DEV-${selectedReceiptForView.unit}-${Date.now().toString().slice(-4)}`,

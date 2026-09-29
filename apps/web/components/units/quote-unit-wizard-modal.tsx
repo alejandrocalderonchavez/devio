@@ -36,7 +36,7 @@ import PhoneInput from "../ui/phone-input";
 import CurrencyInput from "../ui/currency-input";
 import { CoOwner, ProjectAdditional, QuoteRecord, UnitItem } from "../../data/projects-data";
 import { useProject } from "../../context/project-context";
-import { generateQuotePDF, openQuoteInNewTab, QuotePDFData } from "../../lib/pdf-generator";
+import { generateQuotePDF, openQuoteInNewTab, QuotePDFData, resolveProjectLogo } from "../../lib/pdf-generator";
 
 export interface QuoteUnitWizardModalProps {
   isOpen: boolean;
@@ -655,15 +655,18 @@ export default function QuoteUnitWizardModal({
     const devLogo =
       (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
       "";
-    const projLogo =
-      curProj?.logoFileName ||
-      curProj?.logoUrl ||
-      curProj?.logo ||
-      (curProj?.image && curProj.image.startsWith("http") ? curProj.image : devLogo);
+    const projLogo = resolveProjectLogo(curProj, devLogo);
+
+    const projCover =
+      ((curProj as any)?.coverImagePath && (typeof (curProj as any).coverImagePath === "string") && ((curProj as any).coverImagePath.startsWith("http") || (curProj as any).coverImagePath.startsWith("data:") || (curProj as any).coverImagePath.startsWith("/")))
+        ? (curProj as any).coverImagePath
+        : (curProj?.image && (curProj.image.startsWith("http") || curProj.image.startsWith("data:") || curProj.image.startsWith("/")))
+        ? curProj.image
+        : undefined;
 
     const unitPhoto = (unit?.images && unit.images.length > 0 && unit.images[0])
       ? unit.images[0]
-      : (curProj?.coverFileName || curProj?.image || curProj?.logoFileName || "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg");
+      : (projCover || projLogo || undefined);
 
     const floorPlanUrl =
       (unit?.floorPlan && curProj?.floorPlans?.find((fp) => fp.name === unit.floorPlan || fp.id === unit.floorPlan)?.imageUrl) ||
@@ -788,11 +791,7 @@ export default function QuoteUnitWizardModal({
       const devLogoUrl =
         (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
         "";
-      const projLogoUrl =
-        activeProj?.logoFileName ||
-        activeProj?.logoUrl ||
-        activeProj?.logo ||
-        (activeProj?.image && activeProj.image.startsWith("http") ? activeProj.image : devLogoUrl);
+      const projLogoUrl = resolveProjectLogo(activeProj, devLogoUrl);
 
       targets.forEach((t) => {
         fetch("/api/notifications/send", {

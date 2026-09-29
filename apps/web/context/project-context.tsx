@@ -570,12 +570,15 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       dbProj.image ||
       "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80";
 
-    const logo =
-      (dbProj.galleryPaths && dbProj.galleryPaths.length > 0 ? dbProj.galleryPaths[0] : null) ||
-      dbProj.logoPath ||
-      dbProj.logoUrl ||
-      dbProj.logo ||
-      "";
+    const candidateLogos = [
+      ...(Array.isArray(dbProj.galleryPaths) ? dbProj.galleryPaths : []),
+      dbProj.logoUrl,
+      dbProj.logo,
+      dbProj.logoPath,
+      dbProj.logoFileName,
+    ].filter((l) => typeof l === "string" && (l.startsWith("http") || l.startsWith("data:") || l.startsWith("/")));
+
+    const logo = candidateLogos.length > 0 ? candidateLogos[0] : "";
 
     const googleMapsUrl = dbProj.googleMapsUrl || dbProj.addressLine1 || "";
     const websiteUrl = dbProj.websiteUrl || dbProj.addressLine2 || "";

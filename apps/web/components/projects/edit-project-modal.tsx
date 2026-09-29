@@ -70,6 +70,7 @@ export default function EditProjectModal({
   });
 
   const [logoFileName, setLogoFileName] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string>("");
   const [coverFileName, setCoverFileName] = useState<string | null>(null);
   const [coverImageUrl, setCoverImageUrl] = useState<string>("");
 
@@ -112,12 +113,16 @@ export default function EditProjectModal({
         setCoverImageUrl(activeProject.image);
       }
 
-      if (activeProject.logoFileName) {
+      const rawProjLogo = activeProject.logoUrl || activeProject.logo || (activeProject as any).logoPath || "";
+      if (rawProjLogo && (rawProjLogo.startsWith("http") || rawProjLogo.startsWith("data:") || rawProjLogo.startsWith("/"))) {
+        setLogoUrl(rawProjLogo);
+        setLogoFileName(activeProject.logoFileName || "logo-proyecto.png");
+      } else if (activeProject.logoFileName) {
         setLogoFileName(activeProject.logoFileName);
-      } else if (activeProject.logo || activeProject.logoUrl) {
-        setLogoFileName("logo.png");
+        setLogoUrl("");
       } else {
         setLogoFileName(null);
+        setLogoUrl("");
       }
 
       if (activeProject.coverFileName) {
@@ -276,6 +281,13 @@ export default function EditProjectModal({
     const file = e.target.files?.[0];
     if (!file) return;
     setLogoFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target?.result) {
+        setLogoUrl(ev.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -288,6 +300,8 @@ export default function EditProjectModal({
     setIsSaving(true);
 
     const projectId = activeProject?.id || "p-1";
+    const finalLogo = logoUrl || (activeProject?.logoUrl && (activeProject.logoUrl.startsWith("http") || activeProject.logoUrl.startsWith("data:") || activeProject.logoUrl.startsWith("/")) ? activeProject.logoUrl : undefined);
+
     const updatedPayload = {
       name: projectGeneralData.name.trim(),
       legalName: projectGeneralData.legalName.trim(),
@@ -299,6 +313,8 @@ export default function EditProjectModal({
       type: projectType,
       currency: baseCurrency,
       image: coverImageUrl || activeProject?.image || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
+      logo: finalLogo,
+      logoUrl: finalLogo,
       logoFileName: logoFileName || undefined,
       coverFileName: coverFileName || undefined,
       team: teamMembers,
@@ -553,7 +569,14 @@ export default function EditProjectModal({
                       gap: "0.25rem",
                     }}
                   >
-                    {logoFileName ? (
+                    {logoUrl && (logoUrl.startsWith("http") || logoUrl.startsWith("data:") || logoUrl.startsWith("/")) ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <img src={logoUrl} alt="Logo proyecto" style={{ height: "28px", maxWidth: "70px", objectFit: "contain", borderRadius: "4px" }} />
+                        <span style={{ fontSize: "0.82rem", color: "var(--devio-blue-dark)", fontWeight: 700 }}>
+                          {logoFileName || "Logo cargado"}
+                        </span>
+                      </div>
+                    ) : logoFileName ? (
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                         <Upload size={16} style={{ color: "var(--devio-blue-matte)" }} />
                         <span style={{ fontSize: "0.82rem", color: "var(--devio-blue-dark)", fontWeight: 700 }}>

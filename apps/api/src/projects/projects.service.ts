@@ -103,6 +103,26 @@ export class ProjectsService {
     const baseCurr = (currency || "MXN").toUpperCase() === "USD" ? "USD" : "MXN";
 
     // 2. Create Project
+    const resolvedCover =
+      coverImagePath && (coverImagePath.startsWith("http") || coverImagePath.startsWith("data:") || coverImagePath.startsWith("/"))
+        ? coverImagePath
+        : image && (image.startsWith("http") || image.startsWith("data:") || image.startsWith("/"))
+        ? image
+        : coverFileName && (coverFileName.startsWith("http") || coverFileName.startsWith("data:") || coverFileName.startsWith("/"))
+        ? coverFileName
+        : null;
+
+    const resolvedLogo =
+      logoUrl && (logoUrl.startsWith("http") || logoUrl.startsWith("data:") || logoUrl.startsWith("/"))
+        ? logoUrl
+        : logo && (logo.startsWith("http") || logo.startsWith("data:") || logo.startsWith("/"))
+        ? logo
+        : logoPath && (logoPath.startsWith("http") || logoPath.startsWith("data:") || logoPath.startsWith("/"))
+        ? logoPath
+        : logoFileName && (logoFileName.startsWith("http") || logoFileName.startsWith("data:") || logoFileName.startsWith("/"))
+        ? logoFileName
+        : null;
+
     const project = await this.prisma.project.create({
       data: {
         id: randomUUID(),
@@ -118,8 +138,8 @@ export class ProjectsService {
         city: city || null,
         state: state || null,
         postalCode: postalCode || zipCode || (totalSurfaceM2 ? String(totalSurfaceM2) : null),
-        coverImagePath: coverFileName || coverImagePath || image || null,
-        galleryPaths: logoUrl || logo || logoPath || logoFileName ? [logoUrl || logo || logoPath || logoFileName] : [],
+        coverImagePath: resolvedCover,
+        galleryPaths: resolvedLogo ? [resolvedLogo] : [],
       },
     });
 
@@ -379,10 +399,28 @@ export class ProjectsService {
       updateData.postalCode = totalSurfaceM2 ? String(totalSurfaceM2) : null;
     }
     if (coverFileName || coverImagePath || image) {
-      updateData.coverImagePath = coverFileName || coverImagePath || image;
+      const resolvedCover =
+        coverImagePath && (coverImagePath.startsWith("http") || coverImagePath.startsWith("data:") || coverImagePath.startsWith("/"))
+          ? coverImagePath
+          : image && (image.startsWith("http") || image.startsWith("data:") || image.startsWith("/"))
+          ? image
+          : coverFileName && (coverFileName.startsWith("http") || coverFileName.startsWith("data:") || coverFileName.startsWith("/"))
+          ? coverFileName
+          : null;
+      if (resolvedCover) updateData.coverImagePath = resolvedCover;
     }
     if (logoUrl || logo || logoPath || logoFileName) {
-      updateData.galleryPaths = [logoUrl || logo || logoPath || logoFileName];
+      const resolvedLogo =
+        logoUrl && (logoUrl.startsWith("http") || logoUrl.startsWith("data:") || logoUrl.startsWith("/"))
+          ? logoUrl
+          : logo && (logo.startsWith("http") || logo.startsWith("data:") || logo.startsWith("/"))
+          ? logo
+          : logoPath && (logoPath.startsWith("http") || logoPath.startsWith("data:") || logoPath.startsWith("/"))
+          ? logoPath
+          : logoFileName && (logoFileName.startsWith("http") || logoFileName.startsWith("data:") || logoFileName.startsWith("/"))
+          ? logoFileName
+          : null;
+      if (resolvedLogo) updateData.galleryPaths = [resolvedLogo];
     }
     if (status) updateData.status = status;
     if (type) {

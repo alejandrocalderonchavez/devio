@@ -196,31 +196,41 @@ export default function ProjectsPage() {
                     }}
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
-                  {(project.logoFileName || (project as any).logo || (project as any).logoUrl) && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        bottom: "10px",
-                        left: "10px",
-                        backgroundColor: "#FFFFFF",
-                        borderRadius: "8px",
-                        padding: "4px 8px",
-                        boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        border: "1px solid rgba(226, 232, 240, 0.9)",
-                        maxWidth: "80%",
-                      }}
-                    >
-                      <img
-                        src={project.logoFileName || (project as any).logo || (project as any).logoUrl}
-                        alt={project.name}
-                        style={{ height: "24px", width: "auto", maxWidth: "80px", objectFit: "contain" }}
-                        onError={(e) => { (e.currentTarget as HTMLElement).style.display = "none"; }}
-                      />
-                    </div>
-                  )}
+                  {(() => {
+                    const rawLogo = (project as any).logoUrl || (project as any).logo || (project as any).logoPath || project.logoFileName;
+                    const validLogo = typeof rawLogo === "string" && (rawLogo.startsWith("http") || rawLogo.startsWith("data:") || rawLogo.startsWith("/")) ? rawLogo : null;
+
+                    if (!validLogo) return null;
+
+                    return (
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: "10px",
+                          left: "10px",
+                          backgroundColor: "#FFFFFF",
+                          borderRadius: "8px",
+                          padding: "4px 8px",
+                          boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          border: "1px solid rgba(226, 232, 240, 0.9)",
+                          maxWidth: "80%",
+                        }}
+                      >
+                        <img
+                          src={validLogo}
+                          alt={project.name}
+                          style={{ height: "24px", width: "auto", maxWidth: "80px", objectFit: "contain" }}
+                          onError={(e) => {
+                            const parent = (e.currentTarget as HTMLElement).parentElement;
+                            if (parent) parent.style.display = "none";
+                          }}
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Cuerpo de la Tarjeta */}
