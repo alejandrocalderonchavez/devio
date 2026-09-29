@@ -306,6 +306,7 @@ export interface ProjectDocument {
   uploadDate: string;
   updatedAt: string;
   url?: string;
+  fileName?: string;
   version?: string;
   notes?: string;
 }

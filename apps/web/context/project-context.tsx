@@ -578,40 +578,75 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         : undefined;
 
     const rawDocs = Array.isArray(dbProj.documents) ? dbProj.documents : [];
-    const mappedDocuments: ProjectDocument[] = rawDocs.map((d: any, idx: number) => {
-      const rawType = String(d.type || d.category || "Contratos").toUpperCase();
-      let category: any = "Contratos";
+    const mappedClientDocs: ClientDocument[] = [];
+    const mappedDocuments: ProjectDocument[] = [];
 
-      if (rawType.includes("BLUEPRINT") || rawType.includes("PLANO")) {
-        category = "Planos y Arquitectura";
-      } else if (rawType.includes("LICENSE") || rawType.includes("PERMISO") || rawType.includes("LICENCIA")) {
-        category = "Licencias y Permisos";
-      } else if (rawType.includes("TECHNICAL") || rawType.includes("FICHA") || rawType.includes("TÉCNICO")) {
-        category = "Fichas Técnicas";
-      } else if (rawType.includes("REGULATION") || rawType.includes("REGLAMENTO") || rawType.includes("ACTA")) {
-        category = "Reglamentos y Actas";
-      } else if (rawType.includes("FINANCIAL") || rawType.includes("FISCAL") || rawType.includes("RECEIPT") || rawType.includes("STATEMENT")) {
-        category = "Financiero y Fiscal";
-      } else if (d.category) {
-        category = d.category;
+    rawDocs.forEach((d: any, idx: number) => {
+      const unitNum = d.unit?.unitNumber || d.metadata?.unit || d.unit || "";
+      const cId = d.clientId || d.client?.id || d.metadata?.clientId || "";
+      const cName = d.client?.fullName || d.metadata?.clientName || d.clientName || "";
+      const notes = d.metadata?.notes || d.notes || "";
+      const isVisible = d.isClientVisible !== false;
+      const isClientDoc = Boolean(cId || cName || unitNum || d.unitId || d.clientId || d.metadata?.unit || d.metadata?.clientId);
+
+      if (isClientDoc) {
+        mappedClientDocs.push({
+          id: d.id || `doc-cli-${idx + 1}`,
+          clientId: cId,
+          clientName: cName,
+          title: d.title || d.name || "Documento",
+          unit: unitNum,
+          fileType: d.fileType || (d.mimeType?.includes("image") ? "PNG" : d.storagePath?.split(".").pop()?.toUpperCase() || "PDF"),
+          fileSize: d.fileSizeBytes ? `${Math.round(d.fileSizeBytes / 1024)} KB` : d.fileSize || "1.0 MB",
+          uploadDate: d.uploadDate || (d.createdAt ? new Date(d.createdAt).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX")),
+          updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX"),
+          url: d.storagePath || d.url || d.fileDataUrl || undefined,
+          notes,
+          isVisibleToClient: isVisible,
+        });
+      } else {
+        const rawType = String(d.type || d.category || "Contratos").toUpperCase();
+        let category: any = "Contratos";
+
+        if (rawType.includes("BLUEPRINT") || rawType.includes("PLANO")) {
+          category = "Planos y Arquitectura";
+        } else if (rawType.includes("LICENSE") || rawType.includes("PERMISO") || rawType.includes("LICENCIA")) {
+          category = "Licencias y Permisos";
+        } else if (rawType.includes("TECHNICAL") || rawType.includes("FICHA") || rawType.includes("TÉCNICO")) {
+          category = "Fichas Técnicas";
+        } else if (rawType.includes("REGULATION") || rawType.includes("REGLAMENTO") || rawType.includes("ACTA")) {
+          category = "Reglamentos y Actas";
+        } else if (rawType.includes("FINANCIAL") || rawType.includes("FISCAL") || rawType.includes("RECEIPT") || rawType.includes("STATEMENT")) {
+          category = "Financiero y Fiscal";
+        } else if (d.category) {
+          category = d.category;
+        }
+
+        const fileType = d.fileType || (d.mimeType?.includes("image") ? "PNG" : d.storagePath?.split(".").pop()?.toUpperCase() || "PDF");
+
+        mappedDocuments.push({
+          id: d.id || `doc-${idx + 1}`,
+          title: d.title || d.name || "Documento",
+          category: category,
+          fileType: fileType === "DOCX" || fileType === "XLSX" || fileType === "DWG" || fileType === "ZIP" ? fileType : "PDF",
+          fileSize: d.fileSizeBytes ? `${Math.round(d.fileSizeBytes / 1024)} KB` : d.fileSize || "1.0 MB",
+          uploadDate: d.uploadDate || (d.createdAt ? new Date(d.createdAt).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX")),
+          updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX"),
+          version: d.version || "v1.0",
+          notes: d.notes || "",
+          url: d.storagePath || d.url || d.fileDataUrl || undefined,
+          fileName: d.fileName || (d.storagePath ? d.storagePath.split("/").pop() : `${d.title || "documento"}.pdf`),
+        });
       }
-
-      const fileType = d.fileType || (d.mimeType?.includes("image") ? "PNG" : d.storagePath?.split(".").pop()?.toUpperCase() || "PDF");
-
-      return {
-        id: d.id || `doc-${idx + 1}`,
-        title: d.title || d.name || "Documento",
-        category: category,
-        fileType: fileType === "DOCX" || fileType === "XLSX" || fileType === "DWG" || fileType === "ZIP" ? fileType : "PDF",
-        fileSize: d.fileSizeBytes ? `${Math.round(d.fileSizeBytes / 1024)} KB` : d.fileSize || "1.0 MB",
-        uploadDate: d.uploadDate || (d.createdAt ? new Date(d.createdAt).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX")),
-        updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX"),
-        version: d.version || "v1.0",
-        notes: d.notes || "",
-        url: d.storagePath || d.url || d.fileDataUrl || undefined,
-        fileName: d.fileName || (d.storagePath ? d.storagePath.split("/").pop() : `${d.title || "documento"}.pdf`),
-      };
     });
+
+    if (Array.isArray(dbProj.clientDocuments)) {
+      dbProj.clientDocuments.forEach((cd: any) => {
+        if (!mappedClientDocs.some((m) => m.id === cd.id || (m.title === cd.title && m.unit === cd.unit))) {
+          mappedClientDocs.push(cd);
+        }
+      });
+    }
 
     return {
       id: dbProj.id,
@@ -656,7 +691,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       quotes: dbProj.quotes || [],
       floorPlans: dbProj.floorPlans || [],
       documents: mappedDocuments,
-      clientDocuments: dbProj.clientDocuments || [],
+      clientDocuments: mappedClientDocs,
       paymentPlans: dbProj.paymentPlans || [],
       team: dbProj.team || [],
     };
@@ -2735,12 +2770,21 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        id: doc.id,
         projectId,
+        clientId: doc.clientId,
+        clientName: doc.clientName,
+        unit: doc.unit,
         title: doc.title,
-        category: doc.category,
+        type: doc.fileType,
+        category: "CONTRACT",
         filePath: doc.url,
+        fileUrl: doc.url,
+        fileSizeBytes: doc.fileSize ? parseInt(doc.fileSize.replace(/\D/g, "")) * 1024 : 1024,
+        isClientVisible: doc.isVisibleToClient,
+        notes: doc.notes,
       }),
-    }).catch(() => {});
+    }).catch((err) => console.warn("Could not sync client document with backend:", err));
   };
 
   const updateClientDocument = (projectId: string, doc: ClientDocument) => {
@@ -2759,12 +2803,20 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        id: doc.id,
         projectId,
+        clientId: doc.clientId,
+        clientName: doc.clientName,
+        unit: doc.unit,
         title: doc.title,
-        category: doc.category,
+        type: doc.fileType,
+        category: "CONTRACT",
         filePath: doc.url,
+        fileUrl: doc.url,
+        isClientVisible: doc.isVisibleToClient,
+        notes: doc.notes,
       }),
-    }).catch(() => {});
+    }).catch((err) => console.warn("Could not sync client document update with backend:", err));
   };
 
   const deleteClientDocument = (projectId: string, docId: string) => {

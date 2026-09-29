@@ -540,7 +540,7 @@ export default function CreateSaleWizardModal({
   };
 
   // Helper de cálculo de fechas de cuotas según periodicidad
-  const calculateInstallmentDate = (baseDateStr: string, index: number, period: string, cutoffDay?: number) => {
+  const calculateInstallmentDate = (baseDateStr: string = "", index: number = 1, period: string = "Mensual", cutoffDay?: number) => {
     const { year, month, day } = parseYearMonthDay(baseDateStr);
     const safeDay = cutoffDay && cutoffDay > 0 ? Math.min(cutoffDay, 28) : day;
 
@@ -1012,6 +1012,47 @@ export default function CreateSaleWizardModal({
     );
   };
 
+  const handleUpdateRowConcept = (id: string, newConcept: string) => {
+    setPaymentSchedule((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, concept: newConcept } : r))
+    );
+  };
+
+  const handleAddRowAfter = (index: number) => {
+    const currentRow = paymentSchedule[index];
+    const prevDate = currentRow?.date || saleDate || new Date().toISOString().split("T")[0];
+    const nextDate = calculateInstallmentDate(prevDate, 1, periodicity || "Mensual", monthlyCutoffDay);
+    const newRow = {
+      id: `row-custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      concept: `Cuota ${paymentSchedule.length + 1}`,
+      date: nextDate,
+      amount: 0,
+    };
+    const updated = [...paymentSchedule];
+    updated.splice(index + 1, 0, newRow);
+    setPaymentSchedule(updated);
+  };
+
+  const handleAddRowAtEnd = () => {
+    const lastRow = paymentSchedule[paymentSchedule.length - 1];
+    const prevDate = lastRow?.date || saleDate || new Date().toISOString().split("T")[0];
+    const nextDate = calculateInstallmentDate(prevDate, 1, periodicity || "Mensual", monthlyCutoffDay);
+    const newRow = {
+      id: `row-custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      concept: `Cuota ${paymentSchedule.length + 1}`,
+      date: nextDate,
+      amount: 0,
+    };
+    setPaymentSchedule((prev) => [...prev, newRow]);
+  };
+
+  const handleDeleteRow = (id: string) => {
+    if (paymentSchedule.length <= 1) {
+      return;
+    }
+    setPaymentSchedule((prev) => prev.filter((r) => r.id !== id));
+  };
+
   // Bulk update all monthly dates to a specific cutoff day
   const handleBulkCutoffDayChange = (newDay: number) => {
     setMonthlyCutoffDay(newDay);
@@ -1173,10 +1214,13 @@ export default function CreateSaleWizardModal({
         schedule: paymentSchedule.map((row, idx) => ({
           id: `inst-${selectedUnitNumber || "unit"}-${row.id || idx}`,
           concept: row.concept,
+          title: row.concept,
           date: row.date,
+          dueDate: row.date,
           scheduledDate: row.date,
           amount: row.amount,
           scheduledAmount: row.amount,
+          originalAmount: row.amount,
         })),
         quoteId: initialQuote?.id,
         initialPayment: {
@@ -2855,12 +2899,32 @@ export default function CreateSaleWizardModal({
                   <h4 style={{ fontSize: "0.9rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
                     Calendario de Pagos ({paymentSchedule.length} exhibiciones)
                   </h4>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                     {!isScheduleBalanced && (
                       <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-red)" }}>
                         Diferencia: {formatMoney(scheduleDifference)}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={handleAddRowAtEnd}
+                      style={{
+                        fontSize: "0.75rem",
+                        padding: "0.3rem 0.75rem",
+                        borderRadius: "0.4rem",
+                        backgroundColor: "#EFF6FF",
+                        border: "1px solid #BFDBFE",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        color: "#1D4ED8",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3rem",
+                      }}
+                      title="Agregar una nueva cuota al final"
+                    >
+                      <Plus size={13} /> Agregar Cuota
+                    </button>
                     <button
                       type="button"
                       onClick={handleAutoBalanceOnLiquidation}
@@ -2880,22 +2944,43 @@ export default function CreateSaleWizardModal({
                   </div>
                 </div>
 
-                <div style={{ maxHeight: "220px", overflowY: "auto" }}>
+                <div style={{ maxHeight: "320px", overflowY: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                     <thead>
                       <tr style={{ backgroundColor: "#FAFBFD", borderBottom: "1px solid var(--devio-neutral-1)", textAlign: "left" }}>
-                        <th style={{ padding: "0.6rem 1rem", color: "var(--devio-neutral-3)" }}>Concepto</th>
-                        <th style={{ padding: "0.6rem 1rem", color: "var(--devio-neutral-3)" }}>Fecha de Pago</th>
-                        <th style={{ padding: "0.6rem 1rem", color: "var(--devio-neutral-3)", textAlign: "right" }}>Monto</th>
+                        <th style={{ padding: "0.6rem 0.6rem", color: "var(--devio-neutral-3)", width: "35px", textAlign: "center" }}>#</th>
+                        <th style={{ padding: "0.6rem 0.75rem", color: "var(--devio-neutral-3)" }}>Concepto del Pago</th>
+                        <th style={{ padding: "0.6rem 0.75rem", color: "var(--devio-neutral-3)" }}>Fecha de Pago</th>
+                        <th style={{ padding: "0.6rem 0.75rem", color: "var(--devio-neutral-3)", textAlign: "right" }}>Monto</th>
+                        <th style={{ padding: "0.6rem 0.6rem", color: "var(--devio-neutral-3)", textAlign: "center", width: "85px" }}>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paymentSchedule.map((row, idx) => (
                         <tr key={row.id ? `${row.id}-${idx}` : idx} style={{ borderBottom: "1px solid #F1F5F9" }}>
-                          <td style={{ padding: "0.55rem 1rem", fontWeight: 600, color: "var(--devio-blue-dark)" }}>
-                            {idx + 1}. {row.concept}
+                          <td style={{ padding: "0.55rem 0.4rem", textAlign: "center", fontWeight: 700, color: "var(--devio-neutral-3)", fontSize: "0.78rem" }}>
+                            {idx + 1}
                           </td>
-                          <td style={{ padding: "0.55rem 1rem", minWidth: "160px" }}>
+                          <td style={{ padding: "0.55rem 0.75rem", minWidth: "170px" }}>
+                            <input
+                              type="text"
+                              value={row.concept}
+                              onChange={(e) => handleUpdateRowConcept(row.id, e.target.value)}
+                              placeholder={`Concepto (ej. Cuota ${idx + 1})`}
+                              style={{
+                                width: "100%",
+                                padding: "0.45rem 0.65rem",
+                                borderRadius: "0.45rem",
+                                border: "1px solid var(--devio-neutral-2)",
+                                fontSize: "0.82rem",
+                                fontWeight: 600,
+                                color: "var(--devio-blue-dark)",
+                                backgroundColor: "var(--devio-white)",
+                                outline: "none",
+                              }}
+                            />
+                          </td>
+                          <td style={{ padding: "0.55rem 0.75rem", minWidth: "155px" }}>
                             <DevioDatePicker
                               value={row.date}
                               minDate={idx === 0 ? saleDate : paymentSchedule[idx - 1]?.date}
@@ -2904,12 +2989,56 @@ export default function CreateSaleWizardModal({
                               placeholder="Seleccionar"
                             />
                           </td>
-                          <td style={{ padding: "0.55rem 1rem", textAlign: "right" }}>
+                          <td style={{ padding: "0.55rem 0.75rem", textAlign: "right" }}>
                             <CurrencyInput
                               value={row.amount}
                               onChange={(newVal) => handleUpdateRowAmount(row.id, newVal)}
-                              style={{ width: "150px" }}
+                              style={{ width: "140px" }}
                             />
+                          </td>
+                          <td style={{ padding: "0.55rem 0.5rem", textAlign: "center" }}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                              <button
+                                type="button"
+                                onClick={() => handleAddRowAfter(idx)}
+                                title="Insertar cuota debajo"
+                                style={{
+                                  background: "#EFF6FF",
+                                  border: "1px solid #BFDBFE",
+                                  color: "#2563EB",
+                                  cursor: "pointer",
+                                  width: "28px",
+                                  height: "28px",
+                                  borderRadius: "6px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  transition: "all 0.15s ease",
+                                }}
+                              >
+                                <Plus size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRow(row.id)}
+                                title="Eliminar esta cuota"
+                                style={{
+                                  background: "#FEF2F2",
+                                  border: "1px solid #FECACA",
+                                  color: "#EF4444",
+                                  cursor: "pointer",
+                                  width: "28px",
+                                  height: "28px",
+                                  borderRadius: "6px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  transition: "all 0.15s ease",
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}

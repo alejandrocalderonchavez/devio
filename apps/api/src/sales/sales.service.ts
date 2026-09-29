@@ -281,8 +281,33 @@ export class SalesService {
         else if (rawType.includes("ENGANCHE") || rawType.includes("DOWN")) obType = "DOWN_PAYMENT";
         else if (rawType.includes("LIQUIDAC") || rawType.includes("FINIQUITO") || rawType.includes("SETTLE")) obType = "SETTLEMENT";
 
-        const dueDate = item.dueDate ? new Date(item.dueDate) : new Date(Date.now() + (i + 1) * 30 * 24 * 60 * 60 * 1000);
-        const itemAmount = Number(item.amount || item.total || 0);
+        const rawDateStr = item.dueDate || item.date || item.scheduledDate || item.fechaProgramada;
+        let parsedDueDate: Date | null = null;
+        if (rawDateStr) {
+          if (typeof rawDateStr === "string" && rawDateStr.includes("-")) {
+            const parts = rawDateStr.split("-");
+            if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+              if (parts[0].length === 4) {
+                // YYYY-MM-DD
+                parsedDueDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+              } else {
+                // DD-MM-YYYY
+                parsedDueDate = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10), 12, 0, 0);
+              }
+            }
+          } else if (typeof rawDateStr === "string" && rawDateStr.includes("/")) {
+            const parts = rawDateStr.split("/");
+            if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+              // DD/MM/YYYY
+              parsedDueDate = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10), 12, 0, 0);
+            }
+          }
+          if (!parsedDueDate || isNaN(parsedDueDate.getTime())) {
+            parsedDueDate = new Date(rawDateStr);
+          }
+        }
+        const dueDate = (parsedDueDate && !isNaN(parsedDueDate.getTime())) ? parsedDueDate : new Date(Date.now() + (i + 1) * 30 * 24 * 60 * 60 * 1000);
+        const itemAmount = Number(item.amount || item.total || item.scheduledAmount || 0);
 
         if (itemAmount > 0) {
           await this.prisma.scheduledObligation.create({

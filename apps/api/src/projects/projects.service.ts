@@ -272,7 +272,12 @@ export class ProjectsService {
             paymentReceipts: { orderBy: { paymentDate: "desc" } },
           },
         },
-        documents: true,
+        documents: {
+          include: {
+            client: true,
+            unit: true,
+          },
+        },
         additionals: {
           include: {
             unit: true,
@@ -304,7 +309,12 @@ export class ProjectsService {
             paymentReceipts: { orderBy: { paymentDate: "desc" } },
           },
         },
-        documents: true,
+        documents: {
+          include: {
+            client: true,
+            unit: true,
+          },
+        },
         additionals: {
           include: {
             unit: true,
