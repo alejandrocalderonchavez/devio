@@ -128,20 +128,27 @@ export default function EditProjectModal({
         setCoverFileName(null);
       }
 
-      // Load real system users from storage to merge with project assigned team
+      // Load real system users from storage to merge with project assigned team (exclude clients)
       let registeredUsers: Array<{ id: string; name: string; email: string; role: string }> = [];
       if (typeof window !== "undefined") {
         const storedUsers = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
         if (storedUsers) {
           try {
-            registeredUsers = JSON.parse(storedUsers);
+            const parsed = JSON.parse(storedUsers);
+            if (Array.isArray(parsed)) {
+              registeredUsers = parsed.filter(
+                (u: any) => u.role && u.role.toUpperCase() !== "CLIENT" && u.role.toUpperCase() !== "CLIENTE"
+              );
+            }
           } catch (e) {
             registeredUsers = [];
           }
         }
       }
 
-      const assignedTeam = activeProject.team || [];
+      const assignedTeam = (activeProject.team || []).filter(
+        (t) => t.role && t.role.toUpperCase() !== "CLIENT" && t.role.toUpperCase() !== "CLIENTE"
+      );
       const assignedIdsOrEmails = new Set(
         assignedTeam.filter((t) => t.assigned !== false).map((t) => (t.email ? t.email.toLowerCase() : t.id))
       );

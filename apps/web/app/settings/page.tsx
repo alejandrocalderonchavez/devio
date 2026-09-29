@@ -305,7 +305,10 @@ export default function SettingsPage() {
         try {
           const parsed = JSON.parse(storedSystemUsers);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setSystemUsers(parsed);
+            const nonClients = parsed.filter(
+              (u: any) => u.role && u.role.toUpperCase() !== "CLIENT" && u.role.toUpperCase() !== "CLIENTE"
+            );
+            setSystemUsers(nonClients);
             return;
           }
         } catch (e) {}

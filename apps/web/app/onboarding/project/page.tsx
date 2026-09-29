@@ -176,7 +176,10 @@ export default function ProjectOnboardingPage() {
       const stored = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
       if (stored) {
         try {
-          const sysUsers: Array<{ id: string; name: string; email: string; role: string }> = JSON.parse(stored);
+          const rawUsers: Array<{ id: string; name: string; email: string; role: string }> = JSON.parse(stored);
+          const sysUsers = Array.isArray(rawUsers)
+            ? rawUsers.filter((u) => u.role && u.role.toUpperCase() !== "CLIENT" && u.role.toUpperCase() !== "CLIENTE")
+            : [];
           if (sysUsers && sysUsers.length > 0) {
             setTeamMembers(
               sysUsers.map((u) => ({

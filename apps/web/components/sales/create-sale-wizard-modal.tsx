@@ -187,24 +187,27 @@ export default function CreateSaleWizardModal({
 
     if (!found && typeof window !== "undefined") {
       try {
-        const stored = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
-        if (stored) {
-          const list = JSON.parse(stored);
-          if (Array.isArray(list)) {
-            const inUsers = list.find(
-              (u: any) =>
-                (trimmedEmail && u.email && u.email.toLowerCase() === trimmedEmail) ||
-                (trimmedName && u.name && u.name.toLowerCase() === trimmedName)
-            );
-            if (inUsers) {
-              found = {
-                name: inUsers.name || inUsers.fullName || "",
-                email: inUsers.email || "",
-                phone: inUsers.phone || "",
-                rfc: inUsers.rfc || "",
-                isExisting: true,
-              };
-            }
+        const storedClients = localStorage.getItem("devio_client_portal_users") || sessionStorage.getItem("devio_client_portal_users");
+        const storedSys = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
+        const combined = [
+          ...(storedClients ? JSON.parse(storedClients) : []),
+          ...(storedSys ? JSON.parse(storedSys) : []),
+        ];
+
+        if (Array.isArray(combined)) {
+          const inUsers = combined.find(
+            (u: any) =>
+              (trimmedEmail && u.email && u.email.toLowerCase() === trimmedEmail) ||
+              (trimmedName && u.name && u.name.toLowerCase() === trimmedName)
+          );
+          if (inUsers) {
+            found = {
+              name: inUsers.name || inUsers.fullName || "",
+              email: inUsers.email || "",
+              phone: inUsers.phone || "",
+              rfc: inUsers.rfc || "",
+              isExisting: true,
+            };
           }
         }
       } catch {
@@ -239,20 +242,23 @@ export default function CreateSaleWizardModal({
     );
     if (inProjects) return true;
 
-    // 2. Check devio_system_users in storage
+    // 2. Check storage (client portal users and system users)
     if (typeof window !== "undefined") {
       try {
-        const stored = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
-        if (stored) {
-          const list = JSON.parse(stored);
-          if (Array.isArray(list)) {
-            const inUsers = list.some(
-              (u: any) =>
-                (trimmedEmail && u.email && u.email.toLowerCase() === trimmedEmail) ||
-                (trimmedName && u.name && u.name.toLowerCase() === trimmedName)
-            );
-            if (inUsers) return true;
-          }
+        const storedClients = localStorage.getItem("devio_client_portal_users") || sessionStorage.getItem("devio_client_portal_users");
+        const storedSys = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
+        const combined = [
+          ...(storedClients ? JSON.parse(storedClients) : []),
+          ...(storedSys ? JSON.parse(storedSys) : []),
+        ];
+
+        if (Array.isArray(combined)) {
+          const inUsers = combined.some(
+            (u: any) =>
+              (trimmedEmail && u.email && u.email.toLowerCase() === trimmedEmail) ||
+              (trimmedName && u.name && u.name.toLowerCase() === trimmedName)
+          );
+          if (inUsers) return true;
         }
       } catch {
         // ignore
@@ -1172,21 +1178,21 @@ export default function CreateSaleWizardModal({
         };
       });
 
-      // Register / persist new users in devio_system_users
+      // Register / persist client portal users in devio_client_portal_users and clean devio_system_users
       if (typeof window !== "undefined") {
         try {
-          const stored = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
-          let usersList: any[] = [];
-          if (stored) {
-            usersList = JSON.parse(stored);
+          // 1. Save to dedicated client portal users storage
+          const storedClients = localStorage.getItem("devio_client_portal_users") || sessionStorage.getItem("devio_client_portal_users");
+          let clientPortalUsers: any[] = [];
+          if (storedClients) {
+            clientPortalUsers = JSON.parse(storedClients);
           }
 
           finalCoOwners.forEach((owner) => {
             if (!owner.email) return;
-            const existingIdx = usersList.findIndex((u) => u.email?.toLowerCase() === owner.email.toLowerCase());
+            const existingIdx = clientPortalUsers.findIndex((u) => u.email?.toLowerCase() === owner.email.toLowerCase());
             if (existingIdx === -1) {
-              // Create new system user account for client portal & mobile app
-              usersList.push({
+              clientPortalUsers.push({
                 id: owner.id || `client-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                 name: owner.name,
                 email: owner.email,
@@ -1211,10 +1217,23 @@ export default function CreateSaleWizardModal({
             }
           });
 
-          localStorage.setItem("devio_system_users", JSON.stringify(usersList));
-          sessionStorage.setItem("devio_system_users", JSON.stringify(usersList));
+          localStorage.setItem("devio_client_portal_users", JSON.stringify(clientPortalUsers));
+          sessionStorage.setItem("devio_client_portal_users", JSON.stringify(clientPortalUsers));
+
+          // 2. Ensure devio_system_users NEVER contains users with role CLIENT or CLIENTE
+          const storedSys = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
+          if (storedSys) {
+            const parsedSys = JSON.parse(storedSys);
+            if (Array.isArray(parsedSys)) {
+              const cleanSys = parsedSys.filter(
+                (u: any) => u.role && u.role.toUpperCase() !== "CLIENT" && u.role.toUpperCase() !== "CLIENTE"
+              );
+              localStorage.setItem("devio_system_users", JSON.stringify(cleanSys));
+              sessionStorage.setItem("devio_system_users", JSON.stringify(cleanSys));
+            }
+          }
         } catch (err) {
-          console.error("Error saving client users to devio_system_users:", err);
+          console.error("Error managing client users storage:", err);
         }
       }
 

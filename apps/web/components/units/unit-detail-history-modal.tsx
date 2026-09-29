@@ -94,18 +94,22 @@ export default function UnitDetailHistoryModal({
   useEffect(() => {
     let list: Array<{ name: string; email: string; role: string }> = [];
     if (currentProject?.team && currentProject.team.length > 0) {
-      list = currentProject.team.filter((m) => m.assigned !== false).map((m) => ({ name: m.name, email: m.email, role: m.role }));
+      list = currentProject.team
+        .filter((m) => m.assigned !== false && m.role && m.role.toUpperCase() !== "CLIENT" && m.role.toUpperCase() !== "CLIENTE")
+        .map((m) => ({ name: m.name, email: m.email, role: m.role }));
     }
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
       if (stored) {
         try {
           const sysUsers: any[] = JSON.parse(stored);
-          sysUsers.forEach((u) => {
-            if (!list.some((existing) => existing.email.toLowerCase() === u.email.toLowerCase() || existing.name === u.name)) {
-              list.push({ name: u.name, email: u.email, role: u.role });
-            }
-          });
+          sysUsers
+            .filter((u) => u.role && u.role.toUpperCase() !== "CLIENT" && u.role.toUpperCase() !== "CLIENTE")
+            .forEach((u) => {
+              if (!list.some((existing) => existing.email.toLowerCase() === u.email.toLowerCase() || existing.name === u.name)) {
+                list.push({ name: u.name, email: u.email, role: u.role });
+              }
+            });
         } catch (e) {}
       }
     }
