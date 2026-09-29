@@ -837,38 +837,95 @@ export default function ClientDetailPage() {
   // Modal para ver abonos aplicados a una cuota específica
   const [selectedCuotaForAbonos, setSelectedCuotaForAbonos] = useState<InstallmentItem | null>(null);
 
-  // Payments / Abonos filtered specifically for the selected cuota
-  const cuotaSpecificPayments = useMemo<PaymentReceipt[]>(() => {
-    if (!selectedCuotaForAbonos || selectedCuotaForAbonos.montoPagado <= 0) return [];
+  interface CuotaContributionItem {
+    receipt: PaymentReceipt;
+    allocatedAmount: number;
+    totalReceiptAmount: number;
+    isPartial: boolean;
+    isSplit: boolean;
+  }
 
-    // 1. Direct match by scheduledDate, ID in notes, or exact paymentDate
-    const direct = paymentsList.filter((p) => {
-      if (p.scheduledDate && (p.scheduledDate === selectedCuotaForAbonos.fechaProgramada || p.scheduledDate === selectedCuotaForAbonos.id)) return true;
-      if (p.notes && (p.notes.includes(selectedCuotaForAbonos.id) || p.notes.includes(selectedCuotaForAbonos.fechaProgramada))) return true;
-      if (selectedCuotaForAbonos.fechaPago && selectedCuotaForAbonos.fechaPago !== "Pendiente" && p.fechaPago === selectedCuotaForAbonos.fechaPago) return true;
-      return false;
+  // Calculate chronological allocation of all real paymentsList receipts across statementData cuotas
+  const cuotaContributionsMap = useMemo<Map<string, CuotaContributionItem[]>>(() => {
+    const map = new Map<string, CuotaContributionItem[]>();
+    if (!statementData || statementData.length === 0 || !paymentsList || paymentsList.length === 0) {
+      return map;
+    }
+
+    // Sort statementData in chronological order
+    const sortedCuotas = [...statementData].sort((a, b) => {
+      const dateA = parseDateFlexible(a.fechaProgramada)?.getTime() || 0;
+      const dateB = parseDateFlexible(b.fechaProgramada)?.getTime() || 0;
+      return dateA - dateB;
     });
 
-    if (direct.length > 0) return direct;
+    // Sort paymentsList in chronological order
+    const sortedPayments = [...paymentsList].sort((a, b) => {
+      const dateA = parseDateFlexible(a.fechaPago)?.getTime() || 0;
+      const dateB = parseDateFlexible(b.fechaPago)?.getTime() || 0;
+      return dateA - dateB;
+    });
 
-    const engancheMatch = paymentsList.filter((p) =>
-      (p.notes || "").toLowerCase().includes("enganche") || (p.reciboFolio || "").toLowerCase().includes("rec")
-    );
-    if (engancheMatch.length > 0) return [engancheMatch[0]!];
+    const tracking = sortedPayments.map((p) => ({
+      receipt: p,
+      totalAmount: Number(p.monto) || 0,
+      remainingAmount: Number(p.monto) || 0,
+    }));
 
-    // 3. Fallback: create synthesized abono receipt for this exact cuota
-    return [
-      {
-        id: `abono-${selectedCuotaForAbonos.id}`,
-        reciboFolio: `REC-${selectedCuotaForAbonos.unit}-${selectedCuotaForAbonos.id.slice(-4)}`,
-        fechaPago: selectedCuotaForAbonos.fechaPago && selectedCuotaForAbonos.fechaPago !== "Pendiente" ? selectedCuotaForAbonos.fechaPago : new Date().toLocaleDateString("es-MX"),
-        monto: selectedCuotaForAbonos.montoPagado,
-        metodoPago: selectedCuotaForAbonos.metodoPago !== "Pendiente" ? selectedCuotaForAbonos.metodoPago : "SPEI",
-        unit: selectedCuotaForAbonos.unit,
-        notes: `Abono aplicado a cuota programada (${selectedCuotaForAbonos.fechaProgramada})`,
+    for (const cuota of sortedCuotas) {
+      let needed = Number(cuota.montoProgramado) || 0;
+      const list: CuotaContributionItem[] = [];
+
+      for (const t of tracking) {
+        if (needed <= 0) break;
+        if (t.remainingAmount <= 0) continue;
+
+        const alloc = Math.min(needed, t.remainingAmount);
+        t.remainingAmount -= alloc;
+        needed -= alloc;
+
+        list.push({
+          receipt: t.receipt,
+          allocatedAmount: alloc,
+          totalReceiptAmount: t.totalAmount,
+          isPartial: alloc < cuota.montoProgramado,
+          isSplit: alloc < t.totalAmount,
+        });
       }
-    ];
-  }, [selectedCuotaForAbonos, paymentsList, statementData]);
+
+      map.set(cuota.id, list);
+    }
+
+    return map;
+  }, [statementData, paymentsList]);
+
+  const currentCuotaContributions = useMemo<CuotaContributionItem[]>(() => {
+    if (!selectedCuotaForAbonos) return [];
+    const directList = cuotaContributionsMap.get(selectedCuotaForAbonos.id);
+    if (directList && directList.length > 0) return directList;
+
+    // Fallback if cuota was paid but not tracked in map
+    if (selectedCuotaForAbonos.montoPagado > 0) {
+      return [
+        {
+          receipt: {
+            id: `abono-${selectedCuotaForAbonos.id}`,
+            reciboFolio: `REC-${selectedCuotaForAbonos.unit}-${selectedCuotaForAbonos.id.slice(-4)}`,
+            fechaPago: selectedCuotaForAbonos.fechaPago && selectedCuotaForAbonos.fechaPago !== "Pendiente" ? selectedCuotaForAbonos.fechaPago : new Date().toLocaleDateString("es-MX"),
+            monto: selectedCuotaForAbonos.montoPagado,
+            metodoPago: selectedCuotaForAbonos.metodoPago !== "Pendiente" ? selectedCuotaForAbonos.metodoPago : "Transferencia SPEI",
+            unit: selectedCuotaForAbonos.unit,
+            notes: `Abono aplicado a cuota programada (${selectedCuotaForAbonos.fechaProgramada})`,
+          },
+          allocatedAmount: selectedCuotaForAbonos.montoPagado,
+          totalReceiptAmount: selectedCuotaForAbonos.montoPagado,
+          isPartial: selectedCuotaForAbonos.montoPagado < selectedCuotaForAbonos.montoProgramado,
+          isSplit: false,
+        },
+      ];
+    }
+    return [];
+  }, [selectedCuotaForAbonos, cuotaContributionsMap]);
 
   // Financial Summary
   const fullUnitAPagar = currentSale?.totalPrice || (currentSale as any)?.totalAmount || (statementData.reduce((acc, s) => acc + s.montoProgramado, 0) > 0 ? statementData.reduce((acc, s) => acc + s.montoProgramado, 0) : currentUnitObj?.price || 0);
@@ -5496,10 +5553,10 @@ export default function ClientDetailPage() {
 
               {/* Lista de Abonos Realizados */}
               <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.75rem" }}>
-                Historial de Abonos y Transacciones ({cuotaSpecificPayments.length})
+                Historial de Abonos y Transacciones ({currentCuotaContributions.length})
               </h4>
 
-              {cuotaSpecificPayments.length === 0 ? (
+              {currentCuotaContributions.length === 0 ? (
                 <div
                   style={{
                     padding: "2rem 1.5rem",
@@ -5517,92 +5574,101 @@ export default function ClientDetailPage() {
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "1.5rem" }}>
-                  {cuotaSpecificPayments.map((pay) => (
-                    <div
-                      key={pay.id}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "0.85rem 1rem",
-                        backgroundColor: "#FFFFFF",
-                        border: "1px solid #E2E8F0",
-                        borderRadius: "0.75rem",
-                        boxShadow: "0 1px 4px rgba(0,0,0,0.02)",
-                      }}
-                    >
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <span
+                  {currentCuotaContributions.map((item, idx) => {
+                    const { receipt, allocatedAmount, totalReceiptAmount } = item;
+                    return (
+                      <div
+                        key={receipt.id ? `${receipt.id}-${idx}` : `contrib-${idx}`}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "0.85rem 1rem",
+                          backgroundColor: "#FFFFFF",
+                          border: "1px solid #E2E8F0",
+                          borderRadius: "0.75rem",
+                          boxShadow: "0 1px 4px rgba(0,0,0,0.02)",
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.2rem" }}>
+                            <span
+                              style={{
+                                fontSize: "0.72rem",
+                                fontWeight: 800,
+                                backgroundColor: "rgba(0, 196, 140, 0.12)",
+                                color: "#00A877",
+                                padding: "0.15rem 0.5rem",
+                                borderRadius: "0.3rem",
+                              }}
+                            >
+                              {receipt.reciboFolio}
+                            </span>
+                            <strong style={{ fontSize: "0.92rem", color: "#1F3652" }}>
+                              {formatMoney(allocatedAmount)}
+                            </strong>
+                            {allocatedAmount < totalReceiptAmount && (
+                              <span style={{ fontSize: "0.7rem", color: "#64748B", backgroundColor: "#F1F5F9", padding: "0.1rem 0.4rem", borderRadius: "4px" }}>
+                                Aporte parcial (Recibo total: {formatMoney(totalReceiptAmount)})
+                              </span>
+                            )}
+                          </div>
+                          <span style={{ fontSize: "0.75rem", color: "#64748B", display: "block" }}>
+                            Fecha de cobro: <strong>{receipt.fechaPago}</strong> • Método: <strong>{receipt.metodoPago}</strong>
+                            {receipt.reference ? ` • Ref: ${receipt.reference}` : ""}
+                          </span>
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedReceiptForView(receipt);
+                              setSelectedCuotaForAbonos(null);
+                            }}
                             style={{
-                              fontSize: "0.72rem",
-                              fontWeight: 800,
-                              backgroundColor: "rgba(0, 196, 140, 0.12)",
-                              color: "#00A877",
-                              padding: "0.15rem 0.5rem",
-                              borderRadius: "0.3rem",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              padding: "0.4rem 0.75rem",
+                              borderRadius: "0.45rem",
+                              border: "1px solid #CBD5E1",
+                              backgroundColor: "#FFFFFF",
+                              color: "#1F3652",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
                             }}
                           >
-                            {pay.reciboFolio}
-                          </span>
-                          <strong style={{ fontSize: "0.9rem", color: "#1F3652" }}>
-                            {formatMoney(pay.monto)}
-                          </strong>
+                            <Printer size={13} color="#2F80ED" /> Recibo
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedVoucherForView(receipt);
+                              setSelectedCuotaForAbonos(null);
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              padding: "0.4rem 0.75rem",
+                              borderRadius: "0.45rem",
+                              border: "1px solid rgba(47, 128, 237, 0.25)",
+                              backgroundColor: "rgba(47, 128, 237, 0.08)",
+                              color: "#2F80ED",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <FileText size={13} /> Comprobante
+                          </button>
                         </div>
-                        <span style={{ fontSize: "0.75rem", color: "#64748B", display: "block", marginTop: "0.2rem" }}>
-                          Fecha de cobro: {pay.fechaPago} • Método: {pay.metodoPago}
-                        </span>
                       </div>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedReceiptForView(pay);
-                            setSelectedCuotaForAbonos(null);
-                          }}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.35rem",
-                            padding: "0.4rem 0.8rem",
-                            borderRadius: "0.45rem",
-                            border: "1px solid #CBD5E1",
-                            backgroundColor: "#FFFFFF",
-                            color: "#1F3652",
-                            fontSize: "0.75rem",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <Printer size={13} color="#2F80ED" /> Recibo
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedVoucherForView(pay);
-                            setSelectedCuotaForAbonos(null);
-                          }}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.35rem",
-                            padding: "0.4rem 0.8rem",
-                            borderRadius: "0.45rem",
-                            border: "1px solid rgba(47, 128, 237, 0.25)",
-                            backgroundColor: "rgba(47, 128, 237, 0.08)",
-                            color: "#2F80ED",
-                            fontSize: "0.75rem",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <FileText size={13} /> Comprobante
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 

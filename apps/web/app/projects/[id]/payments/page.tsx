@@ -254,10 +254,37 @@ export default function ProjectPaymentsPage() {
       const planName = typeof sale.paymentPlan === "string" ? sale.paymentPlan : (sale.paymentPlan as any)?.name || "Plan de Pago";
       const targetClientId = sale.clientId || sale.clientEmail || (sale as any).primaryClient?.email || clientName;
 
-      const totalPaidAvailable = (sale.payments && sale.payments.length > 0)
-        ? sale.payments.reduce((acc: number, p: any) => acc + (Number(p.amount ?? p.monto) || 0), 0)
-        : (Number(sale.paidAmount) || 0);
+      const rawPayments: any[] = (sale.payments && sale.payments.length > 0)
+        ? sale.payments.map((p: any) => ({
+            id: p.id || `pay-${unitNum}-${p.receiptFolio || p.reciboFolio || Date.now()}`,
+            fechaPago: p.paymentDate || p.fechaPago || (p.createdAt ? new Date(p.createdAt).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX")),
+            metodoPago: p.paymentMethod || p.metodoPago || "Transferencia SPEI",
+            monto: Number(p.amount ?? p.monto) || 0,
+            unit: unitNum,
+            reciboFolio: p.receiptFolio || p.reciboFolio || `REC-${unitNum}-${(p.id || "001").slice(-4)}`,
+            comprobanteUrl: p.voucherUrl || p.comprobanteUrl,
+            voucherName: p.voucherName,
+            reference: p.reference,
+            notes: p.notes,
+            moratoryAmount: p.moratoryAmount,
+            moratoryAction: p.moratoryAction,
+            waiveReason: p.waiveReason,
+          }))
+        : [];
 
+      if (rawPayments.length === 0 && Number(sale.paidAmount) > 0) {
+        rawPayments.push({
+          id: `pay-${unitNum}-init`,
+          fechaPago: sale.saleDate ? new Date(sale.saleDate).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX"),
+          metodoPago: "Transferencia SPEI",
+          monto: Number(sale.paidAmount),
+          unit: unitNum,
+          reciboFolio: `REC-${(sale.id || unitNum || "001").replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}`,
+          notes: "Pago de enganche inicial",
+        });
+      }
+
+      const totalPaidAvailable = rawPayments.reduce((acc: number, p: any) => acc + (Number(p.monto) || 0), 0);
       let remainingPaid = totalPaidAvailable;
 
       const obligationsList = Array.isArray(sale.schedule) && sale.schedule.length > 0
@@ -271,6 +298,18 @@ export default function ProjectPaymentsPage() {
         const dateB = parseDateFlexible(b.scheduledDate || b.dueDate || b.fechaProgramada || "")?.getTime() || 0;
         return dateA - dateB;
       });
+
+      const sortedPayments = [...rawPayments].sort((a: any, b: any) => {
+        const dateA = parseDateFlexible(a.fechaPago)?.getTime() || 0;
+        const dateB = parseDateFlexible(b.fechaPago)?.getTime() || 0;
+        return dateA - dateB;
+      });
+
+      const trackingReceipts = sortedPayments.map((p: any) => ({
+        receipt: p,
+        totalAmount: Number(p.monto) || 0,
+        remainingAmount: Number(p.monto) || 0,
+      }));
 
       if (sortedObligations.length > 0) {
         sortedObligations.forEach((inst: any, idx: number) => {
@@ -312,6 +351,32 @@ export default function ProjectPaymentsPage() {
             pMethod = pAmount > 0 ? (inst.paymentMethod || "Transferencia SPEI") : "Pendiente";
           }
 
+          let needed = sAmount;
+          const contributions: Array<{
+            receipt: any;
+            allocatedAmount: number;
+            totalReceiptAmount: number;
+            isPartial: boolean;
+            isSplit: boolean;
+          }> = [];
+
+          for (const t of trackingReceipts) {
+            if (needed <= 0) break;
+            if (t.remainingAmount <= 0) continue;
+
+            const alloc = Math.min(needed, t.remainingAmount);
+            t.remainingAmount -= alloc;
+            needed -= alloc;
+
+            contributions.push({
+              receipt: t.receipt,
+              allocatedAmount: alloc,
+              totalReceiptAmount: t.totalAmount,
+              isPartial: alloc < sAmount,
+              isSplit: alloc < t.totalAmount,
+            });
+          }
+
           result.push({
             id: uniqueId,
             clientId: targetClientId,
@@ -327,6 +392,7 @@ export default function ProjectPaymentsPage() {
             concept: inst.concept || inst.title || `Cuota ${idx + 1}`,
             pendingAmount: pendAmount,
             saleRecord: sale,
+            contributions,
           } as any);
         });
       }
@@ -2001,159 +2067,214 @@ export default function ProjectPaymentsPage() {
               </div>
 
               {/* Historial de Abonos */}
-              <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.75rem" }}>
-                Historial de Abonos y Transacciones ({selectedPaymentForAbonos.paidAmount > 0 ? 1 : 0})
-              </h4>
+              {(() => {
+                const contributions = (selectedPaymentForAbonos.contributions && selectedPaymentForAbonos.contributions.length > 0)
+                  ? selectedPaymentForAbonos.contributions
+                  : selectedPaymentForAbonos.paidAmount > 0
+                  ? [
+                      {
+                        receipt: {
+                          id: selectedPaymentForAbonos.id,
+                          unit: selectedPaymentForAbonos.unit,
+                          reciboFolio: `REC-DEV-${selectedPaymentForAbonos.unit}-${Date.now().toString().slice(-4)}`,
+                          fechaPago: selectedPaymentForAbonos.paymentDate,
+                          metodoPago: selectedPaymentForAbonos.paymentMethod,
+                          monto: selectedPaymentForAbonos.paidAmount,
+                          clientName: selectedPaymentForAbonos.clientName,
+                        },
+                        allocatedAmount: selectedPaymentForAbonos.paidAmount,
+                        totalReceiptAmount: selectedPaymentForAbonos.paidAmount,
+                        isPartial: false,
+                        isSplit: false,
+                      },
+                    ]
+                  : [];
 
-              {selectedPaymentForAbonos.paidAmount <= 0 ? (
-                <div
-                  style={{
-                    padding: "2rem 1.5rem",
-                    textAlign: "center",
-                    backgroundColor: "#FAFBFD",
-                    borderRadius: "0.75rem",
-                    border: "1px dashed #CBD5E1",
-                    marginBottom: "1.5rem",
-                  }}
-                >
-                  <CreditCard size={32} color="#94A3B8" style={{ margin: "0 auto 0.5rem auto" }} />
-                  <p style={{ fontSize: "0.85rem", color: "#64748B", margin: 0 }}>
-                    Aún no se han registrado transacciones de abono para esta cuota.
-                  </p>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "1.5rem" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "0.85rem 1rem",
-                      backgroundColor: "#FFFFFF",
-                      border: "1px solid #E2E8F0",
-                      borderRadius: "0.75rem",
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.02)",
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <span
-                          style={{
-                            fontSize: "0.72rem",
-                            fontWeight: 800,
-                            backgroundColor: "rgba(0, 196, 140, 0.12)",
-                            color: "#00A877",
-                            padding: "0.15rem 0.5rem",
-                            borderRadius: "0.3rem",
-                          }}
-                        >
-                          REC-DEV-{selectedPaymentForAbonos.unit}-{Date.now().toString().slice(-4)}
-                        </span>
-                        <strong style={{ fontSize: "0.9rem", color: "#1F3652" }}>
-                          {formatMoney(selectedPaymentForAbonos.paidAmount)}
-                        </strong>
+                return (
+                  <>
+                    <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.75rem" }}>
+                      Historial de Abonos y Transacciones ({contributions.length})
+                    </h4>
+
+                    {contributions.length === 0 ? (
+                      <div
+                        style={{
+                          padding: "2rem 1.5rem",
+                          textAlign: "center",
+                          backgroundColor: "#FAFBFD",
+                          borderRadius: "0.75rem",
+                          border: "1px dashed #CBD5E1",
+                          marginBottom: "1.5rem",
+                        }}
+                      >
+                        <CreditCard size={32} color="#94A3B8" style={{ margin: "0 auto 0.5rem auto" }} />
+                        <p style={{ fontSize: "0.85rem", color: "#64748B", margin: 0 }}>
+                          Aún no se han registrado transacciones de abono para esta cuota.
+                        </p>
                       </div>
-                      <span style={{ fontSize: "0.75rem", color: "#64748B", display: "block", marginTop: "0.2rem" }}>
-                        Fecha de cobro: {selectedPaymentForAbonos.paymentDate} • Método: {selectedPaymentForAbonos.paymentMethod}
-                      </span>
-                    </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "1.5rem" }}>
+                        {contributions.map((item: any, idx: number) => {
+                          const { receipt, allocatedAmount, totalReceiptAmount } = item;
+                          const receiptWithContext = {
+                            ...receipt,
+                            clientName: receipt.clientName || selectedPaymentForAbonos.clientName,
+                            unit: receipt.unit || selectedPaymentForAbonos.unit,
+                            folio: receipt.reciboFolio || receipt.receiptFolio || receipt.folio || `REC-${selectedPaymentForAbonos.unit}-${(receipt.id || "001").slice(-4)}`,
+                            reciboFolio: receipt.reciboFolio || receipt.receiptFolio || receipt.folio || `REC-${selectedPaymentForAbonos.unit}-${(receipt.id || "001").slice(-4)}`,
+                            paymentDate: receipt.fechaPago || receipt.paymentDate || selectedPaymentForAbonos.paymentDate,
+                            fechaPago: receipt.fechaPago || receipt.paymentDate || selectedPaymentForAbonos.paymentDate,
+                            paymentMethod: receipt.metodoPago || receipt.paymentMethod || selectedPaymentForAbonos.paymentMethod || "Transferencia SPEI",
+                            metodoPago: receipt.metodoPago || receipt.paymentMethod || selectedPaymentForAbonos.paymentMethod || "Transferencia SPEI",
+                            paidAmount: receipt.monto || receipt.amount || receipt.paidAmount || allocatedAmount,
+                            amount: receipt.monto || receipt.amount || receipt.paidAmount || allocatedAmount,
+                            monto: receipt.monto || receipt.amount || receipt.paidAmount || allocatedAmount,
+                          };
 
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                      {hasPermission("payments.audit_abonos") && (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditAbono(selectedPaymentForAbonos)}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.25rem",
-                            backgroundColor: "#F1F5F9",
-                            color: "#1F3652",
-                            border: "1px solid #CBD5E1",
-                            padding: "0.35rem 0.6rem",
-                            borderRadius: "0.45rem",
-                            fontSize: "0.74rem",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                          title="Auditoría contable: modificar monto real, fecha bancaria o método"
-                        >
-                          <Edit3 size={12} color="#2F80ED" /> Editar
-                        </button>
-                      )}
+                          return (
+                            <div
+                              key={receipt.id ? `${receipt.id}-${idx}` : `contrib-${idx}`}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                padding: "0.85rem 1rem",
+                                backgroundColor: "#FFFFFF",
+                                border: "1px solid #E2E8F0",
+                                borderRadius: "0.75rem",
+                                boxShadow: "0 1px 4px rgba(0,0,0,0.02)",
+                              }}
+                            >
+                              <div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.2rem" }}>
+                                  <span
+                                    style={{
+                                      fontSize: "0.72rem",
+                                      fontWeight: 800,
+                                      backgroundColor: "rgba(0, 196, 140, 0.12)",
+                                      color: "#00A877",
+                                      padding: "0.15rem 0.5rem",
+                                      borderRadius: "0.3rem",
+                                    }}
+                                  >
+                                    {receiptWithContext.reciboFolio}
+                                  </span>
+                                  <strong style={{ fontSize: "0.92rem", color: "#1F3652" }}>
+                                    {formatMoney(allocatedAmount)}
+                                  </strong>
+                                  {allocatedAmount < totalReceiptAmount && (
+                                    <span style={{ fontSize: "0.7rem", color: "#64748B", backgroundColor: "#F1F5F9", padding: "0.1rem 0.4rem", borderRadius: "4px" }}>
+                                      Aporte parcial (Recibo total: {formatMoney(totalReceiptAmount)})
+                                    </span>
+                                  )}
+                                </div>
+                                <span style={{ fontSize: "0.75rem", color: "#64748B", display: "block" }}>
+                                  Fecha de cobro: <strong>{receiptWithContext.fechaPago}</strong> • Método: <strong>{receiptWithContext.metodoPago}</strong>
+                                  {receiptWithContext.reference ? ` • Ref: ${receiptWithContext.reference}` : ""}
+                                </span>
+                              </div>
 
-                      {hasPermission("payments.delete") && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteAbono(selectedPaymentForAbonos)}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.25rem",
-                            backgroundColor: "#FEF2F2",
-                            color: "#EF4444",
-                            border: "1px solid #FECACA",
-                            padding: "0.35rem 0.6rem",
-                            borderRadius: "0.45rem",
-                            fontSize: "0.74rem",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                          title="Revertir este abono"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                {hasPermission("payments.audit_abonos") && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditAbono(receiptWithContext)}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.25rem",
+                                      backgroundColor: "#F1F5F9",
+                                      color: "#1F3652",
+                                      border: "1px solid #CBD5E1",
+                                      padding: "0.35rem 0.6rem",
+                                      borderRadius: "0.45rem",
+                                      fontSize: "0.74rem",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                    title="Auditoría contable: modificar monto real, fecha bancaria o método"
+                                  >
+                                    <Edit3 size={12} color="#2F80ED" /> Editar
+                                  </button>
+                                )}
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedReceiptForView(selectedPaymentForAbonos);
-                          setSelectedPaymentForAbonos(null);
-                        }}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.35rem",
-                          padding: "0.35rem 0.65rem",
-                          borderRadius: "0.45rem",
-                          border: "1px solid #CBD5E1",
-                          backgroundColor: "#FFFFFF",
-                          color: "#1F3652",
-                          fontSize: "0.74rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        <Printer size={12} color="#2F80ED" /> Recibo
-                      </button>
+                                {hasPermission("payments.delete") && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteAbono(receiptWithContext)}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.25rem",
+                                      backgroundColor: "#FEF2F2",
+                                      color: "#EF4444",
+                                      border: "1px solid #FECACA",
+                                      padding: "0.35rem 0.6rem",
+                                      borderRadius: "0.45rem",
+                                      fontSize: "0.74rem",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                    title="Revertir este abono"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedVoucherForView(selectedPaymentForAbonos);
-                          setSelectedPaymentForAbonos(null);
-                        }}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.35rem",
-                          padding: "0.35rem 0.65rem",
-                          borderRadius: "0.45rem",
-                          border: "1px solid rgba(47, 128, 237, 0.25)",
-                          backgroundColor: "rgba(47, 128, 237, 0.08)",
-                          color: "#2F80ED",
-                          fontSize: "0.74rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        <FileText size={12} /> SPEI
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedReceiptForView(receiptWithContext);
+                                    setSelectedPaymentForAbonos(null);
+                                  }}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.35rem",
+                                    padding: "0.35rem 0.65rem",
+                                    borderRadius: "0.45rem",
+                                    border: "1px solid #CBD5E1",
+                                    backgroundColor: "#FFFFFF",
+                                    color: "#1F3652",
+                                    fontSize: "0.74rem",
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  <Printer size={12} color="#2F80ED" /> Recibo
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedVoucherForView(receiptWithContext);
+                                    setSelectedPaymentForAbonos(null);
+                                  }}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.35rem",
+                                    padding: "0.35rem 0.65rem",
+                                    borderRadius: "0.45rem",
+                                    border: "1px solid rgba(47, 128, 237, 0.25)",
+                                    backgroundColor: "rgba(47, 128, 237, 0.08)",
+                                    color: "#2F80ED",
+                                    fontSize: "0.74rem",
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  <FileText size={12} /> SPEI
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 {hasPermission("payments.register") ? (
