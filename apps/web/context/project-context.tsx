@@ -175,6 +175,7 @@ interface ProjectContextType {
   updateProject: (projectId: string, updatedFields: Partial<ProjectItem>) => void;
   updateProjectProgress: (projectId: string, progressPct: number) => void;
   registerConstructionProgress: (projectId: string, advanceData: ProjectConstructionAdvance) => void;
+  deleteConstructionProgress: (projectId: string, advanceId: string) => Promise<void>;
   updateProjectFloorPlans: (projectId: string, floorPlans: ProjectFloorPlan[]) => void;
   addFloorPlan: (projectId: string, floorPlan: ProjectFloorPlan) => void;
   updateFloorPlan: (projectId: string, floorPlanId: string, updatedFields: Partial<ProjectFloorPlan>) => void;
@@ -2579,6 +2580,42 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }).catch((err) => console.warn("Could not sync progress with backend:", err));
   };
 
+  const deleteConstructionProgress = async (projectId: string, advanceId: string) => {
+    const updated = projects.map((p) => {
+      if (p.id !== projectId) return p;
+      const history = p.constructionHistory || [];
+      const newHistory = history.filter((adv) => adv.id !== advanceId);
+
+      // Latest remaining advance
+      const latestRemaining = newHistory.length > 0 ? newHistory[0] : null;
+      const newOverallPct = latestRemaining ? latestRemaining.pct : 0;
+
+      // Update unit construction percentages
+      const updatedUnits = (p.unitsInventory || []).map((u) => ({
+        ...u,
+        constructionPct: newOverallPct,
+      }));
+
+      return {
+        ...p,
+        progressPct: newOverallPct,
+        unitsInventory: updatedUnits,
+        constructionHistory: newHistory,
+      };
+    });
+
+    saveProjects(updated);
+    showToast("Avance Eliminado", "El avance fue removido de la bitácora y se recalcularon los porcentajes.");
+
+    try {
+      await fetch(`/api/progress/${advanceId}`, {
+        method: "DELETE",
+      });
+    } catch (err) {
+      console.warn("Could not sync progress deletion with backend:", err);
+    }
+  };
+
   const updateProjectProgress = (projectId: string, progressPct: number) => {
     const updated = projects.map((p) => {
       if (p.id !== projectId) return p;
@@ -3029,6 +3066,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         updateProject,
         updateProjectProgress,
         registerConstructionProgress,
+        deleteConstructionProgress,
         updateProjectFloorPlans,
         addFloorPlan,
         updateFloorPlan,

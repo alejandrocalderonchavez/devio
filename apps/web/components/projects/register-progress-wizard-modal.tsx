@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   X,
   Check,
@@ -20,6 +20,11 @@ import {
   Users,
   Download,
   Eye,
+  Trash2,
+  ExternalLink,
+  AlertTriangle,
+  AlertCircle,
+  Info,
 } from "lucide-react";
 import { DevioDatePicker } from "../ui/devio-date-picker";
 import { ProjectItem, ProjectConstructionAdvance } from "../../data/projects-data";
@@ -29,6 +34,7 @@ import {
   generateConstructionProgressPDF,
   openConstructionProgressInNewTab,
   ConstructionProgressPDFData,
+  resolveProjectLogo,
 } from "../../lib/pdf-generator";
 
 export interface RegisterProgressWizardModalProps {
@@ -48,7 +54,7 @@ export default function RegisterProgressWizardModal({
   currentProgressPct = 0,
   onProgressSaved,
 }: RegisterProgressWizardModalProps) {
-  const { registerConstructionProgress, getProject, developerName, developerLogo } = useProject();
+  const { registerConstructionProgress, deleteConstructionProgress, getProject, developerName, developerLogo } = useProject();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
 
@@ -59,12 +65,24 @@ export default function RegisterProgressWizardModal({
   const unitsInventory = activeProject?.unitsInventory || [];
   const historyAdvances = activeProject?.constructionHistory || [];
 
+  // Compute baseline percentages from the latest advance
+  const latestAdv = historyAdvances.length > 0 ? historyAdvances[0] : null;
+  const baselineOverallPct = latestAdv?.pct !== undefined ? latestAdv.pct : (initialProgress || 0);
+  const baselineCimentacionPct = latestAdv?.cimentacionPct !== undefined ? latestAdv.cimentacionPct : (baselineOverallPct >= 30 ? 100 : baselineOverallPct);
+  const baselineEstructuraPct = latestAdv?.estructuraPct !== undefined ? latestAdv.estructuraPct : baselineOverallPct;
+  const baselineInstalacionesPct = latestAdv?.instalacionesPct !== undefined ? latestAdv.instalacionesPct : Math.max(0, baselineOverallPct - 20);
+  const baselineAcabadosPct = latestAdv?.acabadosPct !== undefined ? latestAdv.acabadosPct : Math.max(0, baselineOverallPct - 40);
+
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [showHistory, setShowHistory] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState<boolean>(false);
   const [savedPDFData, setSavedPDFData] = useState<ConstructionProgressPDFData | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState<boolean>(false);
+
+  // Advance Detail Modal state (for clicking on past advances)
+  const [selectedAdvanceForDetail, setSelectedAdvanceForDetail] = useState<ProjectConstructionAdvance | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // Form states - Step 1: Bitácora & Alcance
   const [targetScope, setTargetScope] = useState<"PROJECT" | "UNITS">("PROJECT");
@@ -75,18 +93,31 @@ export default function RegisterProgressWizardModal({
   const [description, setDescription] = useState("");
 
   // Form states - Step 2: Porcentajes de Obra
-  const [overallPct, setOverallPct] = useState<number>(initialProgress || 0);
-  const [cimentacionPct, setCimentacionPct] = useState<number>(initialProgress >= 30 ? 100 : initialProgress || 0);
-  const [estructuraPct, setEstructuraPct] = useState<number>(initialProgress || 0);
-  const [instalacionesPct, setInstalacionesPct] = useState<number>(Math.max(0, (initialProgress || 0) - 20));
-  const [acabadosPct, setAcabadosPct] = useState<number>(Math.max(0, (initialProgress || 0) - 40));
+  const [overallPct, setOverallPct] = useState<number>(baselineOverallPct);
+  const [cimentacionPct, setCimentacionPct] = useState<number>(baselineCimentacionPct);
+  const [estructuraPct, setEstructuraPct] = useState<number>(baselineEstructuraPct);
+  const [instalacionesPct, setInstalacionesPct] = useState<number>(baselineInstalacionesPct);
+  const [acabadosPct, setAcabadosPct] = useState<number>(baselineAcabadosPct);
 
-  // Form states - Step 3: Fotos y Documentos (Clean empty state, no dummy data)
+  // Form states - Step 3: Fotos y Documentos
   const [photos, setPhotos] = useState<Array<{ name: string; url: string; size: string }>>([]);
   const [uploadedDocument, setUploadedDocument] = useState<{ name: string; size: string; url?: string } | null>(null);
 
   // Form states - Step 4: Difusión y Envío
   const [sendEmailToClients, setSendEmailToClients] = useState<boolean>(true);
+
+  // Synchronize initial values to latest baseline when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setOverallPct(baselineOverallPct);
+      setCimentacionPct(baselineCimentacionPct);
+      setEstructuraPct(baselineEstructuraPct);
+      setInstalacionesPct(baselineInstalacionesPct);
+      setAcabadosPct(baselineAcabadosPct);
+      setValidationError(null);
+      setCurrentStep(1);
+    }
+  }, [isOpen, baselineOverallPct, baselineCimentacionPct, baselineEstructuraPct, baselineInstalacionesPct, baselineAcabadosPct]);
 
   if (!isOpen) return null;
 
@@ -132,14 +163,37 @@ export default function RegisterProgressWizardModal({
       const reader = new FileReader();
       reader.onload = (ev) => {
         if (ev.target?.result) {
+          const dataUrl = ev.target.result as string;
           setPhotos((prev) => [
             ...prev,
             {
               name: file.name,
-              url: ev.target!.result as string,
+              url: dataUrl,
               size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
             },
           ]);
+
+          // Asynchronously upload to Supabase storage via /api/upload
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("folder", "progress");
+          formData.append("bucket", "devio-assets");
+
+          fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+              if (data?.publicUrl) {
+                setPhotos((currentPhotos) =>
+                  currentPhotos.map((p) =>
+                    p.name === file.name && p.url.startsWith("data:") ? { ...p, url: data.publicUrl } : p
+                  )
+                );
+              }
+            })
+            .catch((err) => console.warn("Could not upload progress photo to CDN:", err));
         }
       };
       reader.readAsDataURL(file);
@@ -156,14 +210,74 @@ export default function RegisterProgressWizardModal({
     });
   };
 
+  // Helper to construct PDF Payload from any advance object
+  const buildPDFPayloadFromAdvance = (adv: ProjectConstructionAdvance): ConstructionProgressPDFData => {
+    const devLogo =
+      (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+      developerLogo ||
+      "";
+    const projLogo = resolveProjectLogo(activeProject, devLogo);
+    const projCover = (activeProject?.image && activeProject.image.startsWith("http")) ? activeProject.image : "";
+
+    return {
+      folio: `AV-${(adv.date || "2026-01-01").replace(/-/g, "")}-${adv.id.slice(-4).toUpperCase()}`,
+      projectName: targetProjectName,
+      projectType: activeProject?.type || "Vertical",
+      developerName: developerName || "Desarrolladora Inmobiliaria",
+      developerLogoUrl: devLogo,
+      projectLogoUrl: projLogo,
+      projectCoverUrl: projCover || adv.photos?.[0]?.url || adv.image || "",
+      advanceTitle: adv.title,
+      advanceDate: adv.date,
+      description: adv.description || `Avance de obra registrado al ${adv.pct}%.`,
+      overallPercentage: adv.pct,
+      cimentacionPct: adv.cimentacionPct ?? (adv.pct >= 30 ? 100 : adv.pct),
+      estructuraPct: adv.estructuraPct ?? adv.pct,
+      instalacionesPct: adv.instalacionesPct ?? Math.max(0, adv.pct - 20),
+      acabadosPct: adv.acabadosPct ?? Math.max(0, adv.pct - 40),
+      targetScope: adv.targetScope || "PROJECT",
+      targetUnits: adv.targetUnits,
+      photos: adv.photos?.map((p) => ({ name: p.name, url: p.url })) || (adv.image ? [{ name: "Foto 1", url: adv.image }] : []),
+      estimatedDeliveryDate: activeProject?.estimatedDeliveryDate,
+      totalUnits: activeProject?.totalUnits || unitsInventory.length,
+    };
+  };
+
+  const handleNextStep = () => {
+    setValidationError(null);
+    if (currentStep === 1) {
+      if (!title.trim()) {
+        setValidationError("Por favor ingresa un título descriptivo para el avance de obra.");
+        return;
+      }
+      if (targetScope === "UNITS" && selectedUnitNumbers.length === 0) {
+        setValidationError("Has seleccionado alcance por unidad. Por favor selecciona al menos una unidad.");
+        return;
+      }
+    }
+    if (currentStep === 2) {
+      if (overallPct < baselineOverallPct) {
+        setValidationError(`El nuevo avance general (${overallPct}%) no puede ser menor al avance anterior registrado (${baselineOverallPct}%). Si necesitas corregir o reducir el avance, elimina primero el avance anterior desde la bitácora.`);
+        return;
+      }
+    }
+    setCurrentStep((prev) => Math.min(stepsList.length, prev + 1));
+  };
+
   const handleSaveProgress = () => {
+    setValidationError(null);
     if (!title.trim()) {
-      alert("Por favor ingresa un título descriptivo para el avance de obra.");
+      setValidationError("Por favor ingresa un título descriptivo para el avance de obra.");
       return;
     }
 
     if (targetScope === "UNITS" && selectedUnitNumbers.length === 0) {
-      alert("Has seleccionado alcance por unidad. Por favor selecciona al menos una unidad.");
+      setValidationError("Has seleccionado alcance por unidad. Por favor selecciona al menos una unidad.");
+      return;
+    }
+
+    if (overallPct < baselineOverallPct) {
+      setValidationError(`El nuevo avance general (${overallPct}%) no puede ser menor al avance previo (${baselineOverallPct}%). Si necesitas corregir o reducir el avance, elimina primero el avance anterior desde la bitácora.`);
       return;
     }
 
@@ -190,15 +304,22 @@ export default function RegisterProgressWizardModal({
       createdAt: new Date().toISOString(),
     };
 
+    const devLogo =
+      (typeof window !== "undefined" && (localStorage.getItem("devio_developer_logo") || sessionStorage.getItem("devio_developer_logo"))) ||
+      developerLogo ||
+      "";
+    const projLogo = resolveProjectLogo(activeProject, devLogo);
+    const projCover = (activeProject?.image && activeProject.image.startsWith("http")) ? activeProject.image : "";
+
     // Prepare PDF Data
     const pdfData: ConstructionProgressPDFData = {
       folio: `AV-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
       projectName: targetProjectName,
       projectType: activeProject?.type || "Vertical",
       developerName: developerName || "Desarrolladora Inmobiliaria",
-      developerLogoUrl: developerLogo || "",
-      projectLogoUrl: activeProject?.logoUrl || activeProject?.logo || "",
-      projectCoverUrl: activeProject?.image || photos[0]?.url || "",
+      developerLogoUrl: devLogo,
+      projectLogoUrl: projLogo,
+      projectCoverUrl: projCover || photos[0]?.url || "",
       advanceTitle: title.trim(),
       advanceDate: String(date || new Date().toISOString().split("T")[0]),
       description: description.trim() || `Avance de obra registrado al ${overallPct}%.`,
@@ -215,7 +336,7 @@ export default function RegisterProgressWizardModal({
     };
     setSavedPDFData(pdfData);
 
-    // Persist in Project Context
+    // Persist in Project Context & DB
     registerConstructionProgress(targetProjectId, newAdvance);
 
     // Send notifications to clients if checked
@@ -267,6 +388,15 @@ export default function RegisterProgressWizardModal({
         });
       }
 
+      const origin = typeof window !== "undefined" ? window.location.origin : "https://devio.lat";
+      const progressLink = `${origin}/portal?tab=avance`;
+
+      // Extract valid photo URLs for email template
+      const validPhotos = photos.map((p) => p.url).filter((u) => u && typeof u === "string");
+      const photo1 = validPhotos[0] || projCover || "https://images.unsplash.com/photo-1541888946425-d0fbb18f15f6?auto=format&fit=crop&w=800&q=80";
+      const photo2 = validPhotos[1] || "";
+      const photo3 = validPhotos[2] || "";
+
       recipientsMap.forEach((recipientName, recipientEmail) => {
         sendAndLogNotification({
           to: recipientEmail,
@@ -287,12 +417,16 @@ export default function RegisterProgressWizardModal({
             pct_estructura: estructuraPct,
             pct_instalaciones: instalacionesPct,
             pct_acabados: acabadosPct,
-            foto_1: photos[0]?.url || "",
-            foto_2: photos[1]?.url || "",
-            foto_3: photos[2]?.url || "",
-            login_link: typeof window !== "undefined" ? window.location.origin : "https://deviomx.com",
-            logo_proyecto: activeProject?.logoUrl || activeProject?.logo || "",
-            logo_desarrolladora: developerLogo || "",
+            foto_1: photo1,
+            foto_2: photo2,
+            foto_3: photo3,
+            login_link: progressLink,
+            link_avance: progressLink,
+            url_avance: progressLink,
+            portal_link: progressLink,
+            link: progressLink,
+            logo_proyecto: projLogo,
+            logo_desarrolladora: devLogo,
             año: new Date().getFullYear().toString(),
           },
         }).catch((err) => console.warn("Error sending progress email to client:", err));
@@ -330,140 +464,126 @@ export default function RegisterProgressWizardModal({
           maxHeight: "92vh",
           display: "flex",
           flexDirection: "column",
-          boxShadow: "0 25px 70px rgba(0, 0, 0, 0.28)",
-          border: "1px solid var(--devio-neutral-1)",
+          boxShadow: "0 25px 70px rgba(0,0,0,0.35)",
           overflow: "hidden",
-          animation: "fadeIn 0.2s ease-out",
         }}
       >
         {/* ================================================================== */}
-        {/* HEADER & STEPPER */}
+        {/* MODAL HEADER */}
         {/* ================================================================== */}
         <div
           style={{
-            padding: "1.25rem 1.75rem 1rem 1.75rem",
+            padding: "1.25rem 2rem",
             borderBottom: "1px solid var(--devio-neutral-1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
             backgroundColor: "#FAFBFD",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <div
-                style={{
-                  width: "38px",
-                  height: "38px",
-                  borderRadius: "10px",
-                  backgroundColor: "rgba(111, 172, 156, 0.15)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "var(--devio-green)",
-                }}
-              >
-                <HardHat size={22} />
-              </div>
-              <div>
-                <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0, letterSpacing: "-0.02em" }}>
-                  Registrar Avance de Obra
-                </h2>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "2px" }}>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--devio-neutral-3)" }}>
-                    {targetProjectName}
-                  </span>
-                  <span style={{ fontSize: "0.78rem", color: "var(--devio-neutral-2)" }}>•</span>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue)" }}>
-                    Paso {currentStep} de 4: {stepsList[currentStep - 1]?.label || ""}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={onClose}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+            <div
               style={{
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: "0.4rem",
-                borderRadius: "50%",
+                width: "42px",
+                height: "42px",
+                borderRadius: "12px",
+                backgroundColor: "rgba(31, 54, 82, 0.08)",
+                color: "var(--devio-blue-dark)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "var(--devio-neutral-3)",
               }}
             >
-              <X size={20} />
-            </button>
+              <HardHat size={24} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
+                Registrar Avance de Obra
+              </h2>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "2px" }}>
+                <span style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)" }}>
+                  {targetProjectName}
+                </span>
+                <span style={{ fontSize: "0.78rem", color: "var(--devio-neutral-2)" }}>•</span>
+                <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue)" }}>
+                  Avance Actual: {baselineOverallPct}%
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* Stepper Pills */}
-          <div
+          <button
+            type="button"
+            onClick={onClose}
             style={{
+              background: "none",
+              border: "none",
+              color: "var(--devio-neutral-3)",
+              cursor: "pointer",
+              padding: "0.4rem",
+              borderRadius: "50%",
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
-              gap: "0.5rem",
-              overflowX: "auto",
-              paddingBottom: "0.25rem",
+              justifyContent: "center",
             }}
           >
-            {stepsList.map((step) => {
-              const isDone = currentStep > step.num;
-              const isCurrent = currentStep === step.num;
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* ================================================================== */}
+        {/* STEP PROGRESS BAR */}
+        {/* ================================================================== */}
+        <div
+          style={{
+            padding: "0.85rem 2rem",
+            borderBottom: "1px solid var(--devio-neutral-1)",
+            backgroundColor: "var(--devio-white)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            {stepsList.map((st, idx) => {
+              const isActive = currentStep === st.num;
+              const isDone = currentStep > st.num;
               return (
-                <div
-                  key={step.num}
-                  onClick={() => {
-                    if (step.num < currentStep) setCurrentStep(step.num);
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.45rem",
-                    cursor: step.num < currentStep ? "pointer" : "default",
-                    opacity: isCurrent ? 1 : isDone ? 0.9 : 0.45,
-                    transition: "all 0.2s ease",
-                  }}
-                >
+                <div key={st.num} style={{ display: "flex", alignItems: "center", gap: "0.5rem", flex: 1 }}>
                   <div
                     style={{
-                      width: "24px",
-                      height: "24px",
+                      width: "28px",
+                      height: "28px",
                       borderRadius: "50%",
+                      backgroundColor: isDone
+                        ? "var(--devio-green)"
+                        : isActive
+                        ? "var(--devio-blue-dark)"
+                        : "#E2E8F0",
+                      color: isDone || isActive ? "#FFFFFF" : "var(--devio-neutral-3)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: "0.75rem",
-                      fontWeight: 700,
-                      backgroundColor: isDone
-                        ? "var(--devio-green)"
-                        : isCurrent
-                        ? "var(--devio-blue-dark)"
-                        : "transparent",
-                      color: isDone || isCurrent ? "#FFFFFF" : "var(--devio-neutral-3)",
-                      border: isDone || isCurrent ? "none" : "1.5px solid var(--devio-neutral-2)",
+                      fontSize: "0.78rem",
+                      fontWeight: 800,
+                      transition: "all 0.2s ease",
                     }}
                   >
-                    {isDone ? <Check size={13} strokeWidth={3} /> : step.num}
+                    {isDone ? <Check size={14} strokeWidth={3} /> : st.num}
                   </div>
                   <span
                     style={{
-                      fontSize: "0.8rem",
-                      fontWeight: isCurrent ? 700 : 500,
-                      color: isCurrent ? "var(--devio-blue-dark)" : isDone ? "var(--devio-blue)" : "var(--devio-neutral-3)",
-                      whiteSpace: "nowrap",
+                      fontSize: "0.78rem",
+                      fontWeight: isActive ? 800 : isDone ? 700 : 500,
+                      color: isActive ? "var(--devio-blue-dark)" : isDone ? "var(--devio-green)" : "var(--devio-neutral-3)",
                     }}
                   >
-                    {step.label}
+                    {st.label}
                   </span>
-                  {step.num < 4 && (
+                  {idx < stepsList.length - 1 && (
                     <div
                       style={{
-                        width: "24px",
-                        height: "1px",
-                        backgroundColor: isDone ? "var(--devio-green)" : "var(--devio-neutral-1)",
-                        marginLeft: "0.25rem",
+                        flex: 1,
+                        height: "2px",
+                        backgroundColor: isDone ? "var(--devio-green)" : "#E2E8F0",
+                        margin: "0 0.5rem",
                       }}
                     />
                   )}
@@ -473,7 +593,9 @@ export default function RegisterProgressWizardModal({
           </div>
         </div>
 
-        {/* Collapsible Past Advances Bar */}
+        {/* ================================================================== */}
+        {/* HISTORIAL INTERACTIVO DE AVANCES ANTERIORES */}
+        {/* ================================================================== */}
         <div style={{ backgroundColor: "#F1F5F9", borderBottom: "1px solid var(--devio-neutral-1)" }}>
           <button
             type="button"
@@ -498,7 +620,17 @@ export default function RegisterProgressWizardModal({
           </button>
 
           {showHistory && (
-            <div style={{ padding: "0.75rem 1.75rem", maxHeight: "160px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", borderTop: "1px dashed var(--devio-neutral-2)" }}>
+            <div
+              style={{
+                padding: "0.75rem 1.75rem",
+                maxHeight: "190px",
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+                borderTop: "1px dashed var(--devio-neutral-2)",
+              }}
+            >
               {historyAdvances.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "0.75rem", fontSize: "0.78rem", color: "var(--devio-neutral-3)" }}>
                   Aún no hay avances registrados en la bitácora de este desarrollo.
@@ -507,6 +639,7 @@ export default function RegisterProgressWizardModal({
                 historyAdvances.map((adv) => (
                   <div
                     key={adv.id}
+                    onClick={() => setSelectedAdvanceForDetail(adv)}
                     style={{
                       backgroundColor: "var(--devio-white)",
                       borderRadius: "0.6rem",
@@ -516,7 +649,18 @@ export default function RegisterProgressWizardModal({
                       justifyContent: "space-between",
                       fontSize: "0.82rem",
                       border: "1px solid var(--devio-neutral-1)",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
                     }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "var(--devio-blue)";
+                      e.currentTarget.style.backgroundColor = "#F8FAFC";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "var(--devio-neutral-1)";
+                      e.currentTarget.style.backgroundColor = "var(--devio-white)";
+                    }}
+                    title="Haz clic para ver la información completa y descargar el reporte PDF"
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
                       {adv.image && (
@@ -531,7 +675,9 @@ export default function RegisterProgressWizardModal({
                         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "2px" }}>
                           <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)" }}>{adv.date}</span>
                           <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-2)" }}>•</span>
-                          <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--devio-green)" }}>{adv.pct}% Obra</span>
+                          <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--devio-green)" }}>
+                            {adv.pct}% Obra
+                          </span>
                           <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-2)" }}>•</span>
                           <span
                             style={{
@@ -539,7 +685,8 @@ export default function RegisterProgressWizardModal({
                               fontWeight: 700,
                               padding: "0.1rem 0.4rem",
                               borderRadius: "0.3rem",
-                              backgroundColor: adv.targetScope === "UNITS" ? "rgba(99, 102, 241, 0.12)" : "rgba(31, 54, 82, 0.08)",
+                              backgroundColor:
+                                adv.targetScope === "UNITS" ? "rgba(99, 102, 241, 0.12)" : "rgba(31, 54, 82, 0.08)",
                               color: adv.targetScope === "UNITS" ? "#4F46E5" : "var(--devio-blue)",
                             }}
                           >
@@ -548,12 +695,64 @@ export default function RegisterProgressWizardModal({
                         </div>
                       </div>
                     </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedAdvanceForDetail(adv);
+                        }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                          padding: "0.3rem 0.65rem",
+                          borderRadius: "0.4rem",
+                          backgroundColor: "rgba(31, 54, 82, 0.06)",
+                          color: "var(--devio-blue-dark)",
+                          border: "none",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Eye size={13} /> Ver Detalle & PDF
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
             </div>
           )}
         </div>
+
+        {/* Validation Error Banner */}
+        {validationError && (
+          <div
+            style={{
+              padding: "0.75rem 1.5rem",
+              backgroundColor: "#FEF2F2",
+              borderBottom: "1px solid #F87171",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.6rem",
+              color: "#B91C1C",
+              fontSize: "0.82rem",
+              fontWeight: 600,
+            }}
+          >
+            <AlertTriangle size={18} />
+            <span style={{ flex: 1 }}>{validationError}</span>
+            <button
+              type="button"
+              onClick={() => setValidationError(null)}
+              style={{ background: "none", border: "none", color: "#B91C1C", cursor: "pointer" }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
 
         {/* ================================================================== */}
         {/* MODAL BODY */}
@@ -600,27 +799,13 @@ export default function RegisterProgressWizardModal({
                       transition: "all 0.15s ease",
                     }}
                   >
-                    <div
-                      style={{
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "8px",
-                        backgroundColor: targetScope === "PROJECT" ? "var(--devio-blue)" : "#F1F5F9",
-                        color: targetScope === "PROJECT" ? "#FFFFFF" : "var(--devio-neutral-3)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Building size={18} />
-                    </div>
+                    <Building size={22} color={targetScope === "PROJECT" ? "var(--devio-blue)" : "var(--devio-neutral-3)"} />
                     <div>
                       <strong style={{ fontSize: "0.88rem", color: "var(--devio-blue-dark)", display: "block" }}>
                         Todo el Proyecto
                       </strong>
                       <span style={{ fontSize: "0.74rem", color: "var(--devio-neutral-3)" }}>
-                        Actualiza el avance general de todo el desarrollo ({unitsInventory.length} unidades).
+                        Aplica a todas las {unitsInventory.length} unidades del inventario
                       </span>
                     </div>
                   </div>
@@ -639,201 +824,147 @@ export default function RegisterProgressWizardModal({
                       transition: "all 0.15s ease",
                     }}
                   >
-                    <div
-                      style={{
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "8px",
-                        backgroundColor: targetScope === "UNITS" ? "var(--devio-blue)" : "#F1F5F9",
-                        color: targetScope === "UNITS" ? "#FFFFFF" : "var(--devio-neutral-3)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Layers size={18} />
-                    </div>
+                    <Layers size={22} color={targetScope === "UNITS" ? "var(--devio-blue)" : "var(--devio-neutral-3)"} />
                     <div>
                       <strong style={{ fontSize: "0.88rem", color: "var(--devio-blue-dark)", display: "block" }}>
-                        Por Unidad o Selección Manual
+                        Unidades Específicas
                       </strong>
                       <span style={{ fontSize: "0.74rem", color: "var(--devio-neutral-3)" }}>
-                        Aplica a unidades, niveles o prototipos específicos seleccionados.
+                        {selectedUnitNumbers.length > 0 ? `${selectedUnitNumbers.length} seleccionadas` : "Seleccionar unidades"}
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Units Selection Box (if targetScope === "UNITS") */}
+              {/* Units Selection Box if targetScope === UNITS */}
               {targetScope === "UNITS" && (
                 <div
                   style={{
                     backgroundColor: "#F8FAFC",
-                    border: "1px solid #E2E8F0",
+                    border: "1px solid var(--devio-neutral-1)",
                     borderRadius: "0.85rem",
                     padding: "1rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.75rem",
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <strong style={{ fontSize: "0.85rem", color: "var(--devio-blue-dark)" }}>
-                        Seleccionar Unidades Afectadas ({selectedUnitNumbers.length} de {unitsInventory.length})
-                      </strong>
-                    </div>
-                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
+                    <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                      Seleccionar Unidades ({selectedUnitNumbers.length} de {unitsInventory.length})
+                    </span>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
                       <button
                         type="button"
                         onClick={handleSelectAllUnits}
-                        style={{
-                          fontSize: "0.72rem",
-                          fontWeight: 700,
-                          color: "var(--devio-blue)",
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                        }}
+                        style={{ fontSize: "0.72rem", color: "var(--devio-blue)", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}
                       >
                         Seleccionar Todas
                       </button>
-                      <span style={{ color: "#CBD5E1" }}>•</span>
+                      <span style={{ color: "var(--devio-neutral-2)" }}>|</span>
                       <button
                         type="button"
                         onClick={handleDeselectAllUnits}
-                        style={{
-                          fontSize: "0.72rem",
-                          fontWeight: 600,
-                          color: "var(--devio-neutral-3)",
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                        }}
+                        style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", background: "none", border: "none", cursor: "pointer" }}
                       >
-                        Deseleccionar
+                        Limpiar
                       </button>
                     </div>
                   </div>
 
-                  {/* Search Input for Units */}
-                  <div style={{ position: "relative" }}>
+                  <div style={{ position: "relative", marginBottom: "0.6rem" }}>
                     <Search size={14} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--devio-neutral-3)" }} />
                     <input
                       type="text"
+                      placeholder="Buscar por número de unidad, nivel o cliente..."
                       value={unitSearchQuery}
                       onChange={(e) => setUnitSearchQuery(e.target.value)}
-                      placeholder="Buscar por número de unidad, cliente o tipo..."
                       style={{
                         width: "100%",
-                        padding: "0.45rem 0.75rem 0.45rem 2.2rem",
+                        padding: "0.5rem 0.75rem 0.5rem 2.2rem",
                         borderRadius: "0.5rem",
-                        border: "1px solid #CBD5E1",
+                        border: "1px solid var(--devio-neutral-1)",
                         fontSize: "0.8rem",
                       }}
                     />
                   </div>
 
-                  {/* Units Chips Grid */}
-                  <div
-                    style={{
-                      maxHeight: "140px",
-                      overflowY: "auto",
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(105px, 1fr))",
-                      gap: "0.4rem",
-                      backgroundColor: "#FFFFFF",
-                      borderRadius: "0.5rem",
-                      border: "1px solid #E2E8F0",
-                      padding: "0.5rem",
-                    }}
-                  >
-                    {filteredUnits.length === 0 ? (
-                      <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "0.5rem", fontSize: "0.75rem", color: "#94A3B8" }}>
-                        No se encontraron unidades con ese filtro.
-                      </div>
-                    ) : (
-                      filteredUnits.map((u) => {
-                        const isSelected = selectedUnitNumbers.includes(u.unit);
-                        return (
-                          <div
-                            key={u.unit}
-                            onClick={() => handleToggleUnit(u.unit)}
-                            style={{
-                              padding: "0.35rem 0.5rem",
-                              borderRadius: "0.4rem",
-                              cursor: "pointer",
-                              border: isSelected ? "1.5px solid var(--devio-blue)" : "1px solid #E2E8F0",
-                              backgroundColor: isSelected ? "rgba(31, 54, 82, 0.08)" : "#FFFFFF",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              fontSize: "0.75rem",
-                              fontWeight: 700,
-                              color: isSelected ? "var(--devio-blue)" : "var(--devio-blue-dark)",
-                            }}
-                          >
-                            <span>Unidad {u.unit}</span>
-                            {isSelected && <Check size={12} color="var(--devio-blue)" strokeWidth={3} />}
+                  <div style={{ maxHeight: "160px", overflowY: "auto", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: "0.4rem" }}>
+                    {filteredUnits.map((u) => {
+                      const isSelected = selectedUnitNumbers.includes(u.unit);
+                      return (
+                        <div
+                          key={u.unit}
+                          onClick={() => handleToggleUnit(u.unit)}
+                          style={{
+                            padding: "0.45rem 0.6rem",
+                            borderRadius: "0.4rem",
+                            border: isSelected ? "1.5px solid var(--devio-blue)" : "1px solid var(--devio-neutral-1)",
+                            backgroundColor: isSelected ? "rgba(31, 54, 82, 0.08)" : "var(--devio-white)",
+                            cursor: "pointer",
+                            fontSize: "0.75rem",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <div>
+                            <strong style={{ color: "var(--devio-blue-dark)" }}>{u.unit}</strong>
+                            <div style={{ fontSize: "0.68rem", color: "var(--devio-neutral-3)" }}>
+                              {u.status}
+                            </div>
                           </div>
-                        );
-                      })
-                    )}
+                          {isSelected && <Check size={14} color="var(--devio-blue)" />}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
-              {/* Title, Date & Description */}
-              <div>
-                <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                  Título del Hito o Avance *
-                </label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Ej. Colado de losa Nivel 8 y colocación de cancelería"
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem 1rem",
-                    borderRadius: "0.6rem",
-                    border: "1.5px solid var(--devio-neutral-2)",
-                    fontSize: "0.9rem",
-                    fontWeight: 600,
-                    color: "var(--devio-blue-dark)",
-                  }}
-                  required
-                />
+              {/* Title & Date */}
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0.75rem" }}>
+                <div>
+                  <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                    Título Descriptivo del Avance *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Colado de losa Nivel 8 y canalizaciones hidrosanitarias"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.65rem 0.85rem",
+                      borderRadius: "0.6rem",
+                      border: "1px solid var(--devio-neutral-1)",
+                      fontSize: "0.85rem",
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                    Fecha del Registro *
+                  </label>
+                  <DevioDatePicker value={date} onChange={setDate} placeholder="Fecha del avance" />
+                </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0.75rem" }}>
-                <DevioDatePicker
-                  label="Fecha de Corte del Avance"
-                  value={date}
-                  onChange={setDate}
-                  placeholder="Seleccionar fecha"
-                  required
-                />
-              </div>
-
+              {/* Detailed Description */}
               <div>
                 <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
                   Descripción Detallada / Bitácora de Obra
                 </label>
                 <textarea
                   rows={3}
+                  placeholder="Detalla los avances ejecutados en la semana/mes, equipos de supervisión presentes y comentarios para los compradores..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe los trabajos realizados, áreas concluidas, inspecciones aprobadas y siguientes pasos..."
                   style={{
                     width: "100%",
-                    padding: "0.75rem 1rem",
+                    padding: "0.65rem 0.85rem",
                     borderRadius: "0.6rem",
-                    border: "1.5px solid var(--devio-neutral-2)",
-                    fontSize: "0.88rem",
-                    color: "var(--devio-blue-dark)",
+                    border: "1px solid var(--devio-neutral-1)",
+                    fontSize: "0.85rem",
                     resize: "vertical",
                   }}
                 />
@@ -846,13 +977,33 @@ export default function RegisterProgressWizardModal({
             <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
               <div style={{ textAlign: "center", maxWidth: "620px", margin: "0 auto" }}>
                 <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.3rem" }}>
-                  Porcentajes de Construcción
+                  Porcentajes de Construcción y Partidas
                 </h3>
                 <p style={{ fontSize: "0.85rem", color: "var(--devio-neutral-3)" }}>
                   {targetScope === "UNITS"
                     ? `Configura el porcentaje que se asignará a las ${selectedUnitNumbers.length} unidades seleccionadas.`
                     : "Ajusta el porcentaje general de avance y el desglose de cada fase constructiva del desarrollo."}
                 </p>
+              </div>
+
+              {/* Baseline Info Box */}
+              <div
+                style={{
+                  backgroundColor: "#F0FDF4",
+                  border: "1px solid #BBF7D0",
+                  borderRadius: "0.75rem",
+                  padding: "0.75rem 1rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.6rem",
+                  fontSize: "0.8rem",
+                  color: "#166534",
+                }}
+              >
+                <Info size={16} />
+                <span>
+                  Último avance guardado: <strong>{baselineOverallPct}%</strong>. El nuevo avance no puede ser menor a esta cifra.
+                </span>
               </div>
 
               {/* Porcentaje General Card */}
@@ -878,7 +1029,7 @@ export default function RegisterProgressWizardModal({
                         : `Aplica a todas las ${unitsInventory.length} unidades del proyecto.`}
                     </span>
                   </div>
-                  <span style={{ fontSize: "1.6rem", fontWeight: 900, color: "var(--devio-blue)" }}>
+                  <span style={{ fontSize: "1.6rem", fontWeight: 900, color: overallPct < baselineOverallPct ? "#EF4444" : "var(--devio-blue)" }}>
                     {overallPct}%
                   </span>
                 </div>
@@ -888,10 +1039,18 @@ export default function RegisterProgressWizardModal({
                   min="0"
                   max="100"
                   value={overallPct}
-                  onChange={(e) => setOverallPct(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setOverallPct(val);
+                    if (val < baselineOverallPct) {
+                      setValidationError(`El nuevo avance (${val}%) no puede ser menor al avance previo (${baselineOverallPct}%).`);
+                    } else {
+                      setValidationError(null);
+                    }
+                  }}
                   style={{
                     width: "100%",
-                    accentColor: "var(--devio-blue-dark)",
+                    accentColor: overallPct < baselineOverallPct ? "#EF4444" : "var(--devio-blue-dark)",
                     cursor: "pointer",
                     height: "8px",
                   }}
@@ -1101,32 +1260,13 @@ export default function RegisterProgressWizardModal({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: "0.5rem",
-                    fontSize: "0.85rem",
-                    color: uploadedDocument ? "var(--devio-green)" : "var(--devio-neutral-3)",
+                    gap: "0.6rem",
                   }}
                 >
-                  {uploadedDocument ? (
-                    <>
-                      <FileText size={18} />
-                      <strong>{uploadedDocument.name} ({uploadedDocument.size})</strong>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setUploadedDocument(null);
-                        }}
-                        style={{ background: "none", border: "none", color: "var(--devio-red)", cursor: "pointer", marginLeft: "0.5rem" }}
-                      >
-                        <X size={14} />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={16} />
-                      <span>Click para subir reporte de obra o bitácora en PDF</span>
-                    </>
-                  )}
+                  <FileText size={18} color="var(--devio-blue)" />
+                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                    {uploadedDocument ? `${uploadedDocument.name} (${uploadedDocument.size})` : "Subir reporte o dictamen en PDF"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1137,14 +1277,14 @@ export default function RegisterProgressWizardModal({
             <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
               <div style={{ textAlign: "center", maxWidth: "620px", margin: "0 auto" }}>
                 <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.3rem" }}>
-                  Revisión y Publicación
+                  Revisión y Notificación a Clientes
                 </h3>
                 <p style={{ fontSize: "0.85rem", color: "var(--devio-neutral-3)" }}>
-                  Verifica el resumen del avance antes de publicarlo en el expediente del desarrollo.
+                  Verifica el resumen del avance que se registrará en la bitácora y se enviará por correo.
                 </p>
               </div>
 
-              {/* Newsletter Preview Card */}
+              {/* Summary Card */}
               <div
                 style={{
                   backgroundColor: "#F8FAFC",
@@ -1158,92 +1298,82 @@ export default function RegisterProgressWizardModal({
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--devio-neutral-3)", display: "block" }}>
-                      {targetProjectName} • {date}
-                    </span>
-                    <h4 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: "2px 0 0 0" }}>
+                    <strong style={{ fontSize: "1rem", color: "var(--devio-blue-dark)", display: "block" }}>
                       {title || "Avance de Obra"}
-                    </h4>
+                    </strong>
+                    <span style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)" }}>
+                      Fecha: {date} • Alcance: {targetScope === "UNITS" ? `${selectedUnitNumbers.length} Unidades` : "Todo el Proyecto"}
+                    </span>
                   </div>
-                  <div
-                    style={{
-                      padding: "0.35rem 0.85rem",
-                      borderRadius: "9999px",
-                      backgroundColor: "var(--devio-blue-dark)",
-                      color: "#FFF",
-                      fontSize: "0.9rem",
-                      fontWeight: 800,
-                    }}
-                  >
+                  <span style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--devio-green)" }}>
                     {overallPct}% Obra
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", fontSize: "0.75rem", color: "var(--devio-neutral-4)" }}>
-                  <span style={{ fontWeight: 700 }}>Alcance:</span>
-                  <span
-                    style={{
-                      padding: "0.1rem 0.5rem",
-                      borderRadius: "0.3rem",
-                      backgroundColor: targetScope === "UNITS" ? "rgba(99, 102, 241, 0.12)" : "rgba(31, 54, 82, 0.08)",
-                      color: targetScope === "UNITS" ? "#4F46E5" : "var(--devio-blue)",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {targetScope === "UNITS" ? `${selectedUnitNumbers.length} unidades seleccionadas` : "Todo el Desarrollo (Global)"}
                   </span>
                 </div>
 
-                <p style={{ fontSize: "0.85rem", color: "var(--devio-neutral-4)", lineHeight: 1.5, margin: 0 }}>
-                  {description || "Sin descripción adicional."}
-                </p>
-
-                {/* Photos preview */}
-                <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-                  {photos.slice(0, 4).map((p, i) => (
-                    <img
-                      key={i}
-                      src={p.url}
-                      alt="preview"
-                      style={{ width: "70px", height: "50px", borderRadius: "6px", objectFit: "cover" }}
-                    />
-                  ))}
-                  {photos.length > 4 && (
-                    <div style={{ width: "70px", height: "50px", borderRadius: "6px", backgroundColor: "rgba(31, 54, 82, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-blue)" }}>
-                      +{photos.length - 4} más
-                    </div>
-                  )}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem", marginTop: "0.5rem" }}>
+                  <div style={{ backgroundColor: "var(--devio-white)", padding: "0.5rem", borderRadius: "0.5rem", textAlign: "center", border: "1px solid var(--devio-neutral-1)" }}>
+                    <div style={{ fontSize: "0.68rem", color: "var(--devio-neutral-3)" }}>Cimentación</div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "var(--devio-green)" }}>{cimentacionPct}%</div>
+                  </div>
+                  <div style={{ backgroundColor: "var(--devio-white)", padding: "0.5rem", borderRadius: "0.5rem", textAlign: "center", border: "1px solid var(--devio-neutral-1)" }}>
+                    <div style={{ fontSize: "0.68rem", color: "var(--devio-neutral-3)" }}>Estructura</div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "var(--devio-blue)" }}>{estructuraPct}%</div>
+                  </div>
+                  <div style={{ backgroundColor: "var(--devio-white)", padding: "0.5rem", borderRadius: "0.5rem", textAlign: "center", border: "1px solid var(--devio-neutral-1)" }}>
+                    <div style={{ fontSize: "0.68rem", color: "var(--devio-neutral-3)" }}>Instalaciones</div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "var(--devio-blue-matte)" }}>{instalacionesPct}%</div>
+                  </div>
+                  <div style={{ backgroundColor: "var(--devio-white)", padding: "0.5rem", borderRadius: "0.5rem", textAlign: "center", border: "1px solid var(--devio-neutral-1)" }}>
+                    <div style={{ fontSize: "0.68rem", color: "var(--devio-neutral-3)" }}>Acabados</div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "var(--devio-beige-scale1)" }}>{acabadosPct}%</div>
+                  </div>
                 </div>
+
+                {description && (
+                  <p style={{ fontSize: "0.82rem", color: "var(--devio-blue-dark)", margin: "0.5rem 0 0 0", fontStyle: "italic" }}>
+                    "{description}"
+                  </p>
+                )}
               </div>
 
               {/* Notification Checkbox */}
-              <label
+              <div
+                onClick={() => setSendEmailToClients(!sendEmailToClients)}
                 style={{
+                  border: "1px solid var(--devio-neutral-1)",
+                  borderRadius: "0.75rem",
+                  padding: "0.85rem 1.25rem",
+                  backgroundColor: "var(--devio-white)",
+                  cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.65rem",
-                  padding: "0.85rem 1.1rem",
-                  borderRadius: "0.75rem",
-                  backgroundColor: "rgba(31, 54, 82, 0.05)",
-                  border: "1px solid var(--devio-neutral-1)",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: 700,
-                  color: "var(--devio-blue-dark)",
+                  gap: "0.75rem",
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={sendEmailToClients}
-                  onChange={(e) => setSendEmailToClients(e.target.checked)}
-                  style={{ width: "18px", height: "18px", accentColor: "var(--devio-blue)" }}
-                />
-                <span>
-                  {targetScope === "UNITS"
-                    ? `Enviar boletín fotográfico a los compradores de las ${selectedUnitNumbers.length} unidades seleccionadas.`
-                    : "Enviar correo del avance y boletín fotográfico a todos los clientes e inversionistas."}
-                </span>
-              </label>
+                <div
+                  style={{
+                    width: "20px",
+                    height: "20px",
+                    borderRadius: "4px",
+                    border: sendEmailToClients ? "2px solid var(--devio-green)" : "2px solid var(--devio-neutral-2)",
+                    backgroundColor: sendEmailToClients ? "var(--devio-green)" : "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#FFF",
+                  }}
+                >
+                  {sendEmailToClients && <Check size={14} strokeWidth={3} />}
+                </div>
+                <div>
+                  <strong style={{ fontSize: "0.85rem", color: "var(--devio-blue-dark)", display: "block" }}>
+                    Enviar correo con fotografías y reporte a todos los compradores
+                  </strong>
+                  <span style={{ fontSize: "0.74rem", color: "var(--devio-neutral-3)" }}>
+                    Se enviará la plantilla oficial con el logotipo del desarrollo, desglose de avance y fotos adjuntas.
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1257,25 +1387,28 @@ export default function RegisterProgressWizardModal({
             borderTop: "1px solid var(--devio-neutral-1)",
             backgroundColor: "#FAFBFD",
             display: "flex",
-            justifyContent: "space-between",
             alignItems: "center",
+            justifyContent: "space-between",
           }}
         >
           {currentStep > 1 ? (
             <button
               type="button"
-              onClick={() => setCurrentStep((prev) => Math.max(1, prev - 1))}
+              onClick={() => {
+                setValidationError(null);
+                setCurrentStep((prev) => Math.max(1, prev - 1));
+              }}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "0.4rem",
-                padding: "0.65rem 1.4rem",
+                padding: "0.6rem 1.25rem",
                 borderRadius: "9999px",
-                backgroundColor: "var(--devio-blue-dark)",
-                color: "var(--devio-white)",
-                fontSize: "0.875rem",
+                backgroundColor: "transparent",
+                color: "var(--devio-blue-dark)",
+                border: "1px solid var(--devio-neutral-2)",
+                fontSize: "0.85rem",
                 fontWeight: 700,
-                border: "none",
                 cursor: "pointer",
               }}
             >
@@ -1285,22 +1418,10 @@ export default function RegisterProgressWizardModal({
             <div />
           )}
 
-          {currentStep < 4 ? (
+          {currentStep < stepsList.length ? (
             <button
               type="button"
-              onClick={() => {
-                if (currentStep === 1) {
-                  if (!title.trim()) {
-                    alert("Por favor ingresa un título para el avance.");
-                    return;
-                  }
-                  if (targetScope === "UNITS" && selectedUnitNumbers.length === 0) {
-                    alert("Por favor selecciona al menos una unidad para aplicar el avance.");
-                    return;
-                  }
-                }
-                setCurrentStep((prev) => Math.min(4, prev + 1));
-              }}
+              onClick={handleNextStep}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -1309,7 +1430,7 @@ export default function RegisterProgressWizardModal({
                 borderRadius: "9999px",
                 backgroundColor: "var(--devio-blue-dark)",
                 color: "var(--devio-white)",
-                fontSize: "0.875rem",
+                fontSize: "0.85rem",
                 fontWeight: 700,
                 border: "none",
                 cursor: "pointer",
@@ -1343,7 +1464,414 @@ export default function RegisterProgressWizardModal({
         </div>
       </div>
 
-      {/* SUCCESS CONFIRMATION MODAL */}
+      {/* ================================================================== */}
+      {/* MODAL DETALLE DE AVANCE GUARDADO (HISTORIAL & DESCARGA PDF) */}
+      {/* ================================================================== */}
+      {selectedAdvanceForDetail && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(10, 25, 47, 0.85)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10001,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--devio-white)",
+              borderRadius: "1.25rem",
+              width: "100%",
+              maxWidth: "720px",
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 25px 70px rgba(0,0,0,0.4)",
+              overflow: "hidden",
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: "1.25rem 1.75rem",
+                borderBottom: "1px solid var(--devio-neutral-1)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    backgroundColor: "rgba(31, 54, 82, 0.08)",
+                    color: "var(--devio-blue-dark)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <HardHat size={22} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
+                    {selectedAdvanceForDetail.title}
+                  </h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "2px" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)" }}>
+                      {selectedAdvanceForDetail.date}
+                    </span>
+                    <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-2)" }}>•</span>
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        padding: "0.1rem 0.5rem",
+                        borderRadius: "9999px",
+                        backgroundColor: "rgba(111, 172, 156, 0.15)",
+                        color: "var(--devio-green)",
+                      }}
+                    >
+                      {selectedAdvanceForDetail.pct}% Obra
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        padding: "0.1rem 0.5rem",
+                        borderRadius: "9999px",
+                        backgroundColor:
+                          selectedAdvanceForDetail.targetScope === "UNITS" ? "rgba(99, 102, 241, 0.12)" : "rgba(31, 54, 82, 0.08)",
+                        color: selectedAdvanceForDetail.targetScope === "UNITS" ? "#4F46E5" : "var(--devio-blue)",
+                      }}
+                    >
+                      {selectedAdvanceForDetail.targetScope === "UNITS"
+                        ? `${selectedAdvanceForDetail.targetUnits?.length || 0} unidades`
+                        : "Proyecto Completo"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedAdvanceForDetail(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--devio-neutral-3)",
+                  cursor: "pointer",
+                  padding: "0.4rem",
+                  borderRadius: "50%",
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "1.5rem 1.75rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: "1.25rem",
+              }}
+            >
+              {/* Desglose de Especialidades / Partidas */}
+              <div>
+                <h4 style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.6rem" }}>
+                  Desglose de Partidas Constructivas
+                </h4>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <div style={{ backgroundColor: "#F8FAFC", border: "1px solid var(--devio-neutral-1)", borderRadius: "0.6rem", padding: "0.75rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                      <span>1. Cimentación</span>
+                      <span style={{ color: "var(--devio-green)" }}>
+                        {selectedAdvanceForDetail.cimentacionPct ?? (selectedAdvanceForDetail.pct >= 30 ? 100 : selectedAdvanceForDetail.pct)}%
+                      </span>
+                    </div>
+                    <div style={{ width: "100%", height: "6px", backgroundColor: "#E2E8F0", borderRadius: "9999px", overflow: "hidden" }}>
+                      <div
+                        style={{
+                          width: `${selectedAdvanceForDetail.cimentacionPct ?? (selectedAdvanceForDetail.pct >= 30 ? 100 : selectedAdvanceForDetail.pct)}%`,
+                          height: "100%",
+                          backgroundColor: "var(--devio-green)",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ backgroundColor: "#F8FAFC", border: "1px solid var(--devio-neutral-1)", borderRadius: "0.6rem", padding: "0.75rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                      <span>2. Estructura</span>
+                      <span style={{ color: "var(--devio-blue)" }}>
+                        {selectedAdvanceForDetail.estructuraPct ?? selectedAdvanceForDetail.pct}%
+                      </span>
+                    </div>
+                    <div style={{ width: "100%", height: "6px", backgroundColor: "#E2E8F0", borderRadius: "9999px", overflow: "hidden" }}>
+                      <div
+                        style={{
+                          width: `${selectedAdvanceForDetail.estructuraPct ?? selectedAdvanceForDetail.pct}%`,
+                          height: "100%",
+                          backgroundColor: "var(--devio-blue)",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ backgroundColor: "#F8FAFC", border: "1px solid var(--devio-neutral-1)", borderRadius: "0.6rem", padding: "0.75rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                      <span>3. Instalaciones</span>
+                      <span style={{ color: "var(--devio-blue-matte)" }}>
+                        {selectedAdvanceForDetail.instalacionesPct ?? Math.max(0, selectedAdvanceForDetail.pct - 20)}%
+                      </span>
+                    </div>
+                    <div style={{ width: "100%", height: "6px", backgroundColor: "#E2E8F0", borderRadius: "9999px", overflow: "hidden" }}>
+                      <div
+                        style={{
+                          width: `${selectedAdvanceForDetail.instalacionesPct ?? Math.max(0, selectedAdvanceForDetail.pct - 20)}%`,
+                          height: "100%",
+                          backgroundColor: "var(--devio-blue-matte)",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ backgroundColor: "#F8FAFC", border: "1px solid var(--devio-neutral-1)", borderRadius: "0.6rem", padding: "0.75rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                      <span>4. Acabados</span>
+                      <span style={{ color: "var(--devio-beige-scale1)" }}>
+                        {selectedAdvanceForDetail.acabadosPct ?? Math.max(0, selectedAdvanceForDetail.pct - 40)}%
+                      </span>
+                    </div>
+                    <div style={{ width: "100%", height: "6px", backgroundColor: "#E2E8F0", borderRadius: "9999px", overflow: "hidden" }}>
+                      <div
+                        style={{
+                          width: `${selectedAdvanceForDetail.acabadosPct ?? Math.max(0, selectedAdvanceForDetail.pct - 40)}%`,
+                          height: "100%",
+                          backgroundColor: "var(--devio-beige-scale1)",
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Unidades asignadas (si targetScope === UNITS) */}
+              {selectedAdvanceForDetail.targetScope === "UNITS" && selectedAdvanceForDetail.targetUnits && (
+                <div>
+                  <h4 style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.4rem" }}>
+                    Unidades Asignadas ({selectedAdvanceForDetail.targetUnits.length})
+                  </h4>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                    {selectedAdvanceForDetail.targetUnits.map((u) => (
+                      <span
+                        key={u}
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          padding: "0.2rem 0.55rem",
+                          borderRadius: "0.4rem",
+                          backgroundColor: "rgba(99, 102, 241, 0.1)",
+                          color: "#4F46E5",
+                        }}
+                      >
+                        Unidad {u}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Descripción de la Bitácora */}
+              <div>
+                <h4 style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.4rem" }}>
+                  Descripción de los Trabajos Realizados
+                </h4>
+                <div
+                  style={{
+                    padding: "0.85rem 1rem",
+                    borderRadius: "0.6rem",
+                    backgroundColor: "#F8FAFC",
+                    border: "1px solid var(--devio-neutral-1)",
+                    fontSize: "0.84rem",
+                    color: "var(--devio-blue-dark)",
+                    lineHeight: 1.5,
+                    whiteSpace: "pre-line",
+                  }}
+                >
+                  {selectedAdvanceForDetail.description || "Sin descripción adicional."}
+                </div>
+              </div>
+
+              {/* Galería de Fotos */}
+              {((selectedAdvanceForDetail.photos && selectedAdvanceForDetail.photos.length > 0) || selectedAdvanceForDetail.image) && (
+                <div>
+                  <h4 style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.5rem" }}>
+                    Fotografías de Evidencia ({selectedAdvanceForDetail.photos?.length || (selectedAdvanceForDetail.image ? 1 : 0)})
+                  </h4>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "0.6rem" }}>
+                    {(selectedAdvanceForDetail.photos && selectedAdvanceForDetail.photos.length > 0
+                      ? selectedAdvanceForDetail.photos
+                      : selectedAdvanceForDetail.image
+                      ? [{ name: "Foto 1", url: selectedAdvanceForDetail.image }]
+                      : []
+                    ).map((p, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => window.open(p.url, "_blank")}
+                        style={{
+                          position: "relative",
+                          borderRadius: "0.6rem",
+                          overflow: "hidden",
+                          border: "1px solid var(--devio-neutral-1)",
+                          cursor: "pointer",
+                          height: "90px",
+                        }}
+                        title="Clic para ver en tamaño completo"
+                      >
+                        <img src={p.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Documento adjunto si existe */}
+              {selectedAdvanceForDetail.uploadedDocument && (
+                <div
+                  style={{
+                    padding: "0.75rem",
+                    borderRadius: "0.6rem",
+                    backgroundColor: "#F8FAFC",
+                    border: "1px solid var(--devio-neutral-1)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <FileText size={18} color="var(--devio-blue)" />
+                    <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                      {selectedAdvanceForDetail.uploadedDocument.name} ({selectedAdvanceForDetail.uploadedDocument.size})
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div
+              style={{
+                padding: "1rem 1.75rem",
+                borderTop: "1px solid var(--devio-neutral-1)",
+                backgroundColor: "#F8FAFC",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.75rem",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    confirm(
+                      `¿Estás seguro de que deseas eliminar el avance "${selectedAdvanceForDetail.title}"? El porcentaje de avance del proyecto y de las unidades se recalculará automáticamente.`
+                    )
+                  ) {
+                    const targetProjId = activeProject?.id || project?.id || "p-1";
+                    deleteConstructionProgress(targetProjId, selectedAdvanceForDetail.id);
+                    setSelectedAdvanceForDetail(null);
+                  }
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                  padding: "0.6rem 1rem",
+                  borderRadius: "0.6rem",
+                  backgroundColor: "transparent",
+                  color: "#EF4444",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                <Trash2 size={15} /> Eliminar Avance
+              </button>
+
+              <div style={{ display: "flex", gap: "0.6rem" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    openConstructionProgressInNewTab(buildPDFPayloadFromAdvance(selectedAdvanceForDetail));
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.6rem 1.1rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "rgba(31, 54, 82, 0.08)",
+                    color: "var(--devio-blue-dark)",
+                    border: "1px solid rgba(31, 54, 82, 0.15)",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  <ExternalLink size={15} /> Abrir PDF
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isGeneratingPDF}
+                  onClick={async () => {
+                    setIsGeneratingPDF(true);
+                    try {
+                      await generateConstructionProgressPDF(buildPDFPayloadFromAdvance(selectedAdvanceForDetail));
+                    } finally {
+                      setIsGeneratingPDF(false);
+                    }
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.6rem 1.25rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "var(--devio-green)",
+                    color: "#ffffff",
+                    border: "none",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: isGeneratingPDF ? "not-allowed" : "pointer",
+                    boxShadow: "0 4px 12px rgba(0, 196, 140, 0.3)",
+                  }}
+                >
+                  <Download size={15} /> {isGeneratingPDF ? "Generando..." : "Descargar Reporte PDF"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* SUCCESS MODAL AFTER PUBLISHING */}
+      {/* ================================================================== */}
       {isSuccessModalOpen && (
         <div
           style={{

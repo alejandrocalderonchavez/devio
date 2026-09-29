@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, HttpCode, HttpStatus } from "@nestjs/common";
+import { Controller, Get, Post, Delete, Param, Body, Query, HttpCode, HttpStatus } from "@nestjs/common";
 import { ProgressService } from "./progress.service";
 
 @Controller("progress")
@@ -14,5 +14,10 @@ export class ProgressController {
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() body: any) {
     return this.progressService.create(body);
+  }
+
+  @Delete(":id")
+  async remove(@Param("id") id: string) {
+    return this.progressService.remove(id);
   }
 }
