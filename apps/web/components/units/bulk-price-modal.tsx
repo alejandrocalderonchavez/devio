@@ -154,10 +154,24 @@ export default function BulkPriceModal({
             user: "Administrador",
           };
 
+          const existingHistory =
+            Array.isArray(u.priceHistory) && u.priceHistory.length > 0
+              ? u.priceHistory
+              : [
+                  {
+                    date: currentDateStr,
+                    previousPrice: oldPrice,
+                    newPrice: oldPrice,
+                    pctChange: 0,
+                    reason: "Precio de Lista Inicial",
+                    user: "Administrador",
+                  },
+                ];
+
           return {
             ...u,
             price: newPrice,
-            priceHistory: [...(u.priceHistory || []), historyEntry],
+            priceHistory: [historyEntry, ...existingHistory],
           };
         }
         return u;

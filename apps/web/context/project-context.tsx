@@ -5,6 +5,7 @@ import {
   INITIAL_PROJECTS,
   ProjectItem,
   UnitItem,
+  UnitPriceHistoryItem,
   CoOwner,
   SaleItem,
   SaleRecord,
@@ -507,6 +508,36 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           ? Number(customAttrs.constructionPct)
           : undefined;
 
+      const rawPriceHistory = Array.isArray(u.priceHistory)
+        ? u.priceHistory
+        : Array.isArray(customAttrs.priceHistory)
+        ? customAttrs.priceHistory
+        : [];
+
+      const mappedPriceHistory: UnitPriceHistoryItem[] = rawPriceHistory.map((h: any) => {
+        const prevPrice = Number(h.previousPrice ?? h.prevPrice ?? u.basePrice ?? u.price) || 0;
+        const newPrice = Number(h.newPrice ?? u.basePrice ?? u.price) || 0;
+        const rawDate = h.date || h.createdAt;
+        let dateStr = new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+        if (rawDate) {
+          try {
+            const d = new Date(rawDate);
+            dateStr = !isNaN(d.getTime()) ? d.toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : String(rawDate);
+          } catch (_) {
+            dateStr = String(rawDate);
+          }
+        }
+        const calcPct = prevPrice > 0 ? parseFloat((((newPrice - prevPrice) / prevPrice) * 100).toFixed(2)) : 0;
+        return {
+          date: h.date || dateStr,
+          previousPrice: prevPrice,
+          newPrice: newPrice,
+          pctChange: h.pctChange != null ? Number(h.pctChange) : calcPct,
+          reason: h.reason || "Ajuste de precio",
+          user: h.user || (h.changedByUser?.fullName) || "Administrador",
+        };
+      });
+
       return {
         id: u.id || `u-${idx + 1}`,
         unit: uNum,
@@ -529,7 +560,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         storageUnits: u.storageRooms != null ? Number(u.storageRooms) : u.storageUnits != null ? Number(u.storageUnits) : 0,
         floorPlan: u.floorPlan || undefined,
         images: Array.isArray(u.renderUrls) ? u.renderUrls : Array.isArray(u.images) ? u.images : [],
-        priceHistory: u.priceHistory || [],
+        priceHistory: mappedPriceHistory,
         constructionPct: unitConstructionPct,
       };
     });
@@ -1178,6 +1209,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         price: updatedFields.price,
         areaM2: updatedFields.areaM2,
         floor: updatedFields.floor,
+        priceHistory: updatedFields.priceHistory,
+        reason: updatedFields.priceHistory?.[0]?.reason,
+        previousPrice: updatedFields.priceHistory?.[0]?.previousPrice,
       }),
     }).catch((err) => console.warn("Could not sync unit update with backend:", err));
   };
@@ -1191,7 +1225,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
       const newInventory = p.unitsInventory.map((u) => {
         if (updatedMap.has(u.unit)) {
-          return { ...u, ...updatedMap.get(u.unit)! };
+          const incoming = updatedMap.get(u.unit)!;
+          return {
+            ...u,
+            ...incoming,
+            priceHistory: incoming.priceHistory ?? u.priceHistory ?? [],
+          };
         }
         return u;
       });
@@ -1246,13 +1285,21 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           price: u.price,
           areaM2: u.areaM2,
           floor: u.floor,
+          priceHistory: u.priceHistory,
+          reason: u.priceHistory?.[0]?.reason,
+          previousPrice: u.priceHistory?.[0]?.previousPrice,
         }),
       }).catch(() => {});
     });
   };
 
   const updateBulkPrices = (projectId: string, pctIncrease: number, unitNumbers?: string[]) => {
-    const todayStr = new Date().toLocaleDateString("es-MX");
+    const todayStr = new Date().toLocaleDateString("es-MX", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+    const affectedUnitsList: UnitItem[] = [];
     const updated = projects.map((p) => {
       if (p.id !== projectId) return p;
       const newInventory = p.unitsInventory.map((u) => {
@@ -1262,20 +1309,36 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
         const previousPrice = u.price;
         const newPrice = Math.round(previousPrice * (1 + pctIncrease / 100));
-        const historyItem = {
+        const historyItem: UnitPriceHistoryItem = {
           date: todayStr,
           previousPrice,
           newPrice,
           pctChange: pctIncrease,
           reason: `Aumento masivo del ${pctIncrease}%`,
-          user: userName,
+          user: userName || "Administrador",
         };
 
-        return {
+        const existingHistory =
+          Array.isArray(u.priceHistory) && u.priceHistory.length > 0
+            ? u.priceHistory
+            : [
+                {
+                  date: todayStr,
+                  previousPrice,
+                  newPrice: previousPrice,
+                  pctChange: 0,
+                  reason: "Precio de Lista Inicial",
+                  user: userName || "Administrador",
+                },
+              ];
+
+        const updatedUnit: UnitItem = {
           ...u,
           price: newPrice,
-          priceHistory: [...(u.priceHistory || []), historyItem],
+          priceHistory: [historyItem, ...existingHistory],
         };
+        affectedUnitsList.push(updatedUnit);
+        return updatedUnit;
       });
 
       const soldCount = newInventory.filter((u) => u.status === "VENDIDA").length;
@@ -1315,6 +1378,25 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
     saveProjects(updated);
     showToast("Precios Actualizados", `Se aplicó un incremento de +${pctIncrease}% a las unidades disponibles.`);
+
+    // Persist to backend
+    affectedUnitsList.forEach((u) => {
+      fetch("/api/units", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          unitNumber: u.unit,
+          status: u.status,
+          price: u.price,
+          areaM2: u.areaM2,
+          floor: u.floor,
+          priceHistory: u.priceHistory,
+          reason: u.priceHistory?.[0]?.reason,
+          previousPrice: u.priceHistory?.[0]?.previousPrice,
+        }),
+      }).catch(() => {});
+    });
   };
 
   const updateProjectAdditionals = (projectId: string, additionals: ProjectAdditional[]) => {

@@ -281,7 +281,11 @@ export class ProjectsService {
     const projects = await this.prisma.project.findMany({
       where,
       include: {
-        units: true,
+        units: {
+          include: {
+            priceHistory: { orderBy: { createdAt: "desc" } },
+          },
+        },
         sales: {
           include: {
             primaryClient: true,
@@ -318,7 +322,11 @@ export class ProjectsService {
     const project = await this.prisma.project.findUnique({
       where: { id },
       include: {
-        units: true,
+        units: {
+          include: {
+            priceHistory: { orderBy: { createdAt: "desc" } },
+          },
+        },
         sales: {
           include: {
             primaryClient: true,

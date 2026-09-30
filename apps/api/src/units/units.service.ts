@@ -22,6 +22,9 @@ export class UnitsService {
     const units = await this.prisma.unit.findMany({
       where: whereClause,
       include: {
+        priceHistory: {
+          orderBy: { createdAt: "desc" },
+        },
         sales: {
           where: { status: { not: "CANCELLED" } },
           include: {
@@ -129,7 +132,19 @@ export class UnitsService {
   }
 
   async update(body: any) {
-    const { projectId: rawProjectId, unitNumber, unitId, status, price, areaM2, floor } = body;
+    const {
+      projectId: rawProjectId,
+      unitNumber,
+      unitId,
+      status,
+      price,
+      areaM2,
+      floor,
+      previousPrice,
+      reason,
+      priceHistory,
+      userId,
+    } = body;
 
     if (!unitNumber && !unitId) {
       throw new BadRequestException("unitNumber o unitId es requerido");
@@ -195,11 +210,39 @@ export class UnitsService {
     if (price !== undefined) updateData.basePrice = Number(price);
     if (areaM2 !== undefined) updateData.totalAreaM2 = Number(areaM2);
     if (floor !== undefined) updateData.level = Number(floor);
+    if (priceHistory) {
+      updateData.customAttributes = {
+        ...((targetUnit.customAttributes as object) || {}),
+        priceHistory,
+      };
+    }
 
     await this.prisma.unit.update({
       where: { id: targetUnit.id },
       data: updateData,
     });
+
+    // Record in PriceHistory table if price changed
+    const oldPriceNum = previousPrice !== undefined ? Number(previousPrice) : Number(targetUnit.basePrice);
+    const newPriceNum = price !== undefined ? Number(price) : Number(targetUnit.basePrice);
+    if (price !== undefined && oldPriceNum !== newPriceNum) {
+      const historyReason =
+        reason ||
+        (Array.isArray(priceHistory) && priceHistory[0]?.reason) ||
+        "Ajuste de precio";
+      await this.prisma.priceHistory
+        .create({
+          data: {
+            unitId: targetUnit.id,
+            previousPrice: oldPriceNum,
+            newPrice: newPriceNum,
+            currency: targetUnit.currency || "MXN",
+            reason: historyReason,
+            changedByUserId: userId && isUuid(userId) ? userId : null,
+          },
+        })
+        .catch((err) => console.warn("Could not insert PriceHistory row:", err));
+    }
 
     if (mappedStatus === "AVAILABLE") {
       const salesToPurge = await this.prisma.sale.findMany({
