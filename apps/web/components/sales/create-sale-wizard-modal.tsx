@@ -72,6 +72,22 @@ interface AdditionalItem {
   category: "bodega" | "estacionamiento" | "acabados" | "terraza" | "otro";
 }
 
+export interface CoOwnerPaymentConfig {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  rfc?: string;
+  ownershipPct: number;
+  paymentOption: "FULL" | "PARTIAL" | "NONE";
+  paymentAmount: number;
+  paymentMethod: string;
+  paymentReference: string;
+  sendCredentials: boolean;
+  sendSaleConfirmationEmail: boolean;
+  sendReceiptEmail: boolean;
+}
+
 const PRESET_CLIENTS: ClientData[] = [];
 
 export default function CreateSaleWizardModal({
@@ -92,6 +108,29 @@ export default function CreateSaleWizardModal({
   // STEP 1: CLIENTE Y COPROPIEDAD
   // --------------------------------------------------------------------------
   const [isCoOwnership, setIsCoOwnership] = useState<boolean>(false);
+  const [dbClients, setDbClients] = useState<ClientData[]>([]);
+
+  // Fetch registered clients from database catalog
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch("/api/clients")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.clients)) {
+          const mapped: ClientData[] = data.clients
+            .filter((c: any) => c.fullName && c.fullName.trim().length >= 2)
+            .map((c: any) => ({
+              name: c.fullName.trim(),
+              email: (c.email || "").trim(),
+              phone: (c.phone || "").trim(),
+              rfc: (c.taxId || c.rfc || "").trim(),
+              isExisting: true,
+            }));
+          setDbClients(mapped);
+        }
+      })
+      .catch((err) => console.warn("Error loading clients from API:", err));
+  }, [isOpen]);
 
   // Primary Client
   const [primaryClient, setPrimaryClient] = useState<CoOwner>({
@@ -109,68 +148,79 @@ export default function CreateSaleWizardModal({
   // Additional Co-owners list
   const [coOwnersList, setCoOwnersList] = useState<CoOwner[]>([]);
 
-  // Collect existing clients across all projects dynamically
+  // Collect existing registered clients strictly from catalog & real sales
   const existingClients = useMemo(() => {
     const clientsMap: Record<string, ClientData> = {};
+    const invalidNames = new Set([
+      "-",
+      "sin asignar",
+      "disponible",
+      "bloqueada",
+      "apartada",
+      "null",
+      "undefined",
+      "departamento",
+      "casa",
+      "terreno",
+      "local",
+      "bodega",
+      "cliente",
+      "cliente devio",
+      "propietario",
+    ]);
 
+    const isValidClientName = (name?: string) => {
+      if (!name) return false;
+      const clean = name.trim().toLowerCase();
+      if (clean.length < 3) return false;
+      if (invalidNames.has(clean)) return false;
+      // Filter out pure unit numbers or placeholders
+      if (/^(\d+|u-\d+|unidad\s*\d+)$/i.test(clean)) return false;
+      return true;
+    };
+
+    // 1. Add DB catalog clients first
+    dbClients.forEach((c) => {
+      if (isValidClientName(c.name)) {
+        const key = (c.email || c.name).toLowerCase().trim();
+        clientsMap[key] = { ...c, isExisting: true };
+      }
+    });
+
+    // 2. Add real clients from projects sales
     projects.forEach((p) => {
-      // 1. From real sales records
       (p.sales || []).forEach((s) => {
-        if (s.clientName && s.clientName.trim()) {
-          const key = (s.clientEmail || s.clientName).toLowerCase();
-          clientsMap[key] = {
-            name: s.clientName,
-            email: s.clientEmail || "",
-            phone: s.clientPhone || "",
-            rfc: s.clientRfc || "",
-            isExisting: true,
-          };
-        }
-        (s.coOwners || []).forEach((co) => {
-          if (co.name && co.name.trim()) {
-            const coKey = (co.email || co.name).toLowerCase();
-            clientsMap[coKey] = {
-              name: co.name,
-              email: co.email || "",
-              phone: co.phone || "",
-              rfc: co.rfc || "",
-              isExisting: true,
-            };
-          }
-        });
-      });
-
-      // 2. From unitsInventory
-      (p.unitsInventory || []).forEach((u) => {
-        if (u.client && u.client !== "-" && u.client !== "Sin asignar") {
-          const key = u.client.toLowerCase();
+        if (s.status !== "CANCELADA" && isValidClientName(s.clientName)) {
+          const key = (s.clientEmail || s.clientName).toLowerCase().trim();
           if (!clientsMap[key]) {
             clientsMap[key] = {
-              name: u.client,
-              email: (u as any).clientEmail || "",
-              phone: (u as any).clientPhone || "",
-              rfc: (u as any).clientRfc || "",
+              name: s.clientName.trim(),
+              email: s.clientEmail || "",
+              phone: s.clientPhone || "",
+              rfc: s.clientRfc || "",
               isExisting: true,
             };
           }
         }
-        (u.coOwners || []).forEach((co) => {
-          if (co.name && co.name.trim()) {
-            const coKey = (co.email || co.name).toLowerCase();
-            clientsMap[coKey] = {
-              name: co.name,
-              email: co.email || "",
-              phone: co.phone || "",
-              rfc: co.rfc || "",
-              isExisting: true,
-            };
+        (s.coOwners || []).forEach((co) => {
+          if (isValidClientName(co.name)) {
+            const coKey = (co.email || co.name).toLowerCase().trim();
+            if (!clientsMap[coKey]) {
+              clientsMap[coKey] = {
+                name: co.name.trim(),
+                email: co.email || "",
+                phone: co.phone || "",
+                rfc: co.rfc || "",
+                isExisting: true,
+              };
+            }
           }
         });
       });
     });
 
-    return Object.values(clientsMap);
-  }, [projects]);
+    return Object.values(clientsMap).sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }, [dbClients, projects]);
 
   // Primary client email/name lookup & autofill
   useEffect(() => {
@@ -201,7 +251,7 @@ export default function CreateSaleWizardModal({
               (trimmedEmail && u.email && u.email.toLowerCase() === trimmedEmail) ||
               (trimmedName && u.name && u.name.toLowerCase() === trimmedName)
           );
-          if (inUsers) {
+          if (inUsers && inUsers.name && inUsers.name.trim().length >= 3) {
             found = {
               name: inUsers.name || inUsers.fullName || "",
               email: inUsers.email || "",
@@ -235,7 +285,7 @@ export default function CreateSaleWizardModal({
     const trimmedName = (name || "").trim().toLowerCase();
     if (!trimmedEmail && !trimmedName) return false;
 
-    // 1. Check existingClients from projects
+    // 1. Check existingClients from projects & dbClients
     const inProjects = (existingClients || []).some(
       (c) =>
         (trimmedEmail && c.email && c.email.toLowerCase() === trimmedEmail) ||
@@ -452,6 +502,7 @@ export default function CreateSaleWizardModal({
   const { paymentPlans = [], addSale, updateQuote } = useProject();
   const activeDeveloperPlans = useMemo(() => paymentPlans.filter((p) => p.isActive), [paymentPlans]);
 
+  const [activePlanView, setActivePlanView] = useState<"global" | "co_owners">("global");
   const [selectedPlanId, setSelectedPlanId] = useState<string>("custom");
   const [customPlanName, setCustomPlanName] = useState("Plan Personalizado de Venta");
   const [paymentType, setPaymentType] = useState<"ESQUEMA" | "CONTADO">("ESQUEMA");
@@ -1143,6 +1194,9 @@ export default function CreateSaleWizardModal({
   const [sendReceiptEmail, setSendReceiptEmail] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  // Per-co-owner payment settings when isCoOwnership is true
+  const [coOwnerPaymentSettings, setCoOwnerPaymentSettings] = useState<Record<string, CoOwnerPaymentConfig>>({});
+
   useEffect(() => {
     if (paymentSchedule.length > 0 && paymentSchedule[0]) {
       if (initialPaymentOption === "FULL") {
@@ -1150,6 +1204,52 @@ export default function CreateSaleWizardModal({
       }
     }
   }, [paymentSchedule, initialPaymentOption]);
+
+  // Synchronize co-owners payment settings when co-owners or schedule change
+  useEffect(() => {
+    if (!isCoOwnership) return;
+    const totalDownPayment = paymentSchedule[0]?.amount || Math.round(netTotalSaleAmount * (downPaymentPct / 100));
+
+    setCoOwnerPaymentSettings((prev) => {
+      const next: Record<string, CoOwnerPaymentConfig> = {};
+      allOwnersCombined.forEach((owner) => {
+        const ownerKey = owner.id || owner.email || owner.name || "owner";
+        const expectedDown = Math.round(totalDownPayment * (Number(owner.ownershipPct || 0) / 100));
+        const prevSetting = prev[ownerKey] || prev[owner.id];
+        const isClientInCat = isClientInCatalog(owner.email, owner.name);
+
+        if (prevSetting) {
+          next[ownerKey] = {
+            ...prevSetting,
+            id: owner.id,
+            name: owner.name,
+            email: owner.email,
+            phone: owner.phone,
+            rfc: owner.rfc,
+            ownershipPct: owner.ownershipPct,
+            paymentAmount: prevSetting.paymentOption === "FULL" ? expectedDown : prevSetting.paymentAmount,
+          };
+        } else {
+          next[ownerKey] = {
+            id: owner.id,
+            name: owner.name,
+            email: owner.email,
+            phone: owner.phone,
+            rfc: owner.rfc,
+            ownershipPct: owner.ownershipPct,
+            paymentOption: "FULL",
+            paymentAmount: expectedDown,
+            paymentMethod: "transferencia",
+            paymentReference: "",
+            sendCredentials: !isClientInCat,
+            sendSaleConfirmationEmail: true,
+            sendReceiptEmail: true,
+          };
+        }
+      });
+      return next;
+    });
+  }, [allOwnersCombined, isCoOwnership, paymentSchedule, netTotalSaleAmount, downPaymentPct]);
 
   // --------------------------------------------------------------------------
   // FINALIZE SALE
@@ -1178,6 +1278,39 @@ export default function CreateSaleWizardModal({
           id: resolvedOwnerId,
         };
       });
+
+      // Build co-owner payment records
+      const totalDown = paymentSchedule[0]?.amount || Math.round(netTotalSaleAmount * (downPaymentPct / 100));
+      const coOwnerPayments = isCoOwnership
+        ? finalCoOwners.map((owner) => {
+            const ownerKey = owner.id || owner.email || owner.name;
+            const cfg = coOwnerPaymentSettings[ownerKey] || coOwnerPaymentSettings[owner.id] || {
+              paymentOption: "FULL",
+              paymentAmount: Math.round(totalDown * (Number(owner.ownershipPct || 0) / 100)),
+              paymentMethod: "transferencia",
+              paymentReference: "",
+              sendReceiptEmail: true,
+            };
+            return {
+              clientId: owner.id,
+              name: owner.name,
+              email: owner.email,
+              phone: owner.phone,
+              rfc: owner.rfc,
+              ownershipPct: owner.ownershipPct,
+              amount: cfg.paymentOption === "NONE" ? 0 : (Number(cfg.paymentAmount) || 0),
+              method: cfg.paymentMethod || "transferencia",
+              reference: cfg.paymentReference || "",
+              paymentMode: cfg.paymentOption,
+              sendReceiptEmail: cfg.paymentOption !== "NONE" && Boolean(cfg.sendReceiptEmail),
+            };
+          })
+        : [];
+
+      const totalCoOwnerPaid = coOwnerPayments.reduce((acc, cp) => acc + (cp.amount || 0), 0);
+      const effectiveInitialPaid = isCoOwnership
+        ? totalCoOwnerPaid
+        : (initialPaymentOption === "NONE" ? 0 : initialPaymentAmount);
 
       // Register / persist client portal users in devio_client_portal_users and clean devio_system_users
       if (typeof window !== "undefined") {
@@ -1249,13 +1382,12 @@ export default function CreateSaleWizardModal({
           rfc: primaryClient.rfc,
         },
         isCoOwnership,
-        coOwners: isCoOwnership
-          ? coOwnersList.map((co) => ({
-              ...co,
-              percentage: Number(co.ownershipPct),
-              ownershipPercentage: Number(co.ownershipPct),
-            }))
-          : [],
+        coOwners: finalCoOwners.map((co) => ({
+          ...co,
+          percentage: Number(co.ownershipPct),
+          ownershipPercentage: Number(co.ownershipPct),
+        })),
+        coOwnerPayments,
         project: {
           id: targetProjId,
           name: currentProject?.name || "Proyecto",
@@ -1297,14 +1429,14 @@ export default function CreateSaleWizardModal({
         })),
         quoteId: initialQuote?.id,
         initialPayment: {
-          registered: initialPaymentOption !== "NONE",
-          option: initialPaymentOption,
-          amount: initialPaymentOption === "NONE" ? 0 : initialPaymentAmount,
-          method: initialPaymentOption === "NONE" ? undefined : paymentMethod,
-          reference: initialPaymentOption === "NONE" ? undefined : paymentReference,
+          registered: effectiveInitialPaid > 0,
+          option: isCoOwnership ? (effectiveInitialPaid > 0 ? "FULL" : "NONE") : initialPaymentOption,
+          amount: effectiveInitialPaid,
+          method: isCoOwnership ? (coOwnerPayments[0]?.method || "transferencia") : (initialPaymentOption === "NONE" ? undefined : paymentMethod),
+          reference: isCoOwnership ? (coOwnerPayments[0]?.reference || "") : (initialPaymentOption === "NONE" ? undefined : paymentReference),
           sendCredentialsToAll,
           sendSaleConfirmationEmail,
-          sendReceiptEmail: initialPaymentOption !== "NONE" && sendReceiptEmail,
+          sendReceiptEmail: effectiveInitialPaid > 0 && sendReceiptEmail,
         },
       };
 
@@ -1326,8 +1458,13 @@ export default function CreateSaleWizardModal({
       // ----------------------------------------------------------------------
       // Dispatch Real Email Notifications & Audit Logs via Postmark API
       // ----------------------------------------------------------------------
-      allOwnersCombined.forEach(async (owner) => {
+      allOwnersCombined.forEach(async (owner, idx) => {
         if (!owner.email) return;
+        const ownerKey = owner.id || owner.email || owner.name;
+        const cfg = isCoOwnership
+          ? (coOwnerPaymentSettings[ownerKey] || coOwnerPaymentSettings[owner.id])
+          : null;
+
         const isExistingUser =
           (owner.isPrimary && isPrimaryFound) ||
           isClientInCatalog(owner.email, owner.name) ||
@@ -1343,8 +1480,28 @@ export default function CreateSaleWizardModal({
           "";
         const projLogo = resolveProjectLogo(currentProject, devLogo);
 
-        // 1. Envío obligatorio de credenciales de acceso SOLO SI ES USUARIO NUEVO
-        if (!isExistingUser) {
+        const shouldSendCredentials = isCoOwnership
+          ? Boolean(cfg?.sendCredentials)
+          : !isExistingUser;
+
+        const shouldSendConfirmation = isCoOwnership
+          ? Boolean(cfg?.sendSaleConfirmationEmail)
+          : sendSaleConfirmationEmail;
+
+        const ownerPaymentAmount = isCoOwnership
+          ? (cfg?.paymentOption === "NONE" ? 0 : (Number(cfg?.paymentAmount) || 0))
+          : (initialPaymentOption === "NONE" ? 0 : initialPaymentAmount);
+
+        const ownerPaymentMethod = isCoOwnership
+          ? (cfg?.paymentMethod || "transferencia")
+          : paymentMethod;
+
+        const shouldSendReceipt = isCoOwnership
+          ? (cfg?.paymentOption !== "NONE" && Boolean(cfg?.sendReceiptEmail) && ownerPaymentAmount > 0)
+          : (initialPaymentOption !== "NONE" && sendReceiptEmail && ownerPaymentAmount > 0);
+
+        // 1. Envío obligatorio de credenciales de acceso
+        if (shouldSendCredentials) {
           sendAndLogNotification({
             to: owner.email,
             templateAlias: "bienvenida-cliente",
@@ -1369,7 +1526,7 @@ export default function CreateSaleWizardModal({
         }
 
         // 2. Envío de confirmación de venta y asignación de unidad
-        if (sendSaleConfirmationEmail) {
+        if (shouldSendConfirmation) {
           sendAndLogNotification({
             to: owner.email,
             templateAlias: "alta-unidad",
@@ -1395,7 +1552,11 @@ export default function CreateSaleWizardModal({
         }
 
         // 3. Envío de recibo de pago de enganche inicial si se registró pago
-        if (initialPaymentOption !== "NONE" && sendReceiptEmail) {
+        if (shouldSendReceipt) {
+          const receiptFolio = isCoOwnership
+            ? `REC-${new Date().getFullYear()}-${String(idx + 1).padStart(3, "0")}`
+            : "REC-2026-001";
+
           sendAndLogNotification({
             to: owner.email,
             templateAlias: "recibo-pago",
@@ -1404,17 +1565,21 @@ export default function CreateSaleWizardModal({
               correo: owner.email,
               proyecto: projName,
               unidad: selectedUnitNumber,
-              folio_recibo: "REC-2026-001",
-              monto_pagado: formatMoney(initialPaymentAmount),
-              concepto: "Pago de Enganche Inicial",
+              folio_recibo: receiptFolio,
+              monto_pagado: formatMoney(ownerPaymentAmount),
+              concepto: `Pago de Enganche Inicial (${isCoOwnership ? `Copropiedad ${owner.ownershipPct}%` : "Total"})`,
               metodo_pago:
-                paymentMethod === "transferencia"
+                ownerPaymentMethod === "transferencia"
                   ? "Transferencia SPEI"
-                  : paymentMethod === "cheque"
+                  : ownerPaymentMethod === "cheque"
                   ? "Cheque de Caja"
+                  : ownerPaymentMethod === "tarjeta"
+                  ? "Tarjeta Bancaria"
+                  : ownerPaymentMethod === "efectivo"
+                  ? "Efectivo"
                   : "Depósito Bancario",
               fecha_pago: new Date().toLocaleDateString("es-MX"),
-              saldo_pendiente: formatMoney(Math.max(0, netTotalSaleAmount - initialPaymentAmount)),
+              saldo_pendiente: formatMoney(Math.max(0, (netTotalSaleAmount * ((owner.ownershipPct || 100) / 100)) - ownerPaymentAmount)),
               desarrolladora: devName,
               logo_proyecto: projLogo,
               logo_desarrolladora: devLogo,
@@ -2657,9 +2822,72 @@ export default function CreateSaleWizardModal({
                   Seleccionar Plan de Pago
                 </h3>
                 <p style={{ fontSize: "0.82rem", color: "var(--devio-neutral-3)", lineHeight: 1.45 }}>
-                  Elige el plan de pago que se aplicará a esta venta. El sistema calculará el desglose financiero exacto.
+                  {isCoOwnership
+                    ? "Configura las condiciones del plan global y revisa el desglose proporcional exacto para cada uno de los copropietarios."
+                    : "Elige el plan de pago que se aplicará a esta venta. El sistema calculará el desglose financiero exacto."}
                 </p>
               </div>
+
+              {/* Co-ownership View Mode Switcher Tabs */}
+              {isCoOwnership && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    backgroundColor: "#F1F5F9",
+                    padding: "0.3rem",
+                    borderRadius: "0.75rem",
+                    width: "fit-content",
+                    margin: "0 auto",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setActivePlanView("global")}
+                    style={{
+                      padding: "0.5rem 1.15rem",
+                      borderRadius: "0.55rem",
+                      border: "none",
+                      backgroundColor: activePlanView === "global" ? "#FFFFFF" : "transparent",
+                      color: activePlanView === "global" ? "var(--devio-blue-dark)" : "var(--devio-neutral-4)",
+                      fontSize: "0.84rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      boxShadow: activePlanView === "global" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <Building2 size={15} />
+                    Plan Global de la Propiedad (100%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActivePlanView("co_owners")}
+                    style={{
+                      padding: "0.5rem 1.15rem",
+                      borderRadius: "0.55rem",
+                      border: "none",
+                      backgroundColor: activePlanView === "co_owners" ? "#FFFFFF" : "transparent",
+                      color: activePlanView === "co_owners" ? "var(--devio-green)" : "var(--devio-neutral-4)",
+                      fontSize: "0.84rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      boxShadow: activePlanView === "co_owners" ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <Users size={15} />
+                    Desglose Proporcional por Copropietario ({allOwnersCombined.length})
+                  </button>
+                </div>
+              )}
 
               {/* Plan Preset Selector Header */}
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
@@ -2838,346 +3066,477 @@ export default function CreateSaleWizardModal({
                     </div>
                   </div>
                 )}
+              </div>
 
-                {/* Discount Scope Option if discount > 0 */}
-                {discountPct > 0 && (
+              {/* SUB-VIEW 1: VISTA PROPORCIONAL POR COPROPIETARIO */}
+              {isCoOwnership && activePlanView === "co_owners" ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                  {/* Co-owners Proportional Summary Cards */}
+                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(allOwnersCombined.length, 3)}, 1fr)`, gap: "0.85rem" }}>
+                    {allOwnersCombined.map((owner, idx) => {
+                      const pct = Number(owner.ownershipPct) || 0;
+                      const ownerTotal = Math.round(netTotalSaleAmount * (pct / 100));
+                      const ownerDown = Math.round(Math.round(netTotalSaleAmount * (downPaymentPct / 100)) * (pct / 100));
+                      const ownerLiquidation = Math.round(Math.round(netTotalSaleAmount * (balloonLiquidationPct / 100)) * (pct / 100));
+                      const ownerInstallmentTotal = Math.max(0, ownerTotal - ownerDown - ownerLiquidation);
+                      const ownerPerInstallment = installmentsCount > 0 ? Math.round((ownerInstallmentTotal / installmentsCount) * 100) / 100 : 0;
+
+                      const colors = ["#2F80ED", "#00C48C", "#F2994A", "#9B51E0"];
+                      const themeColor = colors[idx % colors.length];
+
+                      return (
+                        <div
+                          key={owner.id}
+                          style={{
+                            backgroundColor: "#FFFFFF",
+                            borderRadius: "0.85rem",
+                            border: `1.5px solid ${themeColor}40`,
+                            padding: "1rem",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.6rem",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div>
+                              <strong style={{ fontSize: "0.92rem", color: "var(--devio-blue-dark)", display: "block" }}>
+                                {owner.name || `Copropietario ${idx + 1}`}
+                              </strong>
+                              <span style={{ fontSize: "0.74rem", color: "var(--devio-neutral-3)" }}>
+                                {owner.isPrimary ? "Titular Principal" : "Copropietario"}
+                              </span>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: "0.78rem",
+                                fontWeight: 800,
+                                padding: "0.2rem 0.6rem",
+                                borderRadius: "9999px",
+                                backgroundColor: `${themeColor}15`,
+                                color: themeColor,
+                              }}
+                            >
+                              {pct}%
+                            </span>
+                          </div>
+
+                          <div style={{ borderTop: "1px solid var(--devio-neutral-1)", paddingTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem" }}>
+                              <span style={{ color: "var(--devio-neutral-3)" }}>Monto Total:</span>
+                              <strong style={{ color: "var(--devio-blue-dark)" }}>{formatMoney(ownerTotal)}</strong>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem" }}>
+                              <span style={{ color: "var(--devio-neutral-3)" }}>Enganche ({downPaymentPct}%):</span>
+                              <strong style={{ color: "#2F80ED" }}>{formatMoney(ownerDown)}</strong>
+                            </div>
+                            {paymentType === "ESQUEMA" && installmentsCount > 0 && (
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem" }}>
+                                <span style={{ color: "var(--devio-neutral-3)" }}>Cuotas ({installmentsCount} {periodicity}s):</span>
+                                <strong style={{ color: "#D97706" }}>{formatMoney(ownerPerInstallment)} c/u</strong>
+                              </div>
+                            )}
+                            {paymentType === "ESQUEMA" && balloonLiquidationPct > 0 && (
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem" }}>
+                                <span style={{ color: "var(--devio-neutral-3)" }}>Liquidación ({balloonLiquidationPct}%):</span>
+                                <strong style={{ color: "#00C48C" }}>{formatMoney(ownerLiquidation)}</strong>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Comparative Proportional Schedule Table */}
                   <div
                     style={{
-                      padding: "0.6rem 0.85rem",
-                      borderRadius: "0.5rem",
-                      backgroundColor: "rgba(47, 128, 237, 0.05)",
-                      border: "1px solid rgba(47, 128, 237, 0.15)",
+                      border: "1px solid var(--devio-neutral-1)",
+                      borderRadius: "1rem",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        backgroundColor: "rgba(31, 54, 82, 0.05)",
+                        padding: "0.75rem 1.25rem",
+                        borderBottom: "1px solid var(--devio-neutral-1)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <h4 style={{ fontSize: "0.9rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
+                        Calendario Desglosado por Copropietario ({paymentSchedule.length} exhibiciones)
+                      </h4>
+                      <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)" }}>
+                        Cada copropietario cubre el % patrimonial asignado
+                      </span>
+                    </div>
+
+                    <div style={{ maxHeight: "360px", overflowY: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
+                        <thead>
+                          <tr style={{ backgroundColor: "#FAFBFD", borderBottom: "1px solid var(--devio-neutral-1)", textAlign: "left" }}>
+                            <th style={{ padding: "0.6rem 0.5rem", color: "var(--devio-neutral-3)", width: "30px", textAlign: "center" }}>#</th>
+                            <th style={{ padding: "0.6rem 0.65rem", color: "var(--devio-neutral-3)" }}>Concepto</th>
+                            <th style={{ padding: "0.6rem 0.65rem", color: "var(--devio-neutral-3)" }}>Fecha</th>
+                            <th style={{ padding: "0.6rem 0.65rem", color: "var(--devio-neutral-3)", textAlign: "right" }}>Total Global</th>
+                            {allOwnersCombined.map((owner) => (
+                              <th key={owner.id} style={{ padding: "0.6rem 0.65rem", color: "var(--devio-blue-dark)", textAlign: "right" }}>
+                                {owner.name || "Copropietario"} ({owner.ownershipPct}%)
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paymentSchedule.map((row, idx) => (
+                            <tr key={row.id ? `${row.id}-${idx}` : idx} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                              <td style={{ padding: "0.55rem 0.4rem", textAlign: "center", fontWeight: 700, color: "var(--devio-neutral-3)" }}>
+                                {idx + 1}
+                              </td>
+                              <td style={{ padding: "0.55rem 0.65rem", fontWeight: 600, color: "var(--devio-blue-dark)" }}>
+                                {row.concept}
+                              </td>
+                              <td style={{ padding: "0.55rem 0.65rem", color: "var(--devio-neutral-4)" }}>
+                                {row.date}
+                              </td>
+                              <td style={{ padding: "0.55rem 0.65rem", textAlign: "right", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                                {formatMoney(row.amount)}
+                              </td>
+                              {allOwnersCombined.map((owner) => {
+                                const ownerShare = Math.round(row.amount * (Number(owner.ownershipPct || 0) / 100));
+                                return (
+                                  <td key={owner.id} style={{ padding: "0.55rem 0.65rem", textAlign: "right", fontWeight: 700, color: "var(--devio-green)" }}>
+                                    {formatMoney(ownerShare)}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ backgroundColor: "#FAFBFD", borderTop: "1.5px solid var(--devio-neutral-2)", fontWeight: 800 }}>
+                            <td colSpan={3} style={{ padding: "0.75rem 0.65rem", textAlign: "right", color: "var(--devio-blue-dark)" }}>
+                              Total Acumulado:
+                            </td>
+                            <td style={{ padding: "0.75rem 0.65rem", textAlign: "right", color: "var(--devio-blue-dark)", fontSize: "0.9rem" }}>
+                              {formatMoney(totalScheduleSum)}
+                            </td>
+                            {allOwnersCombined.map((owner) => {
+                              const ownerTotalSum = Math.round(totalScheduleSum * (Number(owner.ownershipPct || 0) / 100));
+                              return (
+                                <td key={owner.id} style={{ padding: "0.75rem 0.65rem", textAlign: "right", color: "var(--devio-green)", fontSize: "0.9rem" }}>
+                                  {formatMoney(ownerTotalSum)}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* SUB-VIEW 2: VISTA GLOBAL REGULAR DEL CALENDARIO */
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                  {/* Payment Schedule Date Controls */}
+                  <div
+                    style={{
+                      backgroundColor: "#F8FAFC",
+                      border: "1px solid var(--devio-neutral-1)",
+                      borderRadius: "0.85rem",
+                      padding: "0.85rem 1.15rem",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
                       flexWrap: "wrap",
-                      gap: "0.6rem",
+                      gap: "0.85rem",
                     }}
                   >
-                    <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
-                      Aplicar Descuento del {discountPct}% ({formatMoney(discountAmount)}) sobre:
-                    </span>
-                    <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.76rem", cursor: "pointer", fontWeight: discountAppliesTo === "total" ? 700 : 500, color: "var(--devio-blue-dark)" }}>
-                        <input
-                          type="radio"
-                          name="discountAppliesTo"
-                          checked={discountAppliesTo === "total"}
-                          onChange={() => setDiscountAppliesTo("total")}
-                          style={{ accentColor: "var(--devio-blue)" }}
-                        />
-                        <span>Total del Plan (Unidad + Adicionales)</span>
-                      </label>
-                      <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.76rem", cursor: "pointer", fontWeight: discountAppliesTo === "unit_only" ? 700 : 500, color: "var(--devio-blue-dark)" }}>
-                        <input
-                          type="radio"
-                          name="discountAppliesTo"
-                          checked={discountAppliesTo === "unit_only"}
-                          onChange={() => setDiscountAppliesTo("unit_only")}
-                          style={{ accentColor: "var(--devio-blue)" }}
-                        />
-                        <span>Solo Precio de la Unidad</span>
-                      </label>
-                    </div>
-                  </div>
-                )}
-              </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                      <div>
+                        <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.2rem" }}>
+                          📅 Fecha de Enganche (Inicio):
+                        </label>
+                        <div style={{ width: "160px" }}>
+                          <DevioDatePicker
+                            value={saleDate}
+                            onChange={(val) => setSaleDate(val)}
+                            placeholder="Fecha de inicio"
+                          />
+                        </div>
+                      </div>
 
-              {/* Payment Schedule Date Controls */}
-              <div
-                style={{
-                  backgroundColor: "#F8FAFC",
-                  border: "1px solid var(--devio-neutral-1)",
-                  borderRadius: "0.85rem",
-                  padding: "0.85rem 1.15rem",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  flexWrap: "wrap",
-                  gap: "0.85rem",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-                  <div>
-                    <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.2rem" }}>
-                      📅 Fecha de Enganche (Inicio):
-                    </label>
-                    <div style={{ width: "160px" }}>
-                      <DevioDatePicker
-                        value={saleDate}
-                        onChange={(val) => setSaleDate(val)}
-                        placeholder="Fecha de inicio"
-                      />
+                      <div>
+                        <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.2rem" }}>
+                          ⚡ Ajustar día de corte mensual a todas las cuotas:
+                        </label>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                          {[
+                            { label: `Hoy (${new Date().getDate()})`, day: new Date().getDate() },
+                            { label: "Día 1", day: 1 },
+                            { label: "Día 5", day: 5 },
+                            { label: "Día 15", day: 15 },
+                            { label: "Día 25", day: 25 },
+                          ].map((item) => (
+                            <button
+                              key={item.day}
+                              type="button"
+                              onClick={() => handleBulkCutoffDayChange(item.day)}
+                              style={{
+                                padding: "0.3rem 0.6rem",
+                                borderRadius: "0.4rem",
+                                border: monthlyCutoffDay === item.day ? "1.5px solid var(--devio-blue)" : "1px solid var(--devio-neutral-2)",
+                                backgroundColor: monthlyCutoffDay === item.day ? "rgba(47, 128, 237, 0.1)" : "#FFFFFF",
+                                color: monthlyCutoffDay === item.day ? "var(--devio-blue)" : "var(--devio-blue-dark)",
+                                fontSize: "0.74rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.2rem" }}>
-                      ⚡ Ajustar día de corte mensual a todas las cuotas:
-                    </label>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                      {[
-                        { label: `Hoy (${new Date().getDate()})`, day: new Date().getDate() },
-                        { label: "Día 1", day: 1 },
-                        { label: "Día 5", day: 5 },
-                        { label: "Día 15", day: 15 },
-                        { label: "Día 25", day: 25 },
-                      ].map((item) => (
+                  {/* Payment Schedule Table */}
+                  <div
+                    style={{
+                      border: "1px solid var(--devio-neutral-1)",
+                      borderRadius: "1rem",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        backgroundColor: "rgba(31, 54, 82, 0.05)",
+                        padding: "0.75rem 1.25rem",
+                        borderBottom: "1px solid var(--devio-neutral-1)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <h4 style={{ fontSize: "0.9rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
+                        Calendario de Pagos ({paymentSchedule.length} exhibiciones)
+                      </h4>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                        {!isScheduleBalanced && (
+                          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-red)" }}>
+                            Diferencia: {formatMoney(scheduleDifference)}
+                          </span>
+                        )}
                         <button
-                          key={item.day}
                           type="button"
-                          onClick={() => handleBulkCutoffDayChange(item.day)}
+                          onClick={handleAddRowAtEnd}
                           style={{
-                            padding: "0.3rem 0.6rem",
+                            fontSize: "0.75rem",
+                            padding: "0.3rem 0.75rem",
                             borderRadius: "0.4rem",
-                            border: monthlyCutoffDay === item.day ? "1.5px solid var(--devio-blue)" : "1px solid var(--devio-neutral-2)",
-                            backgroundColor: monthlyCutoffDay === item.day ? "rgba(47, 128, 237, 0.1)" : "#FFFFFF",
-                            color: monthlyCutoffDay === item.day ? "var(--devio-blue)" : "var(--devio-blue-dark)",
-                            fontSize: "0.74rem",
+                            backgroundColor: "#EFF6FF",
+                            border: "1px solid #BFDBFE",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            color: "#1D4ED8",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                          }}
+                          title="Agregar una nueva cuota al final"
+                        >
+                          <Plus size={13} /> Agregar Cuota
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAutoBalanceOnLiquidation}
+                          style={{
+                            fontSize: "0.75rem",
+                            padding: "0.3rem 0.75rem",
+                            borderRadius: "0.4rem",
+                            backgroundColor: "var(--devio-white)",
+                            border: "1px solid var(--devio-neutral-2)",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            color: "var(--devio-blue-dark)",
+                          }}
+                        >
+                          Ajustar al 100%
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr style={{ backgroundColor: "#FAFBFD", borderBottom: "1px solid var(--devio-neutral-1)", textAlign: "left" }}>
+                            <th style={{ padding: "0.6rem 0.6rem", color: "var(--devio-neutral-3)", width: "35px", textAlign: "center" }}>#</th>
+                            <th style={{ padding: "0.6rem 0.75rem", color: "var(--devio-neutral-3)" }}>Concepto del Pago</th>
+                            <th style={{ padding: "0.6rem 0.75rem", color: "var(--devio-neutral-3)" }}>Fecha de Pago</th>
+                            <th style={{ padding: "0.6rem 0.75rem", color: "var(--devio-neutral-3)", textAlign: "right" }}>Monto</th>
+                            <th style={{ padding: "0.6rem 0.6rem", color: "var(--devio-neutral-3)", textAlign: "center", width: "85px" }}>Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paymentSchedule.map((row, idx) => (
+                            <tr key={row.id ? `${row.id}-${idx}` : idx} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                              <td style={{ padding: "0.55rem 0.4rem", textAlign: "center", fontWeight: 700, color: "var(--devio-neutral-3)", fontSize: "0.78rem" }}>
+                                {idx + 1}
+                              </td>
+                              <td style={{ padding: "0.55rem 0.75rem", minWidth: "170px" }}>
+                                <input
+                                  type="text"
+                                  value={row.concept}
+                                  onChange={(e) => handleUpdateRowConcept(row.id, e.target.value)}
+                                  placeholder={`Concepto (ej. Cuota ${idx + 1})`}
+                                  style={{
+                                    width: "100%",
+                                    padding: "0.45rem 0.65rem",
+                                    borderRadius: "0.45rem",
+                                    border: "1px solid var(--devio-neutral-2)",
+                                    fontSize: "0.82rem",
+                                    fontWeight: 600,
+                                    color: "var(--devio-blue-dark)",
+                                    backgroundColor: "var(--devio-white)",
+                                    outline: "none",
+                                  }}
+                                />
+                              </td>
+                              <td style={{ padding: "0.55rem 0.75rem", minWidth: "155px" }}>
+                                <DevioDatePicker
+                                  value={row.date}
+                                  minDate={idx === 0 ? saleDate : paymentSchedule[idx - 1]?.date}
+                                  onChange={(val) => handleUpdateRowDate(row.id, val)}
+                                  showPresets={false}
+                                  placeholder="Seleccionar"
+                                />
+                              </td>
+                              <td style={{ padding: "0.55rem 0.75rem", textAlign: "right" }}>
+                                <CurrencyInput
+                                  value={row.amount}
+                                  onChange={(newVal) => handleUpdateRowAmount(row.id, newVal)}
+                                  style={{ width: "140px" }}
+                                />
+                              </td>
+                              <td style={{ padding: "0.55rem 0.5rem", textAlign: "center" }}>
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddRowAfter(idx)}
+                                    title="Insertar cuota debajo"
+                                    style={{
+                                      background: "#EFF6FF",
+                                      border: "1px solid #BFDBFE",
+                                      color: "#2563EB",
+                                      cursor: "pointer",
+                                      width: "28px",
+                                      height: "28px",
+                                      borderRadius: "6px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      transition: "all 0.15s ease",
+                                    }}
+                                  >
+                                    <Plus size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteRow(row.id)}
+                                    title="Eliminar esta cuota"
+                                    style={{
+                                      background: "#FEF2F2",
+                                      border: "1px solid #FECACA",
+                                      color: "#EF4444",
+                                      cursor: "pointer",
+                                      width: "28px",
+                                      height: "28px",
+                                      borderRadius: "6px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      transition: "all 0.15s ease",
+                                    }}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Table Summary Footer with Total Sum */}
+                    <div
+                      style={{
+                        backgroundColor: "#FAFBFD",
+                        borderTop: "1.5px solid var(--devio-neutral-1)",
+                        padding: "0.85rem 1.25rem",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "0.75rem",
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                            Suma Total de Pagos:
+                          </span>
+                          <strong style={{ fontSize: "1.05rem", color: isScheduleBalanced ? "var(--devio-green)" : "var(--devio-red)" }}>
+                            {formatMoney(totalScheduleSum)}
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: "0.72rem",
+                              fontWeight: 800,
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "9999px",
+                              backgroundColor: isScheduleBalanced ? "rgba(0, 196, 140, 0.12)" : "rgba(224, 83, 69, 0.12)",
+                              color: isScheduleBalanced ? "var(--devio-green)" : "var(--devio-red)",
+                            }}
+                          >
+                            {isScheduleBalanced ? "✓ 100% Cuadrado" : `⚠ Diferencia: ${formatMoney(scheduleDifference)}`}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)", display: "block", marginTop: "0.2rem" }}>
+                          Monto Neto a Liquidar: <strong>{formatMoney(netTotalSaleAmount)}</strong>
+                          {discountPct > 0 ? (
+                            <> • (Unidad: {formatMoney(unitCustomPrice)}{totalAdditionalsAmount > 0 ? ` + Adicionales: ${formatMoney(totalAdditionalsAmount)}` : ""} - Descuento {discountAppliesTo === "unit_only" ? "a Unidad" : "Total"}: {formatMoney(discountAmount)})</>
+                          ) : (
+                            totalAdditionalsAmount > 0 ? <> • (Unidad: {formatMoney(unitCustomPrice)} + Adicionales: ${formatMoney(totalAdditionalsAmount)})</> : null
+                          )}
+                        </span>
+                      </div>
+
+                      {!isScheduleBalanced && (
+                        <button
+                          type="button"
+                          onClick={handleAutoBalanceOnLiquidation}
+                          style={{
+                            fontSize: "0.78rem",
+                            padding: "0.4rem 0.9rem",
+                            borderRadius: "0.5rem",
+                            backgroundColor: "var(--devio-blue-dark)",
+                            color: "#FFFFFF",
+                            border: "none",
                             fontWeight: 700,
                             cursor: "pointer",
                           }}
                         >
-                          {item.label}
+                          Ajustar Diferencia en Liquidación
                         </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payment Schedule Table */}
-              <div
-                style={{
-                  border: "1px solid var(--devio-neutral-1)",
-                  borderRadius: "1rem",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: "rgba(31, 54, 82, 0.05)",
-                    padding: "0.75rem 1.25rem",
-                    borderBottom: "1px solid var(--devio-neutral-1)",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <h4 style={{ fontSize: "0.9rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
-                    Calendario de Pagos ({paymentSchedule.length} exhibiciones)
-                  </h4>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    {!isScheduleBalanced && (
-                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-red)" }}>
-                        Diferencia: {formatMoney(scheduleDifference)}
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleAddRowAtEnd}
-                      style={{
-                        fontSize: "0.75rem",
-                        padding: "0.3rem 0.75rem",
-                        borderRadius: "0.4rem",
-                        backgroundColor: "#EFF6FF",
-                        border: "1px solid #BFDBFE",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        color: "#1D4ED8",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.3rem",
-                      }}
-                      title="Agregar una nueva cuota al final"
-                    >
-                      <Plus size={13} /> Agregar Cuota
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleAutoBalanceOnLiquidation}
-                      style={{
-                        fontSize: "0.75rem",
-                        padding: "0.3rem 0.75rem",
-                        borderRadius: "0.4rem",
-                        backgroundColor: "var(--devio-white)",
-                        border: "1px solid var(--devio-neutral-2)",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    >
-                      Ajustar al 100%
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ maxHeight: "320px", overflowY: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
-                    <thead>
-                      <tr style={{ backgroundColor: "#FAFBFD", borderBottom: "1px solid var(--devio-neutral-1)", textAlign: "left" }}>
-                        <th style={{ padding: "0.6rem 0.6rem", color: "var(--devio-neutral-3)", width: "35px", textAlign: "center" }}>#</th>
-                        <th style={{ padding: "0.6rem 0.75rem", color: "var(--devio-neutral-3)" }}>Concepto del Pago</th>
-                        <th style={{ padding: "0.6rem 0.75rem", color: "var(--devio-neutral-3)" }}>Fecha de Pago</th>
-                        <th style={{ padding: "0.6rem 0.75rem", color: "var(--devio-neutral-3)", textAlign: "right" }}>Monto</th>
-                        <th style={{ padding: "0.6rem 0.6rem", color: "var(--devio-neutral-3)", textAlign: "center", width: "85px" }}>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paymentSchedule.map((row, idx) => (
-                        <tr key={row.id ? `${row.id}-${idx}` : idx} style={{ borderBottom: "1px solid #F1F5F9" }}>
-                          <td style={{ padding: "0.55rem 0.4rem", textAlign: "center", fontWeight: 700, color: "var(--devio-neutral-3)", fontSize: "0.78rem" }}>
-                            {idx + 1}
-                          </td>
-                          <td style={{ padding: "0.55rem 0.75rem", minWidth: "170px" }}>
-                            <input
-                              type="text"
-                              value={row.concept}
-                              onChange={(e) => handleUpdateRowConcept(row.id, e.target.value)}
-                              placeholder={`Concepto (ej. Cuota ${idx + 1})`}
-                              style={{
-                                width: "100%",
-                                padding: "0.45rem 0.65rem",
-                                borderRadius: "0.45rem",
-                                border: "1px solid var(--devio-neutral-2)",
-                                fontSize: "0.82rem",
-                                fontWeight: 600,
-                                color: "var(--devio-blue-dark)",
-                                backgroundColor: "var(--devio-white)",
-                                outline: "none",
-                              }}
-                            />
-                          </td>
-                          <td style={{ padding: "0.55rem 0.75rem", minWidth: "155px" }}>
-                            <DevioDatePicker
-                              value={row.date}
-                              minDate={idx === 0 ? saleDate : paymentSchedule[idx - 1]?.date}
-                              onChange={(val) => handleUpdateRowDate(row.id, val)}
-                              showPresets={false}
-                              placeholder="Seleccionar"
-                            />
-                          </td>
-                          <td style={{ padding: "0.55rem 0.75rem", textAlign: "right" }}>
-                            <CurrencyInput
-                              value={row.amount}
-                              onChange={(newVal) => handleUpdateRowAmount(row.id, newVal)}
-                              style={{ width: "140px" }}
-                            />
-                          </td>
-                          <td style={{ padding: "0.55rem 0.5rem", textAlign: "center" }}>
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-                              <button
-                                type="button"
-                                onClick={() => handleAddRowAfter(idx)}
-                                title="Insertar cuota debajo"
-                                style={{
-                                  background: "#EFF6FF",
-                                  border: "1px solid #BFDBFE",
-                                  color: "#2563EB",
-                                  cursor: "pointer",
-                                  width: "28px",
-                                  height: "28px",
-                                  borderRadius: "6px",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  transition: "all 0.15s ease",
-                                }}
-                              >
-                                <Plus size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteRow(row.id)}
-                                title="Eliminar esta cuota"
-                                style={{
-                                  background: "#FEF2F2",
-                                  border: "1px solid #FECACA",
-                                  color: "#EF4444",
-                                  cursor: "pointer",
-                                  width: "28px",
-                                  height: "28px",
-                                  borderRadius: "6px",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  transition: "all 0.15s ease",
-                                }}
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Table Summary Footer with Total Sum */}
-                <div
-                  style={{
-                    backgroundColor: "#FAFBFD",
-                    borderTop: "1.5px solid var(--devio-neutral-1)",
-                    padding: "0.85rem 1.25rem",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "0.75rem",
-                  }}
-                >
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                      <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
-                        Suma Total de Pagos:
-                      </span>
-                      <strong style={{ fontSize: "1.05rem", color: isScheduleBalanced ? "var(--devio-green)" : "var(--devio-red)" }}>
-                        {formatMoney(totalScheduleSum)}
-                      </strong>
-                      <span
-                        style={{
-                          fontSize: "0.72rem",
-                          fontWeight: 800,
-                          padding: "0.2rem 0.55rem",
-                          borderRadius: "9999px",
-                          backgroundColor: isScheduleBalanced ? "rgba(0, 196, 140, 0.12)" : "rgba(224, 83, 69, 0.12)",
-                          color: isScheduleBalanced ? "var(--devio-green)" : "var(--devio-red)",
-                        }}
-                      >
-                        {isScheduleBalanced ? "✓ 100% Cuadrado" : `⚠ Diferencia: ${formatMoney(scheduleDifference)}`}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)", display: "block", marginTop: "0.2rem" }}>
-                      Monto Neto a Liquidar: <strong>{formatMoney(netTotalSaleAmount)}</strong>
-                      {discountPct > 0 ? (
-                        <> • (Unidad: {formatMoney(unitCustomPrice)}{totalAdditionalsAmount > 0 ? ` + Adicionales: ${formatMoney(totalAdditionalsAmount)}` : ""} - Descuento {discountAppliesTo === "unit_only" ? "a Unidad" : "Total"}: {formatMoney(discountAmount)})</>
-                      ) : (
-                        totalAdditionalsAmount > 0 ? <> • (Unidad: {formatMoney(unitCustomPrice)} + Adicionales: ${formatMoney(totalAdditionalsAmount)})</> : null
                       )}
-                    </span>
+                    </div>
                   </div>
-
-                  {!isScheduleBalanced && (
-                    <button
-                      type="button"
-                      onClick={handleAutoBalanceOnLiquidation}
-                      style={{
-                        fontSize: "0.78rem",
-                        padding: "0.4rem 0.9rem",
-                        borderRadius: "0.5rem",
-                        backgroundColor: "var(--devio-blue-dark)",
-                        color: "#FFFFFF",
-                        border: "none",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Ajustar Diferencia en Liquidación
-                    </button>
-                  )}
                 </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -3189,11 +3548,13 @@ export default function CreateSaleWizardModal({
                   Pago Inicial y Resumen Final
                 </h3>
                 <p style={{ fontSize: "0.85rem", color: "var(--devio-neutral-3)" }}>
-                  Registra el comprobante del enganche o primer pago para activar el expediente y expedir contratos.
+                  {isCoOwnership
+                    ? "Configura la modalidad de pago del enganche, comprobantes y notificaciones por correo de manera individual para cada copropietario."
+                    : "Registra el comprobante del enganche o primer pago para activar el expediente y expedir contratos."}
                 </p>
               </div>
 
-              {/* Final Summary Card */}
+              {/* Final Summary Card Header */}
               <div
                 style={{
                   backgroundColor: "var(--devio-white)",
@@ -3202,7 +3563,7 @@ export default function CreateSaleWizardModal({
                   padding: "1.25rem",
                   display: "flex",
                   flexDirection: "column",
-                  gap: "1rem",
+                  gap: "1.25rem",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--devio-neutral-1)", paddingBottom: "0.75rem" }}>
@@ -3225,277 +3586,640 @@ export default function CreateSaleWizardModal({
                   </div>
                 </div>
 
-                {/* Buyers & Shares Breakdown */}
-                <div>
-                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-neutral-3)", textTransform: "uppercase", display: "block", marginBottom: "0.35rem" }}>
-                    {isCoOwnership ? "Copropietarios Registrados:" : "Comprador Registrado:"}
-                  </span>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                    {allOwnersCombined.map((owner) => (
-                      <div
-                        key={owner.id}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          backgroundColor: "#F8FAFC",
-                          padding: "0.45rem 0.75rem",
-                          borderRadius: "0.45rem",
-                          fontSize: "0.82rem",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <User size={13} style={{ color: "var(--devio-blue)" }} />
-                          <strong style={{ color: "var(--devio-blue-dark)" }}>{owner.name}</strong>
-                          <span style={{ color: "var(--devio-neutral-3)" }}>({owner.email})</span>
-                        </div>
-                        <span style={{ fontWeight: 800, color: "var(--devio-blue)" }}>
-                          {owner.ownershipPct}% de la propiedad
-                        </span>
-                      </div>
-                    ))}
+                {/* ========================================================== */}
+                {/* COPROPIEDAD STEP 5: SECCIÓN INDIVIDUAL POR COPROPIETARIO */}
+                {/* ========================================================== */}
+                {isCoOwnership ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "var(--devio-blue-dark)", textTransform: "uppercase" }}>
+                        👥 Pago Inicial y Notificaciones por Copropietario ({allOwnersCombined.length}):
+                      </span>
+                      <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)" }}>
+                        Enganche Total Unidad: <strong>{formatMoney(paymentSchedule[0]?.amount || Math.round(netTotalSaleAmount * (downPaymentPct / 100)))}</strong>
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                      {allOwnersCombined.map((owner, idx) => {
+                        const ownerKey = owner.id || owner.email || owner.name;
+                        const cfg = coOwnerPaymentSettings[ownerKey] || coOwnerPaymentSettings[owner.id] || {
+                          id: owner.id,
+                          name: owner.name,
+                          email: owner.email,
+                          phone: owner.phone,
+                          rfc: owner.rfc,
+                          ownershipPct: owner.ownershipPct,
+                          paymentOption: "FULL" as const,
+                          paymentAmount: Math.round((paymentSchedule[0]?.amount || Math.round(netTotalSaleAmount * (downPaymentPct / 100))) * (Number(owner.ownershipPct || 0) / 100)),
+                          paymentMethod: "transferencia",
+                          paymentReference: "",
+                          sendCredentials: true,
+                          sendSaleConfirmationEmail: true,
+                          sendReceiptEmail: true,
+                        };
+
+                        const totalDown = paymentSchedule[0]?.amount || Math.round(netTotalSaleAmount * (downPaymentPct / 100));
+                        const expectedOwnerDown = Math.round(totalDown * (Number(owner.ownershipPct || 0) / 100));
+
+                        const updateOwnerSetting = (field: keyof CoOwnerPaymentConfig, val: any) => {
+                          setCoOwnerPaymentSettings((prev) => ({
+                            ...prev,
+                            [ownerKey]: {
+                              ...(prev[ownerKey] || cfg),
+                              [field]: val,
+                            },
+                          }));
+                        };
+
+                        const colors = ["#2F80ED", "#00C48C", "#F2994A", "#9B51E0"];
+                        const themeColor = colors[idx % colors.length];
+
+                        return (
+                          <div
+                            key={owner.id}
+                            style={{
+                              backgroundColor: "#F8FAFC",
+                              borderRadius: "0.85rem",
+                              border: `1.5px solid ${themeColor}50`,
+                              padding: "1rem 1.15rem",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "0.85rem",
+                            }}
+                          >
+                            {/* Card Header */}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                <div
+                                  style={{
+                                    width: "30px",
+                                    height: "30px",
+                                    borderRadius: "50%",
+                                    backgroundColor: `${themeColor}20`,
+                                    color: themeColor,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontWeight: 800,
+                                    fontSize: "0.82rem",
+                                  }}
+                                >
+                                  {idx + 1}
+                                </div>
+                                <div>
+                                  <strong style={{ fontSize: "0.92rem", color: "var(--devio-blue-dark)" }}>
+                                    {owner.name || `Copropietario ${idx + 1}`}
+                                  </strong>
+                                  <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)", marginLeft: "0.4rem" }}>
+                                    ({owner.email || "Sin correo"})
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                <span style={{ fontSize: "0.76rem", color: "var(--devio-neutral-3)" }}>
+                                  Enganche Proporcional: <strong style={{ color: "var(--devio-blue-dark)" }}>{formatMoney(expectedOwnerDown)}</strong>
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: 800,
+                                    padding: "0.2rem 0.55rem",
+                                    borderRadius: "9999px",
+                                    backgroundColor: `${themeColor}15`,
+                                    color: themeColor,
+                                  }}
+                                >
+                                  {owner.ownershipPct}%
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Modalidad de Pago Inicial del Copropietario */}
+                            <div>
+                              <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
+                                Modalidad de Pago de Enganche para {owner.name || "este copropietario"}:
+                              </label>
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.6rem" }}>
+                                {/* Option 1: Full */}
+                                <div
+                                  onClick={() => {
+                                    updateOwnerSetting("paymentOption", "FULL");
+                                    updateOwnerSetting("paymentAmount", expectedOwnerDown);
+                                  }}
+                                  style={{
+                                    padding: "0.65rem 0.75rem",
+                                    borderRadius: "0.6rem",
+                                    border: cfg.paymentOption === "FULL" ? `2px solid ${themeColor}` : "1px solid var(--devio-neutral-2)",
+                                    backgroundColor: cfg.paymentOption === "FULL" ? `${themeColor}10` : "#FFFFFF",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "0.2rem",
+                                    transition: "all 0.15s ease",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <strong style={{ fontSize: "0.8rem", color: "var(--devio-blue-dark)" }}>Pago Total Enganche</strong>
+                                    <input
+                                      type="radio"
+                                      name={`co_pay_opt_${owner.id}`}
+                                      checked={cfg.paymentOption === "FULL"}
+                                      onChange={() => {}}
+                                      style={{ accentColor: themeColor }}
+                                    />
+                                  </div>
+                                  <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)" }}>
+                                    {formatMoney(expectedOwnerDown)}
+                                  </span>
+                                </div>
+
+                                {/* Option 2: Partial */}
+                                <div
+                                  onClick={() => {
+                                    updateOwnerSetting("paymentOption", "PARTIAL");
+                                  }}
+                                  style={{
+                                    padding: "0.65rem 0.75rem",
+                                    borderRadius: "0.6rem",
+                                    border: cfg.paymentOption === "PARTIAL" ? `2px solid ${themeColor}` : "1px solid var(--devio-neutral-2)",
+                                    backgroundColor: cfg.paymentOption === "PARTIAL" ? `${themeColor}10` : "#FFFFFF",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "0.2rem",
+                                    transition: "all 0.15s ease",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <strong style={{ fontSize: "0.8rem", color: "var(--devio-blue-dark)" }}>Pago Parcial</strong>
+                                    <input
+                                      type="radio"
+                                      name={`co_pay_opt_${owner.id}`}
+                                      checked={cfg.paymentOption === "PARTIAL"}
+                                      onChange={() => {}}
+                                      style={{ accentColor: themeColor }}
+                                    />
+                                  </div>
+                                  <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)" }}>
+                                    Monto a cuenta
+                                  </span>
+                                </div>
+
+                                {/* Option 3: None */}
+                                <div
+                                  onClick={() => {
+                                    updateOwnerSetting("paymentOption", "NONE");
+                                    updateOwnerSetting("paymentAmount", 0);
+                                  }}
+                                  style={{
+                                    padding: "0.65rem 0.75rem",
+                                    borderRadius: "0.6rem",
+                                    border: cfg.paymentOption === "NONE" ? `2px solid ${themeColor}` : "1px solid var(--devio-neutral-2)",
+                                    backgroundColor: cfg.paymentOption === "NONE" ? `${themeColor}10` : "#FFFFFF",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "0.2rem",
+                                    transition: "all 0.15s ease",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <strong style={{ fontSize: "0.8rem", color: "var(--devio-blue-dark)" }}>Sin Pago Inicial</strong>
+                                    <input
+                                      type="radio"
+                                      name={`co_pay_opt_${owner.id}`}
+                                      checked={cfg.paymentOption === "NONE"}
+                                      onChange={() => {}}
+                                      style={{ accentColor: themeColor }}
+                                    />
+                                  </div>
+                                  <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)" }}>
+                                    $0 (Cobro posterior)
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Payment details if option !== "NONE" */}
+                            {cfg.paymentOption !== "NONE" && (
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.65rem", backgroundColor: "#FFFFFF", padding: "0.75rem", borderRadius: "0.6rem", border: "1px solid var(--devio-neutral-1)" }}>
+                                <div>
+                                  <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.2rem" }}>
+                                    Monto a Pagar
+                                  </label>
+                                  <CurrencyInput
+                                    value={cfg.paymentAmount}
+                                    disabled={cfg.paymentOption === "FULL"}
+                                    onChange={(newVal) => updateOwnerSetting("paymentAmount", newVal)}
+                                    style={{ width: "100%", padding: "0.2rem 0.4rem" }}
+                                  />
+                                </div>
+
+                                <div>
+                                  <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.2rem" }}>
+                                    Método de Pago
+                                  </label>
+                                  <select
+                                    value={cfg.paymentMethod}
+                                    onChange={(e) => updateOwnerSetting("paymentMethod", e.target.value)}
+                                    style={{
+                                      width: "100%",
+                                      padding: "0.5rem 0.65rem",
+                                      borderRadius: "0.45rem",
+                                      border: "1px solid var(--devio-neutral-2)",
+                                      fontSize: "0.8rem",
+                                      backgroundColor: "#FFFFFF",
+                                    }}
+                                  >
+                                    <option value="transferencia">Transferencia SPEI</option>
+                                    <option value="tarjeta">Tarjeta Bancaria</option>
+                                    <option value="cheque">Cheque de Caja</option>
+                                    <option value="deposito">Depósito Bancario</option>
+                                    <option value="efectivo">Efectivo</option>
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.2rem" }}>
+                                    Referencia / Folio
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={cfg.paymentReference}
+                                    onChange={(e) => updateOwnerSetting("paymentReference", e.target.value)}
+                                    placeholder="Ej. SPEI-8938493"
+                                    style={{
+                                      width: "100%",
+                                      padding: "0.5rem 0.65rem",
+                                      borderRadius: "0.45rem",
+                                      border: "1px solid var(--devio-neutral-2)",
+                                      fontSize: "0.8rem",
+                                      backgroundColor: "#FFFFFF",
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Notifications Checkboxes per co-owner */}
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", borderTop: "1px solid var(--devio-neutral-1)", paddingTop: "0.5rem" }}>
+                              <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--devio-neutral-4)", textTransform: "uppercase" }}>
+                                Correos para {owner.name || "este comprador"}:
+                              </span>
+
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
+                                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.76rem", cursor: "pointer", color: "var(--devio-blue-dark)" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={cfg.sendCredentials}
+                                    onChange={(e) => updateOwnerSetting("sendCredentials", e.target.checked)}
+                                    style={{ accentColor: themeColor }}
+                                  />
+                                  <span>🔑 Credenciales Portal</span>
+                                </label>
+
+                                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.76rem", cursor: "pointer", color: "var(--devio-blue-dark)" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={cfg.sendSaleConfirmationEmail}
+                                    onChange={(e) => updateOwnerSetting("sendSaleConfirmationEmail", e.target.checked)}
+                                    style={{ accentColor: themeColor }}
+                                  />
+                                  <span>📄 Confirmación de Venta y Contrato</span>
+                                </label>
+
+                                <label
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.4rem",
+                                    fontSize: "0.76rem",
+                                    cursor: cfg.paymentOption === "NONE" ? "not-allowed" : "pointer",
+                                    opacity: cfg.paymentOption === "NONE" ? 0.5 : 1,
+                                    color: "var(--devio-blue-dark)",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    disabled={cfg.paymentOption === "NONE"}
+                                    checked={cfg.paymentOption !== "NONE" && cfg.sendReceiptEmail}
+                                    onChange={(e) => updateOwnerSetting("sendReceiptEmail", e.target.checked)}
+                                    style={{ accentColor: "var(--devio-green)" }}
+                                  />
+                                  <span>🧾 Recibo de Pago de Enganche</span>
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Co-ownership Initial Payments Total Footer */}
+                    <div
+                      style={{
+                        backgroundColor: "#FAFBFD",
+                        borderRadius: "0.75rem",
+                        padding: "0.85rem 1.15rem",
+                        border: "1px solid var(--devio-neutral-2)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                        Total de Pagos de Enganche a Registrar Hoy:
+                      </span>
+                      <strong style={{ fontSize: "1.05rem", color: "var(--devio-green)" }}>
+                        {formatMoney(
+                          allOwnersCombined.reduce((sum, owner) => {
+                            const ownerKey = owner.id || owner.email || owner.name;
+                            const cfg = coOwnerPaymentSettings[ownerKey] || coOwnerPaymentSettings[owner.id];
+                            return sum + (cfg?.paymentOption === "NONE" ? 0 : (Number(cfg?.paymentAmount) || 0));
+                          }, 0)
+                        )}
+                      </strong>
+                    </div>
                   </div>
-                </div>
-
-                {/* Modalidad de Pago Inicial */}
-                <div>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.4rem" }}>
-                    Modalidad de Pago Inicial:
-                  </label>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem" }}>
-                    {/* Option 1: Full Enganche */}
-                    <div
-                      onClick={() => {
-                        setInitialPaymentOption("FULL");
-                        if (paymentSchedule[0]) setInitialPaymentAmount(paymentSchedule[0].amount);
-                      }}
-                      style={{
-                        padding: "0.85rem",
-                        borderRadius: "0.75rem",
-                        border: initialPaymentOption === "FULL" ? "2px solid var(--devio-blue)" : "1px solid var(--devio-neutral-2)",
-                        backgroundColor: initialPaymentOption === "FULL" ? "rgba(47, 128, 237, 0.05)" : "#FFFFFF",
-                        cursor: "pointer",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.3rem",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <strong style={{ fontSize: "0.85rem", color: "var(--devio-blue-dark)" }}>Pago Total Enganche</strong>
-                        <input
-                          type="radio"
-                          name="initialPaymentOption"
-                          checked={initialPaymentOption === "FULL"}
-                          onChange={() => {}}
-                          style={{ accentColor: "var(--devio-blue)" }}
-                        />
-                      </div>
-                      <span style={{ fontSize: "0.74rem", color: "var(--devio-neutral-3)" }}>
-                        Liquida el total del enganche: <strong style={{ color: "var(--devio-blue-dark)" }}>{formatMoney(paymentSchedule[0]?.amount || 0)}</strong>
-                      </span>
-                    </div>
-
-                    {/* Option 2: Partial */}
-                    <div
-                      onClick={() => {
-                        setInitialPaymentOption("PARTIAL");
-                      }}
-                      style={{
-                        padding: "0.85rem",
-                        borderRadius: "0.75rem",
-                        border: initialPaymentOption === "PARTIAL" ? "2px solid var(--devio-blue)" : "1px solid var(--devio-neutral-2)",
-                        backgroundColor: initialPaymentOption === "PARTIAL" ? "rgba(47, 128, 237, 0.05)" : "#FFFFFF",
-                        cursor: "pointer",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.3rem",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <strong style={{ fontSize: "0.85rem", color: "var(--devio-blue-dark)" }}>Pago Parcial</strong>
-                        <input
-                          type="radio"
-                          name="initialPaymentOption"
-                          checked={initialPaymentOption === "PARTIAL"}
-                          onChange={() => {}}
-                          style={{ accentColor: "var(--devio-blue)" }}
-                        />
-                      </div>
-                      <span style={{ fontSize: "0.74rem", color: "var(--devio-neutral-3)" }}>
-                        Registrar un anticipo o pago menor al enganche total
-                      </span>
-                    </div>
-
-                    {/* Option 3: None */}
-                    <div
-                      onClick={() => {
-                        setInitialPaymentOption("NONE");
-                        setInitialPaymentAmount(0);
-                      }}
-                      style={{
-                        padding: "0.85rem",
-                        borderRadius: "0.75rem",
-                        border: initialPaymentOption === "NONE" ? "2px solid var(--devio-blue)" : "1px solid var(--devio-neutral-2)",
-                        backgroundColor: initialPaymentOption === "NONE" ? "rgba(47, 128, 237, 0.05)" : "#FFFFFF",
-                        cursor: "pointer",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.3rem",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <strong style={{ fontSize: "0.85rem", color: "var(--devio-blue-dark)" }}>Sin Pago Inicial</strong>
-                        <input
-                          type="radio"
-                          name="initialPaymentOption"
-                          checked={initialPaymentOption === "NONE"}
-                          onChange={() => {}}
-                          style={{ accentColor: "var(--devio-blue)" }}
-                        />
-                      </div>
-                      <span style={{ fontSize: "0.74rem", color: "var(--devio-neutral-3)" }}>
-                        No registrar pago ahora (pendiente de cobro posterior)
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Payment Registration Fields if initialPaymentOption !== "NONE" */}
-                {initialPaymentOption !== "NONE" && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", backgroundColor: "#F8FAFC", padding: "1rem", borderRadius: "0.75rem", border: "1px solid #E2E8F0" }}>
+                ) : (
+                  /* ========================================================== */
+                  /* PROPIETARIO ÚNICO STEP 5 */
+                  /* ========================================================== */
+                  <>
+                    {/* Buyers & Shares Breakdown */}
                     <div>
-                      <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                        Monto de Pago Inicial (Enganche)
-                      </label>
-                      <CurrencyInput
-                        value={initialPaymentAmount}
-                        disabled={initialPaymentOption === "FULL"}
-                        onChange={(newVal) => setInitialPaymentAmount(newVal)}
-                        style={{ width: "100%", padding: "0.2rem 0.4rem" }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                        Método de Pago
-                      </label>
-                      <select
-                        value={paymentMethod}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "0.6rem 0.85rem",
-                          borderRadius: "0.5rem",
-                          border: "1px solid var(--devio-neutral-2)",
-                          fontSize: "0.88rem",
-                        }}
-                      >
-                        <option value="transferencia">Transferencia SPEI</option>
-                        <option value="cheque">Cheque de Caja</option>
-                        <option value="deposito">Depósito Bancario</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {/* Email Notifications & Checkboxes */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-neutral-3)", textTransform: "uppercase", display: "block", marginBottom: "0.15rem" }}>
-                    Notificaciones Automáticas por Correo:
-                  </span>
-
-                  {/* Notificación de Credenciales de acceso al portal (Solo si hay compradores nuevos) */}
-                  {hasAnyNewBuyer && (
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "0.65rem",
-                        padding: "0.75rem 0.9rem",
-                        borderRadius: "0.65rem",
-                        backgroundColor: "rgba(111, 172, 156, 0.1)",
-                        border: "1.5px solid rgba(111, 172, 156, 0.35)",
-                        fontSize: "0.82rem",
-                        fontWeight: 600,
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    >
-                      <Mail size={17} color="#2F80ED" style={{ flexShrink: 0, marginTop: "2px" }} />
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.15rem" }}>
-                          <strong style={{ color: "#1F3652" }}>
-                            Credenciales de Acceso al Portal de Clientes
-                          </strong>
-                          <span style={{ fontSize: "0.68rem", fontWeight: 800, padding: "0.15rem 0.45rem", borderRadius: "9999px", backgroundColor: "#00C48C", color: "#FFFFFF" }}>
-                            Automático (Nuevos Compradores)
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-neutral-3)", textTransform: "uppercase", display: "block", marginBottom: "0.35rem" }}>
+                        Comprador Registrado:
+                      </span>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            backgroundColor: "#F8FAFC",
+                            padding: "0.45rem 0.75rem",
+                            borderRadius: "0.45rem",
+                            fontSize: "0.82rem",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <User size={13} style={{ color: "var(--devio-blue)" }} />
+                            <strong style={{ color: "var(--devio-blue-dark)" }}>{primaryClient.name}</strong>
+                            <span style={{ color: "var(--devio-neutral-3)" }}>({primaryClient.email})</span>
+                          </div>
+                          <span style={{ fontWeight: 800, color: "var(--devio-blue)" }}>
+                            100% de la propiedad
                           </span>
                         </div>
-                        <span style={{ fontSize: "0.78rem", color: "#475569", lineHeight: 1.4 }}>
-                          Se enviarán las credenciales de acceso al portal de clientes de Devio por correo a los nuevos compradores dados de alta.
-                        </span>
                       </div>
                     </div>
-                  )}
 
-                  {/* Checkbox 2: Welcome / Sale Confirmation */}
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.6rem",
-                      padding: "0.65rem 0.85rem",
-                      borderRadius: "0.6rem",
-                      backgroundColor: "rgba(47, 128, 237, 0.06)",
-                      border: "1px solid rgba(47, 128, 237, 0.2)",
-                      cursor: "pointer",
-                      fontSize: "0.82rem",
-                      fontWeight: 600,
-                      color: "var(--devio-blue-dark)",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={sendSaleConfirmationEmail}
-                      onChange={(e) => setSendSaleConfirmationEmail(e.target.checked)}
-                      style={{ width: "16px", height: "16px", accentColor: "var(--devio-blue)" }}
-                    />
-                    <span>
-                      Enviar correo de bienvenida con la confirmación de registro de nueva venta y contrato.
-                    </span>
-                  </label>
+                    {/* Modalidad de Pago Inicial */}
+                    <div>
+                      <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.4rem" }}>
+                        Modalidad de Pago Inicial:
+                      </label>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem" }}>
+                        {/* Option 1: Full Enganche */}
+                        <div
+                          onClick={() => {
+                            setInitialPaymentOption("FULL");
+                            if (paymentSchedule[0]) setInitialPaymentAmount(paymentSchedule[0].amount);
+                          }}
+                          style={{
+                            padding: "0.85rem",
+                            borderRadius: "0.75rem",
+                            border: initialPaymentOption === "FULL" ? "2px solid var(--devio-blue)" : "1px solid var(--devio-neutral-2)",
+                            backgroundColor: initialPaymentOption === "FULL" ? "rgba(47, 128, 237, 0.05)" : "#FFFFFF",
+                            cursor: "pointer",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.3rem",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <strong style={{ fontSize: "0.85rem", color: "var(--devio-blue-dark)" }}>Pago Total Enganche</strong>
+                            <input
+                              type="radio"
+                              name="initialPaymentOption"
+                              checked={initialPaymentOption === "FULL"}
+                              onChange={() => {}}
+                              style={{ accentColor: "var(--devio-blue)" }}
+                            />
+                          </div>
+                          <span style={{ fontSize: "0.74rem", color: "var(--devio-neutral-3)" }}>
+                            Liquida el total del enganche: <strong style={{ color: "var(--devio-blue-dark)" }}>{formatMoney(paymentSchedule[0]?.amount || 0)}</strong>
+                          </span>
+                        </div>
 
-                  {/* Checkbox 3: Enganche Payment Receipt */}
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.6rem",
-                      padding: "0.65rem 0.85rem",
-                      borderRadius: "0.6rem",
-                      backgroundColor: initialPaymentOption === "NONE" ? "#F8FAFC" : "rgba(39, 174, 96, 0.08)",
-                      border: initialPaymentOption === "NONE" ? "1px dashed #CBD5E1" : "1px solid rgba(39, 174, 96, 0.25)",
-                      cursor: initialPaymentOption === "NONE" ? "not-allowed" : "pointer",
-                      opacity: initialPaymentOption === "NONE" ? 0.6 : 1,
-                      fontSize: "0.82rem",
-                      fontWeight: 600,
-                      color: initialPaymentOption === "NONE" ? "#94A3B8" : "var(--devio-blue-dark)",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      disabled={initialPaymentOption === "NONE"}
-                      checked={initialPaymentOption !== "NONE" && sendReceiptEmail}
-                      onChange={(e) => setSendReceiptEmail(e.target.checked)}
-                      style={{ width: "16px", height: "16px", accentColor: "var(--devio-green)" }}
-                    />
-                    <span>
-                      Enviar correo con el recibo de pago del enganche registrado.
-                    </span>
-                  </label>
-                </div>
+                        {/* Option 2: Partial */}
+                        <div
+                          onClick={() => {
+                            setInitialPaymentOption("PARTIAL");
+                          }}
+                          style={{
+                            padding: "0.85rem",
+                            borderRadius: "0.75rem",
+                            border: initialPaymentOption === "PARTIAL" ? "2px solid var(--devio-blue)" : "1px solid var(--devio-neutral-2)",
+                            backgroundColor: initialPaymentOption === "PARTIAL" ? "rgba(47, 128, 237, 0.05)" : "#FFFFFF",
+                            cursor: "pointer",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.3rem",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <strong style={{ fontSize: "0.85rem", color: "var(--devio-blue-dark)" }}>Pago Parcial</strong>
+                            <input
+                              type="radio"
+                              name="initialPaymentOption"
+                              checked={initialPaymentOption === "PARTIAL"}
+                              onChange={() => {}}
+                              style={{ accentColor: "var(--devio-blue)" }}
+                            />
+                          </div>
+                          <span style={{ fontSize: "0.74rem", color: "var(--devio-neutral-3)" }}>
+                            Registrar un anticipo o pago menor al enganche total
+                          </span>
+                        </div>
+
+                        {/* Option 3: None */}
+                        <div
+                          onClick={() => {
+                            setInitialPaymentOption("NONE");
+                            setInitialPaymentAmount(0);
+                          }}
+                          style={{
+                            padding: "0.85rem",
+                            borderRadius: "0.75rem",
+                            border: initialPaymentOption === "NONE" ? "2px solid var(--devio-blue)" : "1px solid var(--devio-neutral-2)",
+                            backgroundColor: initialPaymentOption === "NONE" ? "rgba(47, 128, 237, 0.05)" : "#FFFFFF",
+                            cursor: "pointer",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.3rem",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <strong style={{ fontSize: "0.85rem", color: "var(--devio-blue-dark)" }}>Sin Pago Inicial</strong>
+                            <input
+                              type="radio"
+                              name="initialPaymentOption"
+                              checked={initialPaymentOption === "NONE"}
+                              onChange={() => {}}
+                              style={{ accentColor: "var(--devio-blue)" }}
+                            />
+                          </div>
+                          <span style={{ fontSize: "0.74rem", color: "var(--devio-neutral-3)" }}>
+                            No registrar pago ahora (pendiente de cobro posterior)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payment Registration Fields if initialPaymentOption !== "NONE" */}
+                    {initialPaymentOption !== "NONE" && (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", backgroundColor: "#F8FAFC", padding: "1rem", borderRadius: "0.75rem", border: "1px solid #E2E8F0" }}>
+                        <div>
+                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                            Monto de Pago Inicial (Enganche)
+                          </label>
+                          <CurrencyInput
+                            value={initialPaymentAmount}
+                            disabled={initialPaymentOption === "FULL"}
+                            onChange={(newVal) => setInitialPaymentAmount(newVal)}
+                            style={{ width: "100%", padding: "0.2rem 0.4rem" }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                            Método de Pago
+                          </label>
+                          <select
+                            value={paymentMethod}
+                            onChange={(e) => setPaymentMethod(e.target.value)}
+                            style={{
+                              width: "100%",
+                              padding: "0.6rem 0.85rem",
+                              borderRadius: "0.5rem",
+                              border: "1px solid var(--devio-neutral-2)",
+                              fontSize: "0.88rem",
+                            }}
+                          >
+                            <option value="transferencia">Transferencia SPEI</option>
+                            <option value="cheque">Cheque de Caja</option>
+                            <option value="deposito">Depósito Bancario</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Email Notifications & Checkboxes */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-neutral-3)", textTransform: "uppercase", display: "block", marginBottom: "0.15rem" }}>
+                        Notificaciones Automáticas por Correo:
+                      </span>
+
+                      {/* Notificación de Credenciales de acceso al portal */}
+                      {hasAnyNewBuyer && (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "0.65rem",
+                            padding: "0.75rem 0.9rem",
+                            borderRadius: "0.65rem",
+                            backgroundColor: "rgba(111, 172, 156, 0.1)",
+                            border: "1.5px solid rgba(111, 172, 156, 0.35)",
+                            fontSize: "0.82rem",
+                            fontWeight: 600,
+                            color: "var(--devio-blue-dark)",
+                          }}
+                        >
+                          <Mail size={17} color="#2F80ED" style={{ flexShrink: 0, marginTop: "2px" }} />
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.15rem" }}>
+                              <strong style={{ color: "#1F3652" }}>
+                                Credenciales de Acceso al Portal de Clientes
+                              </strong>
+                              <span style={{ fontSize: "0.68rem", fontWeight: 800, padding: "0.15rem 0.45rem", borderRadius: "9999px", backgroundColor: "#00C48C", color: "#FFFFFF" }}>
+                                Automático (Nuevo Comprador)
+                              </span>
+                            </div>
+                            <span style={{ fontSize: "0.78rem", color: "#475569", lineHeight: 1.4 }}>
+                              Se enviarán las credenciales de acceso al portal de clientes de Devio por correo al nuevo comprador.
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Checkbox 2: Welcome / Sale Confirmation */}
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.6rem",
+                          padding: "0.65rem 0.85rem",
+                          borderRadius: "0.6rem",
+                          backgroundColor: "rgba(47, 128, 237, 0.06)",
+                          border: "1px solid rgba(47, 128, 237, 0.2)",
+                          cursor: "pointer",
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          color: "var(--devio-blue-dark)",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={sendSaleConfirmationEmail}
+                          onChange={(e) => setSendSaleConfirmationEmail(e.target.checked)}
+                          style={{ width: "16px", height: "16px", accentColor: "var(--devio-blue)" }}
+                        />
+                        <span>
+                          Enviar correo de bienvenida con la confirmación de registro de nueva venta y contrato.
+                        </span>
+                      </label>
+
+                      {/* Checkbox 3: Enganche Payment Receipt */}
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.6rem",
+                          padding: "0.65rem 0.85rem",
+                          borderRadius: "0.6rem",
+                          backgroundColor: initialPaymentOption === "NONE" ? "#F8FAFC" : "rgba(39, 174, 96, 0.08)",
+                          border: initialPaymentOption === "NONE" ? "1px dashed #CBD5E1" : "1px solid rgba(39, 174, 96, 0.25)",
+                          cursor: initialPaymentOption === "NONE" ? "not-allowed" : "pointer",
+                          opacity: initialPaymentOption === "NONE" ? 0.6 : 1,
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          color: initialPaymentOption === "NONE" ? "#94A3B8" : "var(--devio-blue-dark)",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={initialPaymentOption === "NONE"}
+                          checked={initialPaymentOption !== "NONE" && sendReceiptEmail}
+                          onChange={(e) => setSendReceiptEmail(e.target.checked)}
+                          style={{ width: "16px", height: "16px", accentColor: "var(--devio-green)" }}
+                        />
+                        <span>
+                          Enviar correo con el recibo de pago del enganche registrado.
+                        </span>
+                      </label>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

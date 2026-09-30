@@ -1365,7 +1365,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         : primaryName;
 
     const netSaleTotal = Number(salePayload.financials?.totalSale || salePayload.financials?.netTotalSale) || (Number(salePayload.unit?.price) || 0);
-    const initialPaid = salePayload.initialPayment?.registered ? (Number(salePayload.initialPayment?.amount) || 0) : 0;
+    const coOwnerPaidSum = Array.isArray(salePayload.coOwnerPayments)
+      ? salePayload.coOwnerPayments.reduce((acc: number, cp: any) => acc + (Number(cp.amount) || 0), 0)
+      : 0;
+    const initialPaid = coOwnerPaidSum > 0
+      ? coOwnerPaidSum
+      : (salePayload.initialPayment?.registered ? (Number(salePayload.initialPayment?.amount) || 0) : 0);
     const pendingAmount = Math.max(0, netSaleTotal - initialPaid);
     const saleFolio = salePayload.folio || `VTA-2026-${Math.floor(100 + Math.random() * 900)}`;
     const saleDateIso = salePayload.createdAt || new Date().toISOString();
@@ -1439,22 +1444,49 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 2. Build Initial Payment Receipt (Transacción Real)
-    const initialPaymentsList: SalePaymentReceipt[] = initialPaid > 0 ? [
-      {
-        id: `pay-rec-${Date.now()}`,
-        receiptFolio: `REC-${new Date().getFullYear()}-001`,
-        paymentDate: new Date().toLocaleDateString("es-MX"),
-        amount: initialPaid,
-        paymentMethod: salePayload.initialPayment?.method || "SPEI",
-        unit: unitNum,
-        reference: salePayload.initialPayment?.reference || "ENGANCHE-INICIAL",
-        notes: "Pago de enganche inicial al formalizar venta",
-        scheduledAmount: initialPaid,
-        scheduledDate: saleDateIso,
-        sendReceiptEmail: Boolean(salePayload.initialPayment?.sendReceiptEmail),
-        createdAt: new Date().toISOString(),
-      }
-    ] : [];
+    let initialPaymentsList: SalePaymentReceipt[] = [];
+    if (Array.isArray(salePayload.coOwnerPayments) && salePayload.coOwnerPayments.length > 0) {
+      initialPaymentsList = salePayload.coOwnerPayments
+        .filter((cp: any) => (Number(cp.amount) || 0) > 0)
+        .map((cp: any, idx: number) => {
+          const cpAmount = Number(cp.amount) || 0;
+          const cpName = cp.name || cp.clientName || primaryName;
+          return {
+            id: `pay-rec-${Date.now()}-${idx}`,
+            receiptFolio: `REC-${new Date().getFullYear()}-${String(idx + 1).padStart(3, "0")}`,
+            paymentDate: new Date().toLocaleDateString("es-MX"),
+            amount: cpAmount,
+            paymentMethod: cp.method || "SPEI",
+            unit: unitNum,
+            reference: cp.reference || `ENGANCHE-${cpName.replace(/\s+/g, "").toUpperCase().slice(0, 10)}`,
+            notes: `Pago de enganche inicial (${cp.paymentMode === "PARTIAL" ? "Parcial" : "Total"}) - ${cpName}`,
+            payerClientId: cp.clientId,
+            scheduledAmount: cpAmount,
+            scheduledDate: saleDateIso,
+            sendReceiptEmail: Boolean(cp.sendReceiptEmail),
+            createdAt: new Date().toISOString(),
+          };
+        });
+    }
+
+    if (initialPaymentsList.length === 0 && initialPaid > 0) {
+      initialPaymentsList = [
+        {
+          id: `pay-rec-${Date.now()}`,
+          receiptFolio: `REC-${new Date().getFullYear()}-001`,
+          paymentDate: new Date().toLocaleDateString("es-MX"),
+          amount: initialPaid,
+          paymentMethod: salePayload.initialPayment?.method || "SPEI",
+          unit: unitNum,
+          reference: salePayload.initialPayment?.reference || "ENGANCHE-INICIAL",
+          notes: "Pago de enganche inicial al formalizar venta",
+          scheduledAmount: initialPaid,
+          scheduledDate: saleDateIso,
+          sendReceiptEmail: Boolean(salePayload.initialPayment?.sendReceiptEmail),
+          createdAt: new Date().toISOString(),
+        }
+      ];
+    }
 
     const rawClientId = salePayload.client?.id;
     const resolvedClientId = (rawClientId && rawClientId !== "primary-1")
@@ -1596,7 +1628,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         unitNumber: unitNum,
         unitId: salePayload.unit?.id,
         client: salePayload.client,
+        isCoOwnership: Boolean(salePayload.isCoOwnership),
         coOwners,
+        coOwnerPayments: salePayload.coOwnerPayments,
         financials: salePayload.financials,
         schedule: salePayload.schedule,
         initialPayment: salePayload.initialPayment,

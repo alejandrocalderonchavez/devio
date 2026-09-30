@@ -179,6 +179,8 @@ export class SalesService {
 
     // 6. Handle Co-owners
     const isCoOp = body.isCoOwnership === true || (Array.isArray(coOwners) && coOwners.length > 0 && body.isCoOwnership !== false);
+    const createdCoClients: any[] = [];
+
     if (isCoOp && Array.isArray(coOwners) && coOwners.length > 0) {
       for (const co of coOwners) {
         if (!co.email && !co.name) continue;
@@ -186,7 +188,10 @@ export class SalesService {
         const coName = (co.name || "Co-propietario").trim();
 
         // If this coOwner is the primary client, do not duplicate as a separate coOwner record
-        if ((primaryEmail && coEmail === primaryEmail.toLowerCase()) || (primaryClient && coEmail && primaryClient.email?.toLowerCase() === coEmail)) continue;
+        if ((primaryEmail && coEmail === primaryEmail.toLowerCase()) || (primaryClient && coEmail && primaryClient.email?.toLowerCase() === coEmail)) {
+          createdCoClients.push({ ...co, clientId: primaryClient.id, client: primaryClient });
+          continue;
+        }
 
         let coUser = null;
         if (coEmail) {
@@ -202,7 +207,30 @@ export class SalesService {
                 preferredCurrency: "MXN",
               },
             });
+          } else if (!coUser.fullName || coUser.fullName === "Usuario Devio") {
+            coUser = await this.prisma.user.update({
+              where: { id: coUser.id },
+              data: {
+                fullName: coName,
+                phone: co.phone ? String(co.phone).trim() : coUser.phone,
+              },
+            });
           }
+
+          await this.prisma.membership.upsert({
+            where: {
+              userId_developerId: {
+                userId: coUser.id,
+                developerId: project.developerId,
+              },
+            },
+            create: {
+              userId: coUser.id,
+              developerId: project.developerId,
+              role: "CLIENT",
+            },
+            update: {},
+          });
         }
 
         let coClient = null;
@@ -211,6 +239,12 @@ export class SalesService {
             where: { developerId: project.developerId, email: coEmail },
           });
         }
+        if (!coClient && coName) {
+          coClient = await this.prisma.client.findFirst({
+            where: { developerId: project.developerId, fullName: coName },
+          });
+        }
+
         if (!coClient) {
           coClient = await this.prisma.client.create({
             data: {
@@ -222,7 +256,18 @@ export class SalesService {
               taxId: co.rfc ? String(co.rfc).trim() : null,
             },
           });
+        } else {
+          coClient = await this.prisma.client.update({
+            where: { id: coClient.id },
+            data: {
+              userId: coUser?.id || coClient.userId,
+              phone: co.phone ? String(co.phone).trim() : coClient.phone,
+              taxId: co.rfc ? String(co.rfc).trim() : coClient.taxId,
+            },
+          });
         }
+
+        createdCoClients.push({ ...co, clientId: coClient.id, client: coClient });
 
         const pct = Number(co.percentage ?? co.ownershipPct ?? co.ownershipPercentage ?? (100 / (coOwners.length + 1)));
 
@@ -328,8 +373,54 @@ export class SalesService {
       }
     }
 
-    // 8. Handle Initial Payment Receipt
-    if (initialPayment && Number(initialPayment.amount) > 0) {
+    // 8. Handle Initial Payment Receipts
+    if (Array.isArray(body.coOwnerPayments) && body.coOwnerPayments.length > 0) {
+      for (const cop of body.coOwnerPayments) {
+        const amt = Number(cop.amount || 0);
+        if (amt > 0) {
+          const copEmail = (cop.email || "").toLowerCase().trim();
+          const copName = (cop.name || "").trim();
+          let payerId = cop.clientId;
+          if (!payerId) {
+            if (copEmail && primaryEmail && copEmail === primaryEmail) {
+              payerId = primaryClient.id;
+            } else if (copEmail) {
+              const matched = createdCoClients.find((c) => c.email?.toLowerCase() === copEmail);
+              payerId = matched?.clientId || primaryClient.id;
+            } else if (copName) {
+              const matched = createdCoClients.find((c) => c.name?.toLowerCase() === copName.toLowerCase());
+              payerId = matched?.clientId || primaryClient.id;
+            } else {
+              payerId = primaryClient.id;
+            }
+          }
+          const payerFolio = cop.folio || `REC-INI-${Date.now().toString().slice(-6)}`;
+          await this.prisma.paymentReceipt.create({
+            data: {
+              saleId: sale.id,
+              payerClientId: payerId,
+              receiptFolio: payerFolio,
+              paymentDate: cop.paymentDate ? new Date(cop.paymentDate) : new Date(),
+              paymentMethod:
+                cop.method === "cheque" || cop.paymentMethod === "cheque"
+                  ? "CHECK"
+                  : cop.method === "tarjeta" || cop.paymentMethod === "tarjeta"
+                  ? "CARD"
+                  : cop.method === "efectivo" || cop.paymentMethod === "efectivo"
+                  ? "CASH"
+                  : cop.method === "deposito" || cop.paymentMethod === "deposito"
+                  ? "OTHER"
+                  : "TRANSFER",
+              amount: amt,
+              currency: "MXN",
+              equivalentAmountInSaleCurrency: amt,
+              transactionReference: cop.reference || payerFolio,
+              notes: `Pago de enganche inicial copropietario ${copName}`.trim(),
+            },
+          });
+        }
+      }
+    } else if (initialPayment && Number(initialPayment.amount) > 0) {
       const initAmount = Number(initialPayment.amount);
       const initFolio = `REC-INI-${Date.now().toString().slice(-6)}`;
       await this.prisma.paymentReceipt.create({
