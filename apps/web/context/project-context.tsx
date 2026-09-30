@@ -2624,10 +2624,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const newHistory = [advanceData, ...history];
 
       let updatedUnits = p.unitsInventory;
-      let newOverallPct = advanceData.pct;
+      let newOverallPct = p.progressPct || 0;
 
       if (advanceData.targetScope === "UNITS" && advanceData.targetUnits && advanceData.targetUnits.length > 0) {
-        // Update constructionPct for targeted units
+        // Update constructionPct ONLY for targeted units independently
         updatedUnits = p.unitsInventory.map((u) => {
           if (advanceData.targetUnits?.includes(u.unit)) {
             return {
@@ -2637,21 +2637,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           }
           return u;
         });
-
-        // Compute average across all units
-        const totalUnits = updatedUnits.length;
-        if (totalUnits > 0) {
-          const sumPct = updatedUnits.reduce(
-            (acc, u) => acc + (u.constructionPct !== undefined ? u.constructionPct : p.progressPct || 0),
-            0
-          );
-          newOverallPct = Math.round(sumPct / totalUnits);
-        }
+        // Overall project progress remains unchanged when registering advances for individual units
+        newOverallPct = p.progressPct || 0;
       } else {
-        // Target scope is PROJECT: update all units
+        // Target scope is PROJECT: update overall progress
+        newOverallPct = advanceData.pct;
         updatedUnits = p.unitsInventory.map((u) => ({
           ...u,
-          constructionPct: advanceData.pct,
+          constructionPct: u.constructionPct !== undefined ? u.constructionPct : advanceData.pct,
         }));
       }
 
@@ -2702,26 +2695,20 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const history = p.constructionHistory || [];
       const newHistory = history.filter((adv) => adv.id !== advanceId);
 
-      // Latest remaining advance
+      // Latest remaining project-wide advance
+      const remainingProjectAdv = newHistory.find((adv) => adv.targetScope !== "UNITS");
       const latestRemaining = newHistory.length > 0 ? newHistory[0] : null;
-      const newOverallPct = latestRemaining ? latestRemaining.pct : 0;
-
-      // Update unit construction percentages
-      const updatedUnits = (p.unitsInventory || []).map((u) => ({
-        ...u,
-        constructionPct: newOverallPct,
-      }));
+      const newOverallPct = remainingProjectAdv ? remainingProjectAdv.pct : latestRemaining ? latestRemaining.pct : 0;
 
       return {
         ...p,
         progressPct: newOverallPct,
-        unitsInventory: updatedUnits,
         constructionHistory: newHistory,
       };
     });
 
     saveProjects(updated);
-    showToast("Avance Eliminado", "El avance fue removido de la bitácora y se recalcularon los porcentajes.");
+    showToast("Avance Eliminado", "El avance fue removido de la bitácora.");
 
     try {
       await fetch(`/api/progress/${advanceId}`, {

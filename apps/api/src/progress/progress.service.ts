@@ -95,15 +95,17 @@ export class ProgressService {
 
         for (const unit of units) {
           const existingAttributes = (unit.customAttributes as Record<string, any>) || {};
-          await this.prisma.unit.update({
-            where: { id: unit.id },
-            data: {
-              customAttributes: {
-                ...existingAttributes,
-                constructionPct: pct,
+          if (existingAttributes.constructionPct === undefined) {
+            await this.prisma.unit.update({
+              where: { id: unit.id },
+              data: {
+                customAttributes: {
+                  ...existingAttributes,
+                  constructionPct: pct,
+                },
               },
-            },
-          });
+            });
+          }
         }
       }
     } catch (err) {
@@ -138,28 +140,6 @@ export class ProgressService {
       });
 
       const newPct = remaining.length > 0 && remaining[0] ? Number(remaining[0].overallPercentage) : 0;
-
-      // Update units
-      try {
-        const units = await this.prisma.unit.findMany({
-          where: { projectId },
-        });
-
-        for (const unit of units) {
-          const existingAttributes = (unit.customAttributes as Record<string, any>) || {};
-          await this.prisma.unit.update({
-            where: { id: unit.id },
-            data: {
-              customAttributes: {
-                ...existingAttributes,
-                constructionPct: newPct,
-              },
-            },
-          });
-        }
-      } catch (err) {
-        console.warn("Error updating units on progress deletion:", err);
-      }
 
       return {
         success: true,

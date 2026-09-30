@@ -20,34 +20,47 @@ export class UploadService {
     const storagePath = `${folder}/${cleanFileName}`.replace(/\/+/g, "/");
 
     if (SUPABASE_SERVICE_ROLE_KEY) {
-      const uploadUrl = `${SUPABASE_PROJECT_URL}/storage/v1/object/${bucket}/${storagePath}`;
+      try {
+        const uploadUrl = `${SUPABASE_PROJECT_URL}/storage/v1/object/${bucket}/${storagePath}`;
 
-      const uploadRes = await fetch(uploadUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-          apikey: SUPABASE_SERVICE_ROLE_KEY,
-          "Content-Type": file.mimetype || "application/octet-stream",
-          "x-upsert": "true",
-        },
-        body: file.buffer,
-      });
+        const uploadRes = await fetch(uploadUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            "Content-Type": file.mimetype || "application/octet-stream",
+            "x-upsert": "true",
+          },
+          body: file.buffer,
+        });
 
-      if (uploadRes.ok) {
-        const publicUrl = `${SUPABASE_PROJECT_URL}/storage/v1/object/public/${bucket}/${storagePath}`;
-        return {
-          success: true,
-          publicUrl,
-          path: storagePath,
-          bucket,
-        };
+        if (uploadRes.ok) {
+          const publicUrl = `${SUPABASE_PROJECT_URL}/storage/v1/object/public/${bucket}/${storagePath}`;
+          return {
+            success: true,
+            publicUrl,
+            path: storagePath,
+            bucket,
+          };
+        } else {
+          const errText = await uploadRes.text().catch(() => "");
+          console.warn("Supabase storage upload failed, status:", uploadRes.status, errText);
+        }
+      } catch (err) {
+        console.warn("Supabase storage upload exception:", err);
       }
     }
 
-    const publicUrl = `${SUPABASE_PROJECT_URL}/storage/v1/object/public/${bucket}/${storagePath}`;
+    // Fallback: If Supabase upload was not confirmed, convert buffer to data URL so the image is 100% visible and NEVER broken
+    let fallbackDataUrl = "";
+    if (file.buffer && file.mimetype) {
+      const b64 = file.buffer.toString("base64");
+      fallbackDataUrl = `data:${file.mimetype};base64,${b64}`;
+    }
+
     return {
       success: true,
-      publicUrl,
+      publicUrl: fallbackDataUrl,
       path: storagePath,
       bucket,
     };

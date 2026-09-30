@@ -56,7 +56,6 @@ export default function RegisterProgressWizardModal({
 }: RegisterProgressWizardModalProps) {
   const { registerConstructionProgress, deleteConstructionProgress, getProject, developerName, developerLogo } = useProject();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const docInputRef = useRef<HTMLInputElement>(null);
 
   // Resolve active project from context if needed
   const activeProject = project?.id ? getProject(project.id) || project : project;
@@ -99,9 +98,8 @@ export default function RegisterProgressWizardModal({
   const [instalacionesPct, setInstalacionesPct] = useState<number>(baselineInstalacionesPct);
   const [acabadosPct, setAcabadosPct] = useState<number>(baselineAcabadosPct);
 
-  // Form states - Step 3: Fotos y Documentos
+  // Form states - Step 3: Fotos y Evidencias
   const [photos, setPhotos] = useState<Array<{ name: string; url: string; size: string }>>([]);
-  const [uploadedDocument, setUploadedDocument] = useState<{ name: string; size: string; url?: string } | null>(null);
 
   // Form states - Step 4: Difusión y Envío
   const [sendEmailToClients, setSendEmailToClients] = useState<boolean>(true);
@@ -173,7 +171,7 @@ export default function RegisterProgressWizardModal({
             },
           ]);
 
-          // Asynchronously upload to Supabase storage via /api/upload
+          // Asynchronously upload to storage via /api/upload
           const formData = new FormData();
           formData.append("file", file);
           formData.append("folder", "progress");
@@ -185,7 +183,7 @@ export default function RegisterProgressWizardModal({
           })
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
-              if (data?.publicUrl) {
+              if (data?.success && data?.publicUrl && (data.publicUrl.startsWith("http") || data.publicUrl.startsWith("data:"))) {
                 setPhotos((currentPhotos) =>
                   currentPhotos.map((p) =>
                     p.name === file.name && p.url.startsWith("data:") ? { ...p, url: data.publicUrl } : p
@@ -197,16 +195,6 @@ export default function RegisterProgressWizardModal({
         }
       };
       reader.readAsDataURL(file);
-    });
-  };
-
-  // Document Upload Handler
-  const handleDocFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadedDocument({
-      name: file.name,
-      size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
     });
   };
 
@@ -256,7 +244,7 @@ export default function RegisterProgressWizardModal({
       }
     }
     if (currentStep === 2) {
-      if (overallPct < baselineOverallPct) {
+      if (targetScope === "PROJECT" && overallPct < baselineOverallPct) {
         setValidationError(`El nuevo avance general (${overallPct}%) no puede ser menor al avance anterior registrado (${baselineOverallPct}%). Si necesitas corregir o reducir el avance, elimina primero el avance anterior desde la bitácora.`);
         return;
       }
@@ -276,7 +264,7 @@ export default function RegisterProgressWizardModal({
       return;
     }
 
-    if (overallPct < baselineOverallPct) {
+    if (targetScope === "PROJECT" && overallPct < baselineOverallPct) {
       setValidationError(`El nuevo avance general (${overallPct}%) no puede ser menor al avance previo (${baselineOverallPct}%). Si necesitas corregir o reducir el avance, elimina primero el avance anterior desde la bitácora.`);
       return;
     }
@@ -297,7 +285,6 @@ export default function RegisterProgressWizardModal({
       instalacionesPct,
       acabadosPct,
       photos,
-      uploadedDocument,
       targetScope,
       targetUnits: targetScope === "UNITS" ? selectedUnitNumbers : undefined,
       emailSent: sendEmailToClients,
@@ -667,6 +654,9 @@ export default function RegisterProgressWizardModal({
                         <img
                           src={adv.image}
                           alt={adv.title}
+                          onError={(e) => {
+                            e.currentTarget.src = "https://images.unsplash.com/photo-1541888946425-d0fbb18f15f6?auto=format&fit=crop&w=600&q=80";
+                          }}
                           style={{ width: "38px", height: "38px", borderRadius: "6px", objectFit: "cover" }}
                         />
                       )}
@@ -986,25 +976,27 @@ export default function RegisterProgressWizardModal({
                 </p>
               </div>
 
-              {/* Baseline Info Box */}
-              <div
-                style={{
-                  backgroundColor: "#F0FDF4",
-                  border: "1px solid #BBF7D0",
-                  borderRadius: "0.75rem",
-                  padding: "0.75rem 1rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.6rem",
-                  fontSize: "0.8rem",
-                  color: "#166534",
-                }}
-              >
-                <Info size={16} />
-                <span>
-                  Último avance guardado: <strong>{baselineOverallPct}%</strong>. El nuevo avance no puede ser menor a esta cifra.
-                </span>
-              </div>
+              {/* Baseline Info Box (only for project-wide progress) */}
+              {targetScope === "PROJECT" && (
+                <div
+                  style={{
+                    backgroundColor: "#F0FDF4",
+                    border: "1px solid #BBF7D0",
+                    borderRadius: "0.75rem",
+                    padding: "0.75rem 1rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.6rem",
+                    fontSize: "0.8rem",
+                    color: "#166534",
+                  }}
+                >
+                  <Info size={16} />
+                  <span>
+                    Último avance guardado: <strong>{baselineOverallPct}%</strong>. El nuevo avance general no puede ser menor a esta cifra.
+                  </span>
+                </div>
+              )}
 
               {/* Porcentaje General Card */}
               <div
@@ -1025,11 +1017,11 @@ export default function RegisterProgressWizardModal({
                     </label>
                     <span style={{ fontSize: "0.74rem", color: "var(--devio-neutral-3)" }}>
                       {targetScope === "UNITS"
-                        ? `Aplica a: ${selectedUnitNumbers.slice(0, 10).join(", ")}${selectedUnitNumbers.length > 10 ? ` (+${selectedUnitNumbers.length - 10} más)` : ""}`
+                        ? `Aplica independientemente a: ${selectedUnitNumbers.slice(0, 10).join(", ")}${selectedUnitNumbers.length > 10 ? ` (+${selectedUnitNumbers.length - 10} más)` : ""}`
                         : `Aplica a todas las ${unitsInventory.length} unidades del proyecto.`}
                     </span>
                   </div>
-                  <span style={{ fontSize: "1.6rem", fontWeight: 900, color: overallPct < baselineOverallPct ? "#EF4444" : "var(--devio-blue)" }}>
+                  <span style={{ fontSize: "1.6rem", fontWeight: 900, color: targetScope === "PROJECT" && overallPct < baselineOverallPct ? "#EF4444" : "var(--devio-blue)" }}>
                     {overallPct}%
                   </span>
                 </div>
@@ -1042,7 +1034,7 @@ export default function RegisterProgressWizardModal({
                   onChange={(e) => {
                     const val = Number(e.target.value);
                     setOverallPct(val);
-                    if (val < baselineOverallPct) {
+                    if (targetScope === "PROJECT" && val < baselineOverallPct) {
                       setValidationError(`El nuevo avance (${val}%) no puede ser menor al avance previo (${baselineOverallPct}%).`);
                     } else {
                       setValidationError(null);
@@ -1050,7 +1042,7 @@ export default function RegisterProgressWizardModal({
                   }}
                   style={{
                     width: "100%",
-                    accentColor: overallPct < baselineOverallPct ? "#EF4444" : "var(--devio-blue-dark)",
+                    accentColor: targetScope === "PROJECT" && overallPct < baselineOverallPct ? "#EF4444" : "var(--devio-blue-dark)",
                     cursor: "pointer",
                     height: "8px",
                   }}
@@ -1126,7 +1118,7 @@ export default function RegisterProgressWizardModal({
             </div>
           )}
 
-          {/* STEP 3: FOTOS Y DOCUMENTOS */}
+          {/* STEP 3: FOTOS Y EVIDENCIAS */}
           {currentStep === 3 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
               <div style={{ textAlign: "center", maxWidth: "620px", margin: "0 auto" }}>
@@ -1134,24 +1126,17 @@ export default function RegisterProgressWizardModal({
                   Fotografías y Evidencia de Obra
                 </h3>
                 <p style={{ fontSize: "0.85rem", color: "var(--devio-neutral-3)" }}>
-                  Adjunta fotografías de alta resolución del avance y reportes de supervisión en PDF.
+                  Adjunta fotografías de alta resolución del avance de obra para la bitácora y el portal del cliente.
                 </p>
               </div>
 
-              {/* Hidden file inputs */}
+              {/* Hidden file input */}
               <input
                 type="file"
                 ref={fileInputRef}
                 accept="image/*"
                 multiple
                 onChange={handlePhotoFilesSelected}
-                style={{ display: "none" }}
-              />
-              <input
-                type="file"
-                ref={docInputRef}
-                accept=".pdf,.docx,.xlsx"
-                onChange={handleDocFileSelected}
                 style={{ display: "none" }}
               />
 
@@ -1212,6 +1197,9 @@ export default function RegisterProgressWizardModal({
                       <img
                         src={p.url}
                         alt={p.name}
+                        onError={(e) => {
+                          e.currentTarget.src = "https://images.unsplash.com/photo-1541888946425-d0fbb18f15f6?auto=format&fit=crop&w=600&q=80";
+                        }}
                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       />
                       <button
@@ -1240,33 +1228,6 @@ export default function RegisterProgressWizardModal({
                       </button>
                     </div>
                   ))}
-                </div>
-              </div>
-
-              {/* PDF Document Upload */}
-              <div>
-                <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.4rem" }}>
-                  Reporte Técnico / Dictamen Estructural (PDF Opcional)
-                </label>
-                <div
-                  onClick={() => docInputRef.current?.click()}
-                  style={{
-                    border: "1.5px dashed var(--devio-neutral-2)",
-                    borderRadius: "0.6rem",
-                    padding: "0.85rem",
-                    textAlign: "center",
-                    backgroundColor: uploadedDocument ? "rgba(111, 172, 156, 0.08)" : "#F8FAFC",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "0.6rem",
-                  }}
-                >
-                  <FileText size={18} color="var(--devio-blue)" />
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
-                    {uploadedDocument ? `${uploadedDocument.name} (${uploadedDocument.size})` : "Subir reporte o dictamen en PDF"}
-                  </span>
                 </div>
               </div>
             </div>
@@ -1740,7 +1701,14 @@ export default function RegisterProgressWizardModal({
                         }}
                         title="Clic para ver en tamaño completo"
                       >
-                        <img src={p.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <img
+                          src={p.url}
+                          alt={p.name}
+                          onError={(e) => {
+                            e.currentTarget.src = "https://images.unsplash.com/photo-1541888946425-d0fbb18f15f6?auto=format&fit=crop&w=600&q=80";
+                          }}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
                       </div>
                     ))}
                   </div>
