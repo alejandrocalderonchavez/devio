@@ -54,11 +54,21 @@ export class UnitsService {
 
     // Bulk create
     if (Array.isArray(units) && units.length > 0) {
+      const mapCategory = (raw?: string): any => {
+        const norm = String(raw || "").toUpperCase().trim();
+        if (norm.includes("CASA") || norm.includes("HOUSE") || norm.includes("TOWNHOUSE")) return "HOUSE";
+        if (norm.includes("LOCAL") || norm.includes("COMMERCIAL")) return "COMMERCIAL_SPACE";
+        if (norm.includes("BODEGA") || norm.includes("WAREHOUSE") || norm.includes("INDUSTRIAL")) return "INDUSTRIAL_WAREHOUSE";
+        if (norm.includes("LOTE") || norm.includes("TERRENO") || norm.includes("LAND")) return "LAND_LOT";
+        if (norm.includes("OFICINA") || norm.includes("OFFICE")) return "OFFICE";
+        return "APARTMENT";
+      };
+
       for (const u of units) {
         const uNum = String(u.unit || u.unitNumber || "").trim();
         if (!uNum) continue;
 
-        const uType = (u.type || "Departamento").toUpperCase() === "CASA" ? "HOUSE" : "APARTMENT";
+        const uType = mapCategory(u.type || u.category);
         const uStatus =
           u.status === "VENDIDA" || u.status === "SOLD"
             ? "SOLD"
@@ -67,6 +77,17 @@ export class UnitsService {
             : u.status === "APARTADA" || u.status === "RESERVED"
             ? "RESERVED"
             : "AVAILABLE";
+
+        const bedroomsVal = u.bedrooms !== undefined && u.bedrooms !== null ? Number(u.bedrooms) : undefined;
+        const bathroomsVal = u.bathrooms !== undefined && u.bathrooms !== null ? Number(u.bathrooms) : undefined;
+        const parkingVal = Number(u.parkingSpots || u.parkingSpaces || 0);
+        const storageVal = Number(u.storageUnits || u.storageRooms || 0);
+        const customAttrs = {
+          ...(typeof u.customAttributes === "object" && u.customAttributes ? u.customAttributes : {}),
+          ...(u.deliveryDate ? { deliveryDate: u.deliveryDate } : {}),
+          ...(u.orientation ? { orientation: u.orientation } : {}),
+          ...(u.viewType ? { viewType: u.viewType } : {}),
+        };
 
         await this.prisma.unit.upsert({
           where: {
@@ -78,20 +99,30 @@ export class UnitsService {
           create: {
             projectId,
             unitNumber: uNum,
-            category: uType as any,
-            status: uStatus as any,
+            category: uType,
+            status: uStatus,
             basePrice: Number(u.price || 3500000),
             totalAreaM2: Number(u.areaM2 || u.area || 85),
             level: Number(u.floor || u.level || 1),
+            ...(bedroomsVal !== undefined && !isNaN(bedroomsVal) ? { bedrooms: bedroomsVal } : {}),
+            ...(bathroomsVal !== undefined && !isNaN(bathroomsVal) ? { bathrooms: bathroomsVal } : {}),
+            parkingSpaces: parkingVal,
+            storageRooms: storageVal,
+            customAttributes: Object.keys(customAttrs).length > 0 ? customAttrs : undefined,
           },
           update: {
-            category: uType as any,
-            status: uStatus as any,
+            category: uType,
+            status: uStatus,
             basePrice: Number(u.price || 3500000),
             totalAreaM2: Number(u.areaM2 || u.area || 85),
             level: Number(u.floor || u.level || 1),
+            ...(bedroomsVal !== undefined && !isNaN(bedroomsVal) ? { bedrooms: bedroomsVal } : {}),
+            ...(bathroomsVal !== undefined && !isNaN(bathroomsVal) ? { bathrooms: bathroomsVal } : {}),
+            parkingSpaces: parkingVal,
+            storageRooms: storageVal,
+            customAttributes: Object.keys(customAttrs).length > 0 ? customAttrs : undefined,
           },
-        }).catch(() => {});
+        }).catch((err) => console.warn(`Error upserting unit ${uNum}:`, err));
       }
 
       return {
@@ -105,7 +136,17 @@ export class UnitsService {
       throw new BadRequestException("Número de unidad es requerido");
     }
 
-    const singleType = (type || "Departamento").toUpperCase() === "CASA" ? "HOUSE" : "APARTMENT";
+    const mapSingleCategory = (raw?: string): any => {
+      const norm = String(raw || "").toUpperCase().trim();
+      if (norm.includes("CASA") || norm.includes("HOUSE") || norm.includes("TOWNHOUSE")) return "HOUSE";
+      if (norm.includes("LOCAL") || norm.includes("COMMERCIAL")) return "COMMERCIAL_SPACE";
+      if (norm.includes("BODEGA") || norm.includes("WAREHOUSE") || norm.includes("INDUSTRIAL")) return "INDUSTRIAL_WAREHOUSE";
+      if (norm.includes("LOTE") || norm.includes("TERRENO") || norm.includes("LAND")) return "LAND_LOT";
+      if (norm.includes("OFICINA") || norm.includes("OFFICE")) return "OFFICE";
+      return "APARTMENT";
+    };
+
+    const singleType = mapSingleCategory(type);
     const singleStatus =
       status === "VENDIDA" || status === "SOLD"
         ? "SOLD"

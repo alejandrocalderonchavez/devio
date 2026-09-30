@@ -51,6 +51,7 @@ export interface UnitItem {
   constructionPct?: number; // Porcentaje de avance de obra específico de la unidad
   advisor?: string; // Nombre del Asesor comercial asignado
   advisorEmail?: string; // Email del Asesor asignado
+  customAttributes?: Record<string, any>;
 }
 
 export interface ProjectMetric {

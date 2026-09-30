@@ -553,15 +553,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         salePlanName: associatedSale?.paymentPlan || u.salePlanName,
         salePaidAmount: associatedSale?.paidAmount ?? u.salePaidAmount,
         salePendingAmount: associatedSale?.pendingAmount ?? u.salePendingAmount,
-        deliveryDate: u.deliveryDate || dbProj.estimatedDeliveryDate || "",
-        bedrooms: u.bedrooms != null ? Number(u.bedrooms) : undefined,
-        bathrooms: u.bathrooms != null ? Number(u.bathrooms) : undefined,
+        deliveryDate: u.deliveryDate || customAttrs.deliveryDate || dbProj.estimatedDeliveryDate || "",
+        bedrooms: u.bedrooms != null ? Number(u.bedrooms) : customAttrs.bedrooms != null ? Number(customAttrs.bedrooms) : undefined,
+        bathrooms: u.bathrooms != null ? Number(u.bathrooms) : customAttrs.bathrooms != null ? Number(customAttrs.bathrooms) : undefined,
         parkingSpots: u.parkingSpaces != null ? Number(u.parkingSpaces) : u.parkingSpots != null ? Number(u.parkingSpots) : 0,
         storageUnits: u.storageRooms != null ? Number(u.storageRooms) : u.storageUnits != null ? Number(u.storageUnits) : 0,
         floorPlan: u.floorPlan || undefined,
         images: Array.isArray(u.renderUrls) ? u.renderUrls : Array.isArray(u.images) ? u.images : [],
         priceHistory: mappedPriceHistory,
         constructionPct: unitConstructionPct,
+        customAttributes: customAttrs,
       };
     });
 
@@ -1218,27 +1219,45 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   const updateMultipleUnits = (projectId: string, updatedUnits: UnitItem[]) => {
     const updatedMap = new Map<string, UnitItem>();
-    updatedUnits.forEach((u) => updatedMap.set(u.unit, u));
+    updatedUnits.forEach((u) => updatedMap.set(u.unit.toLowerCase().trim(), u));
+
+    let finalSavedInventory: UnitItem[] = [];
 
     const updated = projects.map((p) => {
       if (p.id !== projectId) return p;
 
-      const newInventory = p.unitsInventory.map((u) => {
-        if (updatedMap.has(u.unit)) {
-          const incoming = updatedMap.get(u.unit)!;
-          return {
-            ...u,
-            ...incoming,
-            priceHistory: incoming.priceHistory ?? u.priceHistory ?? [],
-          };
-        }
-        return u;
+      const existingInventory = p.unitsInventory || [];
+      const newInventory: UnitItem[] = [];
+
+      // 1. Incorporate all updatedUnits (preserving existing IDs and price history if not provided)
+      updatedUnits.forEach((u) => {
+        const cleanKey = u.unit.toLowerCase().trim();
+        const existing = existingInventory.find(
+          (ex) => ex.unit.toLowerCase().trim() === cleanKey
+        );
+        newInventory.push({
+          ...existing,
+          ...u,
+          id: u.id || existing?.id || `u-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          priceHistory: u.priceHistory ?? existing?.priceHistory ?? [],
+          customAttributes: u.customAttributes || existing?.customAttributes,
+        });
       });
+
+      // 2. Preserve any locked/sold units that weren't in updatedUnits
+      existingInventory.forEach((ex) => {
+        const cleanKey = ex.unit.toLowerCase().trim();
+        if (!updatedMap.has(cleanKey) && (ex.status === "VENDIDA" || ex.status === "APARTADA")) {
+          newInventory.push(ex);
+        }
+      });
+
+      finalSavedInventory = newInventory;
 
       const soldCount = newInventory.filter((u) => u.status === "VENDIDA").length;
       const availCount = newInventory.filter((u) => u.status === "DISPONIBLE").length;
       const blockedCount = newInventory.filter((u) => u.status === "BLOQUEADA").length;
-      const totalCount = p.totalUnits || (newInventory.length > 0 ? newInventory.length : 1);
+      const totalCount = newInventory.length;
 
       const valorComercialTotal = newInventory.reduce((acc, u) => acc + (u.price || 0), 0);
       const soldUnitsPriceSum = newInventory.filter((u) => u.status === "VENDIDA").reduce((acc, u) => acc + (u.price || 0), 0);
@@ -1249,6 +1268,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
       return {
         ...p,
+        totalUnits: totalCount,
         soldUnits: soldCount,
         availableUnits: availCount,
         blockedUnits: blockedCount,
@@ -1273,24 +1293,15 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
     saveProjects(updated);
 
-    // Persist bulk unit updates to backend
-    updatedUnits.forEach((u) => {
-      fetch("/api/units", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          unitNumber: u.unit,
-          status: u.status,
-          price: u.price,
-          areaM2: u.areaM2,
-          floor: u.floor,
-          priceHistory: u.priceHistory,
-          reason: u.priceHistory?.[0]?.reason,
-          previousPrice: u.priceHistory?.[0]?.previousPrice,
-        }),
-      }).catch(() => {});
-    });
+    // Persist bulk unit updates / additions to backend
+    fetch("/api/units", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        units: finalSavedInventory.length > 0 ? finalSavedInventory : updatedUnits,
+      }),
+    }).catch((err) => console.warn("Could not sync bulk unit update with backend:", err));
   };
 
   const updateBulkPrices = (projectId: string, pctIncrease: number, unitNumbers?: string[]) => {
@@ -2795,6 +2806,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const bulkImportUnits = (projectId: string, newUnits: UnitItem[]) => {
     let addedCount = 0;
     let updatedCount = 0;
+    let finalInventory: UnitItem[] = [];
     const updated = projects.map((p) => {
       if (p.id !== projectId) return p;
       const existingMap = new Map<string, UnitItem>();
@@ -2820,6 +2832,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           addedCount++;
         }
       });
+
+      finalInventory = mergedInventory;
 
       const soldCount = mergedInventory.filter((u) => u.status === "VENDIDA").length;
       const availCount = mergedInventory.filter((u) => u.status === "DISPONIBLE").length;
@@ -2857,6 +2871,17 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
     saveProjects(updated);
     showToast("Inventario Importado", `Se procesaron ${addedCount} unidades nuevas y ${updatedCount} actualizadas.`);
+
+    // Persist to backend
+    fetch("/api/units", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        units: finalInventory.length > 0 ? finalInventory : newUnits,
+      }),
+    }).catch((err) => console.warn("Could not sync bulk imported units with backend:", err));
+
     return { addedCount, updatedCount };
   };
 
