@@ -76,6 +76,8 @@ interface RowData {
   rowPaidSum: number;
   rowPendingSum: number;
   rowOverdueSum: number;
+  isCoOwned?: boolean;
+  coOwners?: any[];
 }
 
 const MONTH_NAMES = [
@@ -243,8 +245,15 @@ export default function PaymentsMatrixView({
           ? (sale.unit as any).unitNumber
           : sale.unit;
       const unitNum = String(rawUnitStr || "").trim();
-      const clientName =
-        sale.clientName || (sale as any).primaryClient?.fullName || "Cliente Inversionista";
+
+      const isCoOwned = Boolean(
+        sale.isCoOwnership === true ||
+        (Array.isArray(sale.coOwners) && sale.coOwners.length > 1)
+      );
+
+      const clientName = isCoOwned && Array.isArray(sale.coOwners) && sale.coOwners.length > 0
+        ? sale.coOwners.map((c: any) => `${c.name || "Copropietario"} (${c.ownershipPct || 50}%)`).join(" + ")
+        : (sale.clientName || (sale as any).primaryClient?.fullName || "Cliente Inversionista");
 
       // Filter obligations by concept if selected
       let rawSchedule = Array.isArray(sale.schedule) ? sale.schedule : [];
@@ -404,6 +413,8 @@ export default function PaymentsMatrixView({
         rowPaidSum,
         rowPendingSum,
         rowOverdueSum,
+        isCoOwned,
+        coOwners: sale.coOwners,
       });
     });
 

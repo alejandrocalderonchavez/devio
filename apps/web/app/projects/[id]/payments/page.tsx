@@ -238,9 +238,7 @@ export default function ProjectPaymentsPage() {
       if (sale.status === "CANCELADA") return;
       const rawUnitStr = typeof sale.unit === "object" && sale.unit !== null ? (sale.unit as any).unitNumber : sale.unit;
       const unitNum = String(rawUnitStr || "").trim();
-      const clientName = sale.clientName || (sale as any).primaryClient?.fullName || "Cliente Devio";
       const planName = typeof sale.paymentPlan === "string" ? sale.paymentPlan : (sale.paymentPlan as any)?.name || "Plan de Pago";
-      const targetClientId = sale.clientId || sale.clientEmail || (sale as any).primaryClient?.email || clientName;
 
       const rawPayments: any[] = (sale.payments && sale.payments.length > 0)
         ? sale.payments.map((p: any) => ({
@@ -254,6 +252,12 @@ export default function ProjectPaymentsPage() {
             voucherName: p.voucherName,
             reference: p.reference,
             notes: p.notes,
+            payerClientId: p.payerClientId || p.clientId || p.ownerId,
+            payerClientEmail: p.payerClientEmail || p.clientEmail || p.ownerEmail,
+            payerClientName: p.payerClientName || p.clientName || p.ownerName,
+            clientId: p.payerClientId || p.clientId || p.ownerId,
+            clientEmail: p.payerClientEmail || p.clientEmail || p.ownerEmail,
+            clientName: p.payerClientName || p.clientName || p.ownerName,
             moratoryAmount: p.moratoryAmount,
             moratoryAction: p.moratoryAction,
             waiveReason: p.waiveReason,
@@ -272,9 +276,6 @@ export default function ProjectPaymentsPage() {
         });
       }
 
-      const totalPaidAvailable = rawPayments.reduce((acc: number, p: any) => acc + (Number(p.monto) || 0), 0);
-      let remainingPaid = totalPaidAvailable;
-
       const obligationsList = Array.isArray(sale.schedule) && sale.schedule.length > 0
         ? sale.schedule
         : Array.isArray((sale as any).scheduledObligations)
@@ -287,102 +288,286 @@ export default function ProjectPaymentsPage() {
         return dateA - dateB;
       });
 
-      const sortedPayments = [...rawPayments].sort((a: any, b: any) => {
-        const dateA = parseDateFlexible(a.fechaPago)?.getTime() || 0;
-        const dateB = parseDateFlexible(b.fechaPago)?.getTime() || 0;
-        return dateA - dateB;
-      });
+      const hasActualCoOwners = Boolean(
+        sale.isCoOwnership === true ||
+        (Array.isArray(sale.coOwners) && sale.coOwners.length > 1)
+      );
 
-      const trackingReceipts = sortedPayments.map((p: any) => ({
-        receipt: p,
-        totalAmount: Number(p.monto) || 0,
-        remainingAmount: Number(p.monto) || 0,
-      }));
+      const coOwnersList = hasActualCoOwners && Array.isArray(sale.coOwners) && sale.coOwners.length > 0
+        ? sale.coOwners
+        : null;
 
-      if (sortedObligations.length > 0) {
-        sortedObligations.forEach((inst: any, idx: number) => {
-          const uniqueId = inst.id && String(inst.id).includes(unitNum)
-            ? inst.id
-            : `pay-${unitNum}-${inst.id || idx}`;
+      if (coOwnersList && coOwnersList.length > 0) {
+        // Co-ownership mode: generate proportional rows for each co-owner
+        coOwnersList.forEach((co: any, coIdx: number) => {
+          const coPct = Number(co.ownershipPct) || (100 / coOwnersList.length);
+          const coRatio = coPct / 100;
+          const coClientName = co.name || (co.isPrimary ? sale.clientName : `Copropietario ${coIdx + 1}`);
+          const coClientId = co.id || co.email || coClientName;
+          const coEmail = co.email || "";
 
-          const sAmount = Number(inst.scheduledAmount || inst.originalAmount || inst.amount) || 0;
-          const sDate = formatDateMX(inst.scheduledDate || inst.dueDate || inst.fechaProgramada || "", "dd/mm/yyyy");
+          // Filter receipts for this co-owner
+          let coRawPayments = rawPayments.filter((p: any) => {
+            const pId = p.payerClientId || p.clientId || p.ownerId;
+            const pEmail = (p.payerClientEmail || p.clientEmail || p.ownerEmail || "").toLowerCase().trim();
+            const pName = (p.payerClientName || p.clientName || p.ownerName || "").toLowerCase().trim();
+            const targetEmail = coEmail.toLowerCase().trim();
+            const targetName = coClientName.toLowerCase().trim();
 
-          const instDate = parseDateFlexible(sDate);
-          const isOverdue = Boolean(instDate && instDate < now);
+            if (pId && (pId === co.id || pId === coClientId)) return true;
+            if (pEmail && targetEmail && (pEmail === targetEmail || pEmail.includes(targetEmail) || targetEmail.includes(pEmail))) return true;
+            if (pName && targetName && (pName === targetName || pName.includes(targetName) || targetName.includes(pName))) return true;
+            return false;
+          });
 
-          let pAmount = 0;
-          let pendAmount = sAmount;
-          let status = "PENDIENTE";
-          let pDate = "-";
-          let pMethod = "Pendiente";
-
-          if (remainingPaid >= sAmount && sAmount > 0) {
-            pAmount = sAmount;
-            pendAmount = 0;
-            remainingPaid -= sAmount;
-            status = "PAGADO";
-            pDate = sDate;
-            pMethod = inst.paymentMethod || "Transferencia SPEI";
-          } else if (remainingPaid > 0) {
-            pAmount = remainingPaid;
-            pendAmount = Math.max(0, sAmount - remainingPaid);
-            remainingPaid = 0;
-            status = isOverdue ? "ATRASADO" : "PENDIENTE";
-            pDate = "Parcial";
-            pMethod = inst.paymentMethod || "Transferencia SPEI";
-          } else {
-            pAmount = Number(inst.paidAmount) || 0;
-            pendAmount = inst.pendingAmount !== undefined ? Number(inst.pendingAmount) : Math.max(0, sAmount - pAmount);
-            status = pendAmount === 0 && sAmount > 0 ? "PAGADO" : isOverdue && pendAmount > 0 ? "ATRASADO" : "PENDIENTE";
-            pDate = pAmount > 0 ? (inst.paymentDate || "Parcial") : "-";
-            pMethod = pAmount > 0 ? (inst.paymentMethod || "Transferencia SPEI") : "Pendiente";
+          // Check if coOwnerPayments has down payments not in rawPayments
+          if (coRawPayments.length === 0 && Array.isArray((sale as any).coOwnerPayments)) {
+            const matchingCoPay = (sale as any).coOwnerPayments.find((cp: any) => {
+              const cpId = cp.clientId || cp.ownerId || cp.id;
+              const cpEmail = (cp.email || cp.clientEmail || "").toLowerCase().trim();
+              const cpName = (cp.name || cp.clientName || "").toLowerCase().trim();
+              if (cpId && (cpId === co.id || cpId === coClientId)) return true;
+              if (cpEmail && coEmail && cpEmail === coEmail.toLowerCase().trim()) return true;
+              if (cpName && coClientName && cpName === coClientName.toLowerCase().trim()) return true;
+              return false;
+            });
+            if (matchingCoPay && Number(matchingCoPay.amount) > 0) {
+              coRawPayments.push({
+                id: `pay-${unitNum}-co-${coIdx}`,
+                fechaPago: sale.saleDate ? formatDateMX(sale.saleDate, "dd/mm/yyyy") : formatDateMX(getMexicoNow(), "dd/mm/yyyy"),
+                metodoPago: matchingCoPay.method || "Transferencia SPEI",
+                monto: Number(matchingCoPay.amount),
+                unit: unitNum,
+                reciboFolio: `REC-${unitNum}-CO${coIdx + 1}`,
+                notes: `Pago de enganche inicial (${coPct}% proporcional)`,
+              });
+            }
           }
 
-          let needed = sAmount;
-          const contributions: Array<{
-            receipt: any;
-            allocatedAmount: number;
-            totalReceiptAmount: number;
-            isPartial: boolean;
-            isSplit: boolean;
-          }> = [];
+          const hasAnyPayerTagged = rawPayments.some((p: any) => p.payerClientId || p.payerClientEmail || p.payerClientName);
+          if (!hasAnyPayerTagged && coRawPayments.length === 0 && Number(sale.paidAmount) > 0) {
+            coRawPayments = [
+              {
+                id: `pay-${unitNum}-co-init-${coIdx}`,
+                fechaPago: sale.saleDate ? formatDateMX(sale.saleDate, "dd/mm/yyyy") : formatDateMX(getMexicoNow(), "dd/mm/yyyy"),
+                metodoPago: "Transferencia SPEI",
+                monto: Math.round(Number(sale.paidAmount) * coRatio),
+                unit: unitNum,
+                reciboFolio: `REC-${unitNum}-CO${coIdx + 1}`,
+                notes: `Pago de enganche inicial (${coPct}% proporcional)`,
+              },
+            ];
+          }
 
-          for (const t of trackingReceipts) {
-            if (needed <= 0) break;
-            if (t.remainingAmount <= 0) continue;
+          const sortedCoPayments = [...coRawPayments].sort((a: any, b: any) => {
+            const dateA = parseDateFlexible(a.fechaPago)?.getTime() || 0;
+            const dateB = parseDateFlexible(b.fechaPago)?.getTime() || 0;
+            return dateA - dateB;
+          });
 
-            const alloc = Math.min(needed, t.remainingAmount);
-            t.remainingAmount -= alloc;
-            needed -= alloc;
+          const coTrackingReceipts = sortedCoPayments.map((p: any) => ({
+            receipt: p,
+            totalAmount: Number(p.monto) || 0,
+            remainingAmount: Number(p.monto) || 0,
+          }));
 
-            contributions.push({
-              receipt: t.receipt,
-              allocatedAmount: alloc,
-              totalReceiptAmount: t.totalAmount,
-              isPartial: alloc < sAmount,
-              isSplit: alloc < t.totalAmount,
+          const coTotalPaidAvailable = sortedCoPayments.reduce((acc: number, p: any) => acc + (Number(p.monto) || 0), 0);
+          let coRemainingPaid = coTotalPaidAvailable;
+
+          if (sortedObligations.length > 0) {
+            sortedObligations.forEach((inst: any, idx: number) => {
+              const uniqueId = inst.id && String(inst.id).includes(unitNum)
+                ? `${inst.id}-co-${coIdx}`
+                : `pay-${unitNum}-${inst.id || idx}-co-${coIdx}`;
+
+              const rawSAmount = Number(inst.scheduledAmount || inst.originalAmount || inst.amount) || 0;
+              const sAmount = Math.round(rawSAmount * coRatio);
+              const sDate = formatDateMX(inst.scheduledDate || inst.dueDate || inst.fechaProgramada || "", "dd/mm/yyyy");
+
+              const instDate = parseDateFlexible(sDate);
+              const isOverdue = Boolean(instDate && instDate < now);
+
+              let pAmount = 0;
+              let pendAmount = sAmount;
+              let status = "PENDIENTE";
+              let pDate = "-";
+              let pMethod = "Pendiente";
+
+              if (coRemainingPaid >= sAmount && sAmount > 0) {
+                pAmount = sAmount;
+                pendAmount = 0;
+                coRemainingPaid -= sAmount;
+                status = "PAGADO";
+                pDate = sDate;
+                pMethod = inst.paymentMethod || "Transferencia SPEI";
+              } else if (coRemainingPaid > 0) {
+                pAmount = coRemainingPaid;
+                pendAmount = Math.max(0, sAmount - coRemainingPaid);
+                coRemainingPaid = 0;
+                status = isOverdue ? "ATRASADO" : "PENDIENTE";
+                pDate = "Parcial";
+                pMethod = inst.paymentMethod || "Transferencia SPEI";
+              } else {
+                pAmount = 0;
+                pendAmount = sAmount;
+                status = isOverdue && pendAmount > 0 ? "ATRASADO" : "PENDIENTE";
+                pDate = "-";
+                pMethod = "Pendiente";
+              }
+
+              let needed = sAmount;
+              const contributions: Array<{
+                receipt: any;
+                allocatedAmount: number;
+                totalReceiptAmount: number;
+                isPartial: boolean;
+                isSplit: boolean;
+              }> = [];
+
+              for (const t of coTrackingReceipts) {
+                if (needed <= 0) break;
+                if (t.remainingAmount <= 0) continue;
+
+                const alloc = Math.min(needed, t.remainingAmount);
+                t.remainingAmount -= alloc;
+                needed -= alloc;
+
+                contributions.push({
+                  receipt: t.receipt,
+                  allocatedAmount: alloc,
+                  totalReceiptAmount: t.totalAmount,
+                  isPartial: alloc < sAmount,
+                  isSplit: alloc < t.totalAmount,
+                });
+              }
+
+              result.push({
+                id: uniqueId,
+                clientId: coClientId,
+                clientName: `${coClientName} (${coPct}%)`,
+                clientEmail: coEmail,
+                unit: unitNum,
+                paymentPlan: planName,
+                scheduledAmount: sAmount,
+                scheduledDate: sDate,
+                paidAmount: pAmount,
+                paymentDate: pDate,
+                paymentMethod: pMethod as any,
+                status: status as any,
+                concept: inst.concept || inst.title || `Cuota ${idx + 1}`,
+                pendingAmount: pendAmount,
+                saleRecord: sale,
+                contributions,
+                isCoOwnership: true,
+                coOwner: co,
+              } as any);
             });
           }
-
-          result.push({
-            id: uniqueId,
-            clientId: targetClientId,
-            clientName,
-            unit: unitNum,
-            paymentPlan: planName,
-            scheduledAmount: sAmount,
-            scheduledDate: sDate,
-            paidAmount: pAmount,
-            paymentDate: pDate,
-            paymentMethod: pMethod as any,
-            status: status as any,
-            concept: inst.concept || inst.title || `Cuota ${idx + 1}`,
-            pendingAmount: pendAmount,
-            saleRecord: sale,
-            contributions,
-          } as any);
         });
+      } else {
+        // Single client sale
+        const clientName = sale.clientName || (sale as any).primaryClient?.fullName || "Cliente Devio";
+        const targetClientId = sale.clientId || sale.clientEmail || (sale as any).primaryClient?.email || clientName;
+        const totalPaidAvailable = rawPayments.reduce((acc: number, p: any) => acc + (Number(p.monto) || 0), 0);
+        let remainingPaid = totalPaidAvailable;
+
+        const sortedPayments = [...rawPayments].sort((a: any, b: any) => {
+          const dateA = parseDateFlexible(a.fechaPago)?.getTime() || 0;
+          const dateB = parseDateFlexible(b.fechaPago)?.getTime() || 0;
+          return dateA - dateB;
+        });
+
+        const trackingReceipts = sortedPayments.map((p: any) => ({
+          receipt: p,
+          totalAmount: Number(p.monto) || 0,
+          remainingAmount: Number(p.monto) || 0,
+        }));
+
+        if (sortedObligations.length > 0) {
+          sortedObligations.forEach((inst: any, idx: number) => {
+            const uniqueId = inst.id && String(inst.id).includes(unitNum)
+              ? inst.id
+              : `pay-${unitNum}-${inst.id || idx}`;
+
+            const sAmount = Number(inst.scheduledAmount || inst.originalAmount || inst.amount) || 0;
+            const sDate = formatDateMX(inst.scheduledDate || inst.dueDate || inst.fechaProgramada || "", "dd/mm/yyyy");
+
+            const instDate = parseDateFlexible(sDate);
+            const isOverdue = Boolean(instDate && instDate < now);
+
+            let pAmount = 0;
+            let pendAmount = sAmount;
+            let status = "PENDIENTE";
+            let pDate = "-";
+            let pMethod = "Pendiente";
+
+            if (remainingPaid >= sAmount && sAmount > 0) {
+              pAmount = sAmount;
+              pendAmount = 0;
+              remainingPaid -= sAmount;
+              status = "PAGADO";
+              pDate = sDate;
+              pMethod = inst.paymentMethod || "Transferencia SPEI";
+            } else if (remainingPaid > 0) {
+              pAmount = remainingPaid;
+              pendAmount = Math.max(0, sAmount - remainingPaid);
+              remainingPaid = 0;
+              status = isOverdue ? "ATRASADO" : "PENDIENTE";
+              pDate = "Parcial";
+              pMethod = inst.paymentMethod || "Transferencia SPEI";
+            } else {
+              pAmount = Number(inst.paidAmount) || 0;
+              pendAmount = inst.pendingAmount !== undefined ? Number(inst.pendingAmount) : Math.max(0, sAmount - pAmount);
+              status = pendAmount === 0 && sAmount > 0 ? "PAGADO" : isOverdue && pendAmount > 0 ? "ATRASADO" : "PENDIENTE";
+              pDate = pAmount > 0 ? (inst.paymentDate || "Parcial") : "-";
+              pMethod = pAmount > 0 ? (inst.paymentMethod || "Transferencia SPEI") : "Pendiente";
+            }
+
+            let needed = sAmount;
+            const contributions: Array<{
+              receipt: any;
+              allocatedAmount: number;
+              totalReceiptAmount: number;
+              isPartial: boolean;
+              isSplit: boolean;
+            }> = [];
+
+            for (const t of trackingReceipts) {
+              if (needed <= 0) break;
+              if (t.remainingAmount <= 0) continue;
+
+              const alloc = Math.min(needed, t.remainingAmount);
+              t.remainingAmount -= alloc;
+              needed -= alloc;
+
+              contributions.push({
+                receipt: t.receipt,
+                allocatedAmount: alloc,
+                totalReceiptAmount: t.totalAmount,
+                isPartial: alloc < sAmount,
+                isSplit: alloc < t.totalAmount,
+              });
+            }
+
+            result.push({
+              id: uniqueId,
+              clientId: targetClientId,
+              clientName,
+              unit: unitNum,
+              paymentPlan: planName,
+              scheduledAmount: sAmount,
+              scheduledDate: sDate,
+              paidAmount: pAmount,
+              paymentDate: pDate,
+              paymentMethod: pMethod as any,
+              status: status as any,
+              concept: inst.concept || inst.title || `Cuota ${idx + 1}`,
+              pendingAmount: pendAmount,
+              saleRecord: sale,
+              contributions,
+            } as any);
+          });
+        }
       }
     });
 
