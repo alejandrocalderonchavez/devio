@@ -17,6 +17,7 @@ import { FinanceModule } from "./finance/finance.module";
 import { UploadModule } from "./upload/upload.module";
 import { CronModule } from "./cron/cron.module";
 import { NotificationsModule } from "./notifications/notifications.module";
+import { PostventaModule } from "./postventa/postventa.module";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 
@@ -40,6 +41,7 @@ import { AppService } from "./app.service";
     UploadModule,
     CronModule,
     NotificationsModule,
+    PostventaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

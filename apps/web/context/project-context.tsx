@@ -3523,6 +3523,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const updated = [incident, ...postventaIncidents.filter((i) => i.id !== incident.id)];
     savePostventaIncidents(updated);
     showToast("Incidencia Registrada", `Folio ${incident.folio} guardado.`);
+
+    // Persist to backend
+    fetch("/api/postventa/incidents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(incident),
+    }).catch((err) => console.warn("Could not sync incident with backend:", err));
   };
 
   const updatePostventaIncident = (incident: PostventaIncident) => {
@@ -3623,6 +3630,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
 
     savePostventaIncidents(updated);
+
+    // Persist comment to backend
+    fetch(`/api/postventa/incidents/${incidentId}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newComment),
+    }).catch((err) => console.warn("Could not sync comment with backend:", err));
   };
 
   const updateIncidentStatus = (
@@ -3657,6 +3671,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
     savePostventaIncidents(updated);
     showToast("Estatus Actualizado", `El ticket cambió a ${newStatus}.`);
+
+    // Persist status to backend
+    fetch(`/api/postventa/incidents/${incidentId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus, notes }),
+    }).catch((err) => console.warn("Could not sync incident status with backend:", err));
   };
 
   const assignIncidentUser = (
