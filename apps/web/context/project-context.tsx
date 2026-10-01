@@ -802,10 +802,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     if (storedProjects) {
       try {
         const parsed = JSON.parse(storedProjects);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setProjects(parsed.map(mapDbProjectToProjectItem));
         }
       } catch (e) {}
+    } else {
+      setProjects([]);
     }
 
     if (storedPlans) {
@@ -835,8 +837,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       try {
         const parsed = JSON.parse(storedUser);
         if (parsed.fullName) setUserName(parsed.fullName);
+        else if (parsed.name) setUserName(parsed.name);
         if (parsed.email) setUserEmail(parsed.email);
         if (parsed.role) setUserRole(parsed.role as UserRole);
+        if (parsed.activeDeveloper && (!storedDev || !JSON.parse(storedDev)?.name)) {
+          setDeveloperName(parsed.activeDeveloper);
+        }
         if (Array.isArray(parsed.permissions)) setUserPermissions(parsed.permissions);
         else if (parsed.role && DEFAULT_ROLE_PERMISSIONS[parsed.role as UserRole]) {
           setUserPermissions(DEFAULT_ROLE_PERMISSIONS[parsed.role as UserRole]);
@@ -857,7 +863,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem("devio_developer_logo", parsedImp.developerLogo);
           }
           if (parsedImp.role) setUserRole(parsedImp.role as UserRole);
-          if (Array.isArray(parsedImp.projects) && parsedImp.projects.length > 0) {
+          if (Array.isArray(parsedImp.projects)) {
             setProjects(parsedImp.projects.map(mapDbProjectToProjectItem));
           }
         }
@@ -922,7 +928,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           try {
             const u = JSON.parse(storedUser);
             currentEmail = u.email || "";
-            activeDevName = u.activeDeveloper || "";
+            activeDevName = u.activeDeveloper || u.developer?.name || "";
+            activeDevId = u.developer?.id || "";
           } catch (e) {}
         }
 
@@ -930,27 +937,22 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           try {
             const d = JSON.parse(storedDev);
             activeDevName = d.name || d.commercialName || "";
-            activeDevId = d.id || "";
+            if (!activeDevId) activeDevId = d.id || "";
           } catch (e) {}
         }
 
         if (devData && devData.success && Array.isArray(devData.developers) && devData.developers.length > 0) {
           matchedDev = devData.developers.find((d: any) => {
             if (activeDevId && d.id === activeDevId) return true;
-            if (activeDevName && d.name.toLowerCase() === activeDevName.toLowerCase()) return true;
+            if (activeDevName && d.name && d.name.toLowerCase().trim() === activeDevName.toLowerCase().trim()) return true;
             if (currentEmail) {
               return (
                 (d.memberships || []).some((m: any) => m.user?.email?.toLowerCase().trim() === currentEmail.toLowerCase().trim()) ||
-                d.email?.toLowerCase().trim() === currentEmail.toLowerCase().trim()
+                (d.email && d.email.toLowerCase().trim() === currentEmail.toLowerCase().trim())
               );
             }
             return false;
           });
-
-          // Fallback to first developer if single developer exists
-          if (!matchedDev && devData.developers.length === 1) {
-            matchedDev = devData.developers[0];
-          }
 
           if (matchedDev) {
             setDeveloperName(matchedDev.name);
@@ -963,64 +965,81 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // Process projects from either /api/projects or developer projects
+        // Determine developer scope to strictly prevent leaking other developers' projects
+        const targetDevId = matchedDev?.id || activeDevId || "";
+        const targetDevName = (matchedDev?.name || activeDevName || "").toLowerCase().trim();
+        const isGlobalSuperAdmin = Boolean(
+          storedImp && JSON.parse(storedImp)?.isSuperAdmin && !JSON.parse(storedImp)?.developerId
+        );
+
         let candidateProjects: any[] = [];
-        if (projData && projData.success && Array.isArray(projData.projects) && projData.projects.length > 0) {
-          candidateProjects = projData.projects;
-          if (matchedDev) {
-            const filtered = candidateProjects.filter((p: any) => p.developerId === matchedDev.id);
-            if (filtered.length > 0) candidateProjects = filtered;
+        if (projData && projData.success && Array.isArray(projData.projects)) {
+          if (targetDevId || targetDevName) {
+            // Strictly filter projects belonging to this developer
+            candidateProjects = projData.projects.filter((p: any) => {
+              if (targetDevId && p.developerId === targetDevId) return true;
+              if (targetDevName && p.developer?.name && p.developer.name.toLowerCase().trim() === targetDevName) return true;
+              return false;
+            });
+          } else if (isGlobalSuperAdmin) {
+            candidateProjects = projData.projects;
+          } else if (matchedDev && Array.isArray(matchedDev.projects)) {
+            candidateProjects = matchedDev.projects;
           }
-        } else if (matchedDev && Array.isArray(matchedDev.projects) && matchedDev.projects.length > 0) {
-          candidateProjects = matchedDev.projects;
         }
 
-        if (candidateProjects.length > 0) {
-          let currentLocal: ProjectItem[] = [];
-          try {
-            const rawStored = localStorage.getItem("devio_projects_state") || sessionStorage.getItem("devio_projects_state");
-            if (rawStored) currentLocal = JSON.parse(rawStored);
-          } catch (_) {}
+        let currentLocal: ProjectItem[] = [];
+        try {
+          const rawStored = localStorage.getItem("devio_projects_state") || sessionStorage.getItem("devio_projects_state");
+          if (rawStored) currentLocal = JSON.parse(rawStored);
+        } catch (_) {}
 
-          const mapped = candidateProjects.map((cp: any) => {
-            const localProj = currentLocal.find((lp) => lp.id === cp.id || lp.name === cp.name);
-            const mappedItem = mapDbProjectToProjectItem(cp);
-            if (localProj) {
-              return {
-                ...mappedItem,
-                floorPlans: (mappedItem.floorPlans && mappedItem.floorPlans.length > 0) ? mappedItem.floorPlans : (localProj.floorPlans || []),
-                unitsInventory: mappedItem.unitsInventory.map((u) => {
-                  const localUnit = (localProj.unitsInventory || []).find((lu) => lu.unit === u.unit);
-                  if (localUnit) {
-                    return {
-                      ...localUnit,
-                      ...u,
-                      floorPlan: u.floorPlan || localUnit.floorPlan,
-                      images: (u.images && u.images.length > 0) ? u.images : (localUnit.images || []),
-                      customAttributes: {
-                        ...(localUnit.customAttributes || {}),
-                        ...(u.customAttributes || {}),
-                      },
-                    };
-                  }
-                  return u;
-                }),
-              };
-            }
-            return mappedItem;
+        // Filter local storage by target developer as well
+        if (targetDevId || targetDevName) {
+          currentLocal = currentLocal.filter((lp: any) => {
+            if (targetDevId && lp.developerId && lp.developerId !== targetDevId) return false;
+            return true;
           });
-
-          // Preserve local-only projects not yet returned by the API (e.g. just created, API hasn't indexed them yet)
-          const apiIds = new Set(candidateProjects.map((cp: any) => cp.id));
-          const apiNames = new Set(candidateProjects.map((cp: any) => (cp.name || "").toLowerCase().trim()));
-          const localOnly = currentLocal.filter(
-            (lp) => !apiIds.has(lp.id) && !apiNames.has((lp.name || "").toLowerCase().trim())
-          );
-
-          const finalProjects = [...localOnly, ...mapped];
-          setProjects(finalProjects);
-          safeSaveProjectsState(finalProjects);
         }
+
+        const mapped = candidateProjects.map((cp: any) => {
+          const localProj = currentLocal.find((lp) => lp.id === cp.id || lp.name === cp.name);
+          const mappedItem = mapDbProjectToProjectItem(cp);
+          if (localProj) {
+            return {
+              ...mappedItem,
+              floorPlans: (mappedItem.floorPlans && mappedItem.floorPlans.length > 0) ? mappedItem.floorPlans : (localProj.floorPlans || []),
+              unitsInventory: mappedItem.unitsInventory.map((u) => {
+                const localUnit = (localProj.unitsInventory || []).find((lu) => lu.unit === u.unit);
+                if (localUnit) {
+                  return {
+                    ...localUnit,
+                    ...u,
+                    floorPlan: u.floorPlan || localUnit.floorPlan,
+                    images: (u.images && u.images.length > 0) ? u.images : (localUnit.images || []),
+                    customAttributes: {
+                      ...(localUnit.customAttributes || {}),
+                      ...(u.customAttributes || {}),
+                    },
+                  };
+                }
+                return u;
+              }),
+            };
+          }
+          return mappedItem;
+        });
+
+        // Preserve local-only projects not yet returned by the API
+        const apiIds = new Set(candidateProjects.map((cp: any) => cp.id));
+        const apiNames = new Set(candidateProjects.map((cp: any) => (cp.name || "").toLowerCase().trim()));
+        const localOnly = currentLocal.filter(
+          (lp) => !apiIds.has(lp.id) && !apiNames.has((lp.name || "").toLowerCase().trim())
+        );
+
+        const finalProjects = [...localOnly, ...mapped];
+        setProjects(finalProjects);
+        safeSaveProjectsState(finalProjects);
 
       })
       .catch((err) => console.warn("Could not sync projects from API:", err));
