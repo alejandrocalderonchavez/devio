@@ -543,6 +543,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const bathVal = u.bathrooms != null ? Number(u.bathrooms) : customAttrs.bathrooms != null ? Number(customAttrs.bathrooms) : customAttrs.banos != null ? Number(customAttrs.banos) : customAttrs.baños != null ? Number(customAttrs.baños) : undefined;
       const parkVal = u.parkingSpaces != null ? Number(u.parkingSpaces) : u.parkingSpots != null ? Number(u.parkingSpots) : customAttrs.parkingSpaces != null ? Number(customAttrs.parkingSpaces) : customAttrs.parkingSpots != null ? Number(customAttrs.parkingSpots) : customAttrs.estacionamientos != null ? Number(customAttrs.estacionamientos) : customAttrs.cajones != null ? Number(customAttrs.cajones) : undefined;
       const storVal = u.storageRooms != null ? Number(u.storageRooms) : u.storageUnits != null ? Number(u.storageUnits) : customAttrs.storageUnits != null ? Number(customAttrs.storageUnits) : customAttrs.bodegas != null ? Number(customAttrs.bodegas) : undefined;
+      const terraceVal = u.terraceAreaM2 != null ? Number(u.terraceAreaM2) : u.terraceM2 != null ? Number(u.terraceM2) : customAttrs.terraceAreaM2 != null ? Number(customAttrs.terraceAreaM2) : customAttrs.terraceM2 != null ? Number(customAttrs.terraceM2) : customAttrs.terraza != null ? Number(customAttrs.terraza) : undefined;
+      const gardenVal = u.gardenAreaM2 != null ? Number(u.gardenAreaM2) : u.gardenM2 != null ? Number(u.gardenM2) : customAttrs.gardenAreaM2 != null ? Number(customAttrs.gardenAreaM2) : customAttrs.garden != null ? Number(customAttrs.garden) : customAttrs.jardin != null ? Number(customAttrs.jardin) : undefined;
+      const lotVal = u.lotAreaM2 != null ? Number(u.lotAreaM2) : u.lotM2 != null ? Number(u.lotM2) : customAttrs.lotAreaM2 != null ? Number(customAttrs.lotAreaM2) : customAttrs.terreno != null ? Number(customAttrs.terreno) : undefined;
+      const interiorVal = u.interiorAreaM2 != null ? Number(u.interiorAreaM2) : u.interiorM2 != null ? Number(u.interiorM2) : customAttrs.interiorAreaM2 != null ? Number(customAttrs.interiorAreaM2) : undefined;
+      const constVal = u.constructionAreaM2 != null ? Number(u.constructionAreaM2) : u.constructionM2 != null ? Number(u.constructionM2) : u.constructionArea != null ? Number(u.constructionArea) : customAttrs.constructionAreaM2 != null ? Number(customAttrs.constructionAreaM2) : customAttrs.constructionArea != null ? Number(customAttrs.constructionArea) : undefined;
+      const blueprintVal = u.blueprintUrl || u.floorPlan || customAttrs.blueprintUrl || customAttrs.floorPlan || undefined;
+      const orientVal = u.orientation || customAttrs.orientation || customAttrs.orientacion || undefined;
+      const viewVal = u.viewType || customAttrs.viewType || customAttrs.view || customAttrs.vista || undefined;
       // Check all possible floor keys: u.level (DB field), u.floor (local), customAttrs.floor (from Excel alias fix), customAttrs.level, customAttrs.piso/nivel
       const rawFloor = u.level ?? u.floor ?? customAttrs.floor ?? customAttrs.level ?? customAttrs.piso ?? customAttrs.nivel ?? undefined;
       const floorVal = rawFloor != null ? (Number(rawFloor) || 1) : undefined;
@@ -567,7 +575,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         bathrooms: bathVal,
         parkingSpots: parkVal,
         storageUnits: storVal,
-        floorPlan: u.floorPlan || undefined,
+        terraceAreaM2: terraceVal,
+        gardenAreaM2: gardenVal,
+        lotAreaM2: lotVal,
+        interiorAreaM2: interiorVal,
+        constructionAreaM2: constVal,
+        orientation: orientVal,
+        viewType: viewVal,
+        floorPlan: blueprintVal,
         images: Array.isArray(u.renderUrls) ? u.renderUrls : Array.isArray(u.images) ? u.images : [],
         priceHistory: mappedPriceHistory,
         constructionPct: unitConstructionPct,
@@ -635,7 +650,20 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const mappedClientDocs: ClientDocument[] = [];
     const mappedDocuments: ProjectDocument[] = [];
 
+    const extractedFloorPlans: ProjectFloorPlan[] = Array.isArray(dbProj.floorPlans) && dbProj.floorPlans.length > 0
+      ? dbProj.floorPlans
+      : rawDocs
+          .filter((d: any) => d.metadata?.isFloorPlan === true || (d.type === "BLUEPRINT" && d.metadata?.name))
+          .map((d: any) => ({
+            id: d.metadata?.id || d.id,
+            name: d.metadata?.name || d.title || "Planta de Conjunto",
+            imageUrl: d.metadata?.imageUrl || d.storagePath || d.url,
+          }));
+
     rawDocs.forEach((d: any, idx: number) => {
+      // Exclude floor plan documents from generic file management lists
+      if (d.metadata?.isFloorPlan === true) return;
+
       const unitNum = d.unit?.unitNumber || d.metadata?.unit || d.unit || "";
       const cId = d.clientId || d.client?.id || d.metadata?.clientId || "";
       const cName = d.client?.fullName || d.metadata?.clientName || d.clientName || "";
@@ -779,7 +807,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       additionals,
       sales: mappedSales,
       quotes: dbProj.quotes || [],
-      floorPlans: dbProj.floorPlans || [],
+      floorPlans: extractedFloorPlans,
       documents: mappedDocuments,
       clientDocuments: mappedClientDocs,
       paymentPlans: dbProj.paymentPlans || [],
@@ -2898,46 +2926,75 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       };
     });
     saveProjects(updated);
+
+    fetch(`/api/projects/${projectId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ floorPlans }),
+    }).catch((err) => console.warn("Could not sync floor plans with backend:", err));
   };
 
   const addFloorPlan = (projectId: string, floorPlan: ProjectFloorPlan) => {
+    let finalPlans: ProjectFloorPlan[] = [];
     const updated = projects.map((p) => {
       if (p.id !== projectId) return p;
       const current = p.floorPlans || [];
+      finalPlans = [...current, floorPlan];
       return {
         ...p,
-        floorPlans: [...current, floorPlan],
+        floorPlans: finalPlans,
       };
     });
     saveProjects(updated);
     showToast("Planta Agregada", `Se agregó la planta "${floorPlan.name}".`);
+
+    fetch(`/api/projects/${projectId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ floorPlans: finalPlans }),
+    }).catch((err) => console.warn("Could not sync floor plans with backend:", err));
   };
 
   const updateFloorPlan = (projectId: string, floorPlanId: string, updatedFields: Partial<ProjectFloorPlan>) => {
+    let finalPlans: ProjectFloorPlan[] = [];
     const updated = projects.map((p) => {
       if (p.id !== projectId) return p;
       const current = p.floorPlans || [];
-      const newPlans = current.map((fp) => (fp.id === floorPlanId ? { ...fp, ...updatedFields } : fp));
+      finalPlans = current.map((fp) => (fp.id === floorPlanId ? { ...fp, ...updatedFields } : fp));
       return {
         ...p,
-        floorPlans: newPlans,
+        floorPlans: finalPlans,
       };
     });
     saveProjects(updated);
     showToast("Planta Actualizada", "Los cambios en la planta de conjunto han sido guardados.");
+
+    fetch(`/api/projects/${projectId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ floorPlans: finalPlans }),
+    }).catch((err) => console.warn("Could not sync floor plans with backend:", err));
   };
 
   const deleteFloorPlan = (projectId: string, floorPlanId: string) => {
+    let finalPlans: ProjectFloorPlan[] = [];
     const updated = projects.map((p) => {
       if (p.id !== projectId) return p;
       const current = p.floorPlans || [];
+      finalPlans = current.filter((fp) => fp.id !== floorPlanId);
       return {
         ...p,
-        floorPlans: current.filter((fp) => fp.id !== floorPlanId),
+        floorPlans: finalPlans,
       };
     });
     saveProjects(updated);
     showToast("Planta Eliminada", "La planta ha sido removida del proyecto.", "info");
+
+    fetch(`/api/projects/${projectId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ floorPlans: finalPlans }),
+    }).catch((err) => console.warn("Could not sync floor plans with backend:", err));
   };
 
   const bulkImportUnits = (projectId: string, newUnits: UnitItem[]) => {

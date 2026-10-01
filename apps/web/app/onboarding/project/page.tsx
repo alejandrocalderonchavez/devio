@@ -1110,6 +1110,41 @@ export default function ProjectOnboardingPage() {
         if (!isNaN(p)) parsedStor = p;
       }
 
+      const rawTerrace = extra.terraceM2 ?? extra.terraceAreaM2 ?? extra.terraza ?? undefined;
+      let parsedTerrace: number | undefined = undefined;
+      if (rawTerrace != null) {
+        const p = typeof rawTerrace === "number" ? rawTerrace : parseFloat(String(rawTerrace).replace(/[^0-9.]/g, ""));
+        if (!isNaN(p)) parsedTerrace = p;
+      }
+
+      const rawGarden = extra.garden ?? extra.gardenM2 ?? extra.gardenAreaM2 ?? extra.jardin ?? undefined;
+      let parsedGarden: number | undefined = undefined;
+      if (rawGarden != null) {
+        const p = typeof rawGarden === "number" ? rawGarden : parseFloat(String(rawGarden).replace(/[^0-9.]/g, ""));
+        if (!isNaN(p)) parsedGarden = p;
+      }
+
+      const rawLot = extra.lotAreaM2 ?? extra.lotM2 ?? extra.terreno ?? undefined;
+      let parsedLot: number | undefined = undefined;
+      if (rawLot != null) {
+        const p = typeof rawLot === "number" ? rawLot : parseFloat(String(rawLot).replace(/[^0-9.]/g, ""));
+        if (!isNaN(p)) parsedLot = p;
+      }
+
+      const rawConst = extra.constructionArea ?? extra.constructionAreaM2 ?? extra.constructionM2 ?? extra.construccion ?? undefined;
+      let parsedConst: number | undefined = undefined;
+      if (rawConst != null) {
+        const p = typeof rawConst === "number" ? rawConst : parseFloat(String(rawConst).replace(/[^0-9.]/g, ""));
+        if (!isNaN(p)) parsedConst = p;
+      }
+
+      const rawInterior = extra.interiorAreaM2 ?? extra.interiorM2 ?? undefined;
+      let parsedInterior: number | undefined = undefined;
+      if (rawInterior != null) {
+        const p = typeof rawInterior === "number" ? rawInterior : parseFloat(String(rawInterior).replace(/[^0-9.]/g, ""));
+        if (!isNaN(p)) parsedInterior = p;
+      }
+
       // Filter standard unit properties from customAttributes so they are not duplicated as extra columns in UI
       const standardKeys = new Set([
         "floor", "level", "piso", "nivel", "floors", "levels",
@@ -1117,6 +1152,13 @@ export default function ProjectOnboardingPage() {
         "bathrooms", "banos", "baños",
         "parkingspaces", "parkingspots", "estacionamientos", "cajones",
         "storageunits", "bodegas",
+        "terracem2", "terraceaream2", "terraza",
+        "garden", "gardenm2", "gardenaream2", "jardin", "jardín",
+        "lotaream2", "lotm2", "terreno",
+        "constructionarea", "constructionaream2", "constructionm2", "construccion", "construcción",
+        "interioraream2", "interiorm2",
+        "orientation", "orientacion", "orientación",
+        "view", "viewtype", "vista",
         "unitnumber", "unit", "surfacem2", "price", "status", "type",
         "deliverydate", "floorplan"
       ]);
@@ -1143,6 +1185,13 @@ export default function ProjectOnboardingPage() {
         bathrooms: parsedBath,
         parkingSpots: parsedPark,
         storageUnits: parsedStor,
+        terraceAreaM2: parsedTerrace,
+        gardenAreaM2: parsedGarden,
+        lotAreaM2: parsedLot,
+        interiorAreaM2: parsedInterior,
+        constructionAreaM2: parsedConst,
+        orientation: extra.orientation || extra.orientacion || undefined,
+        viewType: extra.view || extra.vista || extra.viewType || undefined,
         priceHistory: [
           {
             date: new Date().toLocaleDateString("es-MX"),

@@ -39,6 +39,7 @@ export class ProjectsService {
       totalSurfaceM2,
       estimatedDeliveryDate,
       legalName,
+      floorPlans,
     } = body;
 
     if (!name) {
@@ -167,11 +168,35 @@ export class ProjectsService {
               ? "INDUSTRIAL_WAREHOUSE"
               : u.type === "Terreno" || u.category === "LAND_LOT"
               ? "LAND_LOT"
+              : u.type === "Oficina" || u.category === "OFFICE"
+              ? "OFFICE"
               : "APARTMENT";
 
           const price = Number(u.price || u.basePrice) || 3500000;
           const area = Number(u.surfaceM2 || u.areaM2 || u.totalAreaM2 || u.area) || 85;
-          const floor = Number(u.level || u.floor) || 1;
+          const floor = u.floor != null ? Number(u.floor) : u.level != null ? Number(u.level) : 1;
+
+          const bedrooms = u.bedrooms != null && !isNaN(Number(u.bedrooms)) ? parseInt(String(u.bedrooms), 10) : null;
+          const bathrooms = u.bathrooms != null && !isNaN(Number(u.bathrooms)) ? parseFloat(String(u.bathrooms)) : null;
+          const halfBathrooms = u.halfBathrooms != null && !isNaN(Number(u.halfBathrooms)) ? parseInt(String(u.halfBathrooms), 10) : null;
+          const parkingSpaces = u.parkingSpots != null ? Number(u.parkingSpots) : u.parkingSpaces != null ? Number(u.parkingSpaces) : 0;
+          const storageRooms = u.storageUnits != null ? Number(u.storageUnits) : u.storageRooms != null ? Number(u.storageRooms) : 0;
+
+          const terraceAreaM2 = u.terraceAreaM2 != null ? Number(u.terraceAreaM2) : u.terraceM2 != null ? Number(u.terraceM2) : null;
+          const gardenAreaM2 = u.gardenAreaM2 != null ? Number(u.gardenAreaM2) : u.gardenM2 != null ? Number(u.gardenM2) : null;
+          const lotAreaM2 = u.lotAreaM2 != null ? Number(u.lotAreaM2) : u.lotM2 != null ? Number(u.lotM2) : null;
+          const interiorAreaM2 = u.interiorAreaM2 != null ? Number(u.interiorAreaM2) : u.interiorM2 != null ? Number(u.interiorM2) : null;
+          const constructionAreaM2 = u.constructionAreaM2 != null ? Number(u.constructionAreaM2) : u.constructionM2 != null ? Number(u.constructionM2) : u.constructionArea != null ? Number(u.constructionArea) : null;
+
+          const blueprintUrl = u.blueprintUrl || u.floorPlan || null;
+          const renderUrls = Array.isArray(u.renderUrls) ? u.renderUrls : Array.isArray(u.images) ? u.images : [];
+
+          const customAttributes = {
+            ...(typeof u.customAttributes === "object" && u.customAttributes ? u.customAttributes : {}),
+            ...(u.deliveryDate ? { deliveryDate: u.deliveryDate } : {}),
+            ...(u.orientation ? { orientation: u.orientation } : {}),
+            ...(u.viewType ? { viewType: u.viewType } : {}),
+          };
 
           return {
             id: randomUUID(),
@@ -183,6 +208,19 @@ export class ProjectsService {
             totalAreaM2: area,
             level: floor,
             currency: baseCurr as any,
+            bedrooms,
+            bathrooms,
+            halfBathrooms,
+            parkingSpaces,
+            storageRooms,
+            terraceAreaM2,
+            gardenAreaM2,
+            lotAreaM2,
+            interiorAreaM2,
+            constructionAreaM2,
+            blueprintUrl,
+            renderUrls,
+            customAttributes: Object.keys(customAttributes).length > 0 ? customAttributes : null,
           };
         }),
         skipDuplicates: true,
@@ -257,6 +295,32 @@ export class ProjectsService {
             isClientVisible: d.isClientVisible !== false,
           };
         }),
+        skipDuplicates: true,
+      });
+    }
+
+    // 6. Create Floor Plans if provided
+    const floorPlansList = Array.isArray(floorPlans) && floorPlans.length > 0 ? floorPlans : [];
+    if (floorPlansList.length > 0) {
+      const isUuidStr = (s?: string) => Boolean(s && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s));
+      await this.prisma.document.createMany({
+        data: floorPlansList.map((fp: any, idx: number) => ({
+          id: fp.id && isUuidStr(fp.id) ? fp.id : randomUUID(),
+          developerId: targetDevId,
+          projectId: project.id,
+          title: fp.name || `Planta de Conjunto ${idx + 1}`,
+          type: "BLUEPRINT",
+          storagePath: fp.imageUrl || fp.url || `/floor-plans/${project.id}/${idx + 1}.png`,
+          fileSizeBytes: 1024,
+          mimeType: "image/png",
+          isClientVisible: true,
+          metadata: {
+            isFloorPlan: true,
+            id: fp.id,
+            name: fp.name,
+            imageUrl: fp.imageUrl || fp.url,
+          },
+        })),
         skipDuplicates: true,
       });
     }
@@ -386,6 +450,7 @@ export class ProjectsService {
       currency,
       baseCurrency,
       unitsInventory,
+      floorPlans,
     } = body;
 
     if (!id || id.startsWith("proj-")) {
@@ -451,6 +516,40 @@ export class ProjectsService {
       where: { id },
       data: updateData,
     });
+
+    if (Array.isArray(floorPlans)) {
+      const isUuidStr = (s?: string) => Boolean(s && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s));
+      // Replace existing floor plan documents for this project
+      await this.prisma.document.deleteMany({
+        where: {
+          projectId: id,
+          type: "BLUEPRINT",
+        },
+      }).catch(() => {});
+
+      if (floorPlans.length > 0) {
+        await this.prisma.document.createMany({
+          data: floorPlans.map((fp: any, idx: number) => ({
+            id: fp.id && isUuidStr(fp.id) ? fp.id : randomUUID(),
+            developerId: updated.developerId,
+            projectId: id,
+            title: fp.name || `Planta de Conjunto ${idx + 1}`,
+            type: "BLUEPRINT",
+            storagePath: fp.imageUrl || fp.url || `/floor-plans/${id}/${idx + 1}.png`,
+            fileSizeBytes: 1024,
+            mimeType: "image/png",
+            isClientVisible: true,
+            metadata: {
+              isFloorPlan: true,
+              id: fp.id,
+              name: fp.name,
+              imageUrl: fp.imageUrl || fp.url,
+            },
+          })),
+          skipDuplicates: true,
+        }).catch(() => {});
+      }
+    }
 
     if (Array.isArray(unitsInventory)) {
       for (const u of unitsInventory) {

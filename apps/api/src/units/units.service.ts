@@ -78,15 +78,49 @@ export class UnitsService {
             ? "RESERVED"
             : "AVAILABLE";
 
-        const bedroomsVal = u.bedrooms !== undefined && u.bedrooms !== null ? Number(u.bedrooms) : undefined;
-        const bathroomsVal = u.bathrooms !== undefined && u.bathrooms !== null ? Number(u.bathrooms) : undefined;
+        const bedroomsVal = u.bedrooms !== undefined && u.bedrooms !== null && !isNaN(Number(u.bedrooms)) ? parseInt(String(u.bedrooms), 10) : undefined;
+        const bathroomsVal = u.bathrooms !== undefined && u.bathrooms !== null && !isNaN(Number(u.bathrooms)) ? parseFloat(String(u.bathrooms)) : undefined;
+        const halfBathroomsVal = u.halfBathrooms !== undefined && u.halfBathrooms !== null && !isNaN(Number(u.halfBathrooms)) ? parseInt(String(u.halfBathrooms), 10) : undefined;
         const parkingVal = Number(u.parkingSpots || u.parkingSpaces || 0);
         const storageVal = Number(u.storageUnits || u.storageRooms || 0);
+        const terraceVal = u.terraceAreaM2 !== undefined && u.terraceAreaM2 !== null ? Number(u.terraceAreaM2) : u.terraceM2 !== undefined && u.terraceM2 !== null ? Number(u.terraceM2) : undefined;
+        const gardenVal = u.gardenAreaM2 !== undefined && u.gardenAreaM2 !== null ? Number(u.gardenAreaM2) : u.gardenM2 !== undefined && u.gardenM2 !== null ? Number(u.gardenM2) : undefined;
+        const lotVal = u.lotAreaM2 !== undefined && u.lotAreaM2 !== null ? Number(u.lotAreaM2) : u.lotM2 !== undefined && u.lotM2 !== null ? Number(u.lotM2) : undefined;
+        const interiorVal = u.interiorAreaM2 !== undefined && u.interiorAreaM2 !== null ? Number(u.interiorAreaM2) : u.interiorM2 !== undefined && u.interiorM2 !== null ? Number(u.interiorM2) : undefined;
+        const constVal = u.constructionAreaM2 !== undefined && u.constructionAreaM2 !== null ? Number(u.constructionAreaM2) : u.constructionM2 !== undefined && u.constructionM2 !== null ? Number(u.constructionM2) : u.constructionArea !== undefined && u.constructionArea !== null ? Number(u.constructionArea) : undefined;
+        const blueprintUrl = u.blueprintUrl || u.floorPlan || undefined;
+        const renderUrls = Array.isArray(u.renderUrls) ? u.renderUrls : Array.isArray(u.images) ? u.images : [];
+        const tower = u.tower || u.torre || undefined;
+        const zone = u.zone || u.zona || undefined;
+
         const customAttrs = {
           ...(typeof u.customAttributes === "object" && u.customAttributes ? u.customAttributes : {}),
           ...(u.deliveryDate ? { deliveryDate: u.deliveryDate } : {}),
           ...(u.orientation ? { orientation: u.orientation } : {}),
           ...(u.viewType ? { viewType: u.viewType } : {}),
+        };
+
+        const unitData: any = {
+          category: uType,
+          status: uStatus,
+          basePrice: Number(u.price || 3500000),
+          totalAreaM2: Number(u.areaM2 || u.area || 85),
+          level: Number(u.floor || u.level || 1),
+          ...(bedroomsVal !== undefined ? { bedrooms: bedroomsVal } : {}),
+          ...(bathroomsVal !== undefined ? { bathrooms: bathroomsVal } : {}),
+          ...(halfBathroomsVal !== undefined ? { halfBathrooms: halfBathroomsVal } : {}),
+          parkingSpaces: parkingVal,
+          storageRooms: storageVal,
+          ...(terraceVal !== undefined ? { terraceAreaM2: terraceVal } : {}),
+          ...(gardenVal !== undefined ? { gardenAreaM2: gardenVal } : {}),
+          ...(lotVal !== undefined ? { lotAreaM2: lotVal } : {}),
+          ...(interiorVal !== undefined ? { interiorAreaM2: interiorVal } : {}),
+          ...(constVal !== undefined ? { constructionAreaM2: constVal } : {}),
+          ...(blueprintUrl ? { blueprintUrl } : {}),
+          ...(renderUrls.length > 0 ? { renderUrls } : {}),
+          ...(tower ? { tower } : {}),
+          ...(zone ? { zone } : {}),
+          customAttributes: Object.keys(customAttrs).length > 0 ? customAttrs : undefined,
         };
 
         await this.prisma.unit.upsert({
@@ -99,29 +133,9 @@ export class UnitsService {
           create: {
             projectId,
             unitNumber: uNum,
-            category: uType,
-            status: uStatus,
-            basePrice: Number(u.price || 3500000),
-            totalAreaM2: Number(u.areaM2 || u.area || 85),
-            level: Number(u.floor || u.level || 1),
-            ...(bedroomsVal !== undefined && !isNaN(bedroomsVal) ? { bedrooms: bedroomsVal } : {}),
-            ...(bathroomsVal !== undefined && !isNaN(bathroomsVal) ? { bathrooms: bathroomsVal } : {}),
-            parkingSpaces: parkingVal,
-            storageRooms: storageVal,
-            customAttributes: Object.keys(customAttrs).length > 0 ? customAttrs : undefined,
+            ...unitData,
           },
-          update: {
-            category: uType,
-            status: uStatus,
-            basePrice: Number(u.price || 3500000),
-            totalAreaM2: Number(u.areaM2 || u.area || 85),
-            level: Number(u.floor || u.level || 1),
-            ...(bedroomsVal !== undefined && !isNaN(bedroomsVal) ? { bedrooms: bedroomsVal } : {}),
-            ...(bathroomsVal !== undefined && !isNaN(bathroomsVal) ? { bathrooms: bathroomsVal } : {}),
-            parkingSpaces: parkingVal,
-            storageRooms: storageVal,
-            customAttributes: Object.keys(customAttrs).length > 0 ? customAttrs : undefined,
-          },
+          update: unitData,
         }).catch((err) => console.warn(`Error upserting unit ${uNum}:`, err));
       }
 
@@ -154,6 +168,18 @@ export class UnitsService {
         ? "BLOCKED"
         : "AVAILABLE";
 
+    const singleBed = body.bedrooms != null && !isNaN(Number(body.bedrooms)) ? parseInt(String(body.bedrooms), 10) : null;
+    const singleBath = body.bathrooms != null && !isNaN(Number(body.bathrooms)) ? parseFloat(String(body.bathrooms)) : null;
+    const singlePark = Number(body.parkingSpots || body.parkingSpaces || 0);
+    const singleStor = Number(body.storageUnits || body.storageRooms || 0);
+    const singleTerrace = body.terraceAreaM2 != null ? Number(body.terraceAreaM2) : body.terraceM2 != null ? Number(body.terraceM2) : null;
+    const singleGarden = body.gardenAreaM2 != null ? Number(body.gardenAreaM2) : body.gardenM2 != null ? Number(body.gardenM2) : null;
+    const singleLot = body.lotAreaM2 != null ? Number(body.lotAreaM2) : body.lotM2 != null ? Number(body.lotM2) : null;
+    const singleInterior = body.interiorAreaM2 != null ? Number(body.interiorAreaM2) : body.interiorM2 != null ? Number(body.interiorM2) : null;
+    const singleConst = body.constructionAreaM2 != null ? Number(body.constructionAreaM2) : body.constructionM2 != null ? Number(body.constructionM2) : body.constructionArea != null ? Number(body.constructionArea) : null;
+    const singleBlueprint = body.blueprintUrl || body.floorPlan || null;
+    const singleRenders = Array.isArray(body.renderUrls) ? body.renderUrls : Array.isArray(body.images) ? body.images : [];
+
     const created = await this.prisma.unit.create({
       data: {
         projectId,
@@ -163,6 +189,18 @@ export class UnitsService {
         basePrice: Number(price || 3500000),
         totalAreaM2: Number(areaM2 || 85),
         level: Number(floor || 1),
+        bedrooms: singleBed,
+        bathrooms: singleBath,
+        parkingSpaces: singlePark,
+        storageRooms: singleStor,
+        terraceAreaM2: singleTerrace,
+        gardenAreaM2: singleGarden,
+        lotAreaM2: singleLot,
+        interiorAreaM2: singleInterior,
+        constructionAreaM2: singleConst,
+        blueprintUrl: singleBlueprint,
+        renderUrls: singleRenders,
+        customAttributes: body.customAttributes || (body.deliveryDate ? { deliveryDate: body.deliveryDate } : null),
       },
     });
 
@@ -185,6 +223,28 @@ export class UnitsService {
       reason,
       priceHistory,
       userId,
+      bedrooms,
+      bathrooms,
+      parkingSpots,
+      parkingSpaces,
+      storageUnits,
+      storageRooms,
+      terraceAreaM2,
+      terraceM2,
+      gardenAreaM2,
+      gardenM2,
+      lotAreaM2,
+      lotM2,
+      interiorAreaM2,
+      interiorM2,
+      constructionAreaM2,
+      constructionM2,
+      constructionArea,
+      blueprintUrl,
+      floorPlan,
+      renderUrls,
+      images,
+      customAttributes,
     } = body;
 
     if (!unitNumber && !unitId) {
@@ -251,10 +311,24 @@ export class UnitsService {
     if (price !== undefined) updateData.basePrice = Number(price);
     if (areaM2 !== undefined) updateData.totalAreaM2 = Number(areaM2);
     if (floor !== undefined) updateData.level = Number(floor);
-    if (priceHistory) {
+    if (bedrooms !== undefined) updateData.bedrooms = bedrooms != null && !isNaN(Number(bedrooms)) ? parseInt(String(bedrooms), 10) : null;
+    if (bathrooms !== undefined) updateData.bathrooms = bathrooms != null && !isNaN(Number(bathrooms)) ? parseFloat(String(bathrooms)) : null;
+    if (parkingSpots !== undefined || parkingSpaces !== undefined) updateData.parkingSpaces = Number(parkingSpots ?? parkingSpaces ?? 0);
+    if (storageUnits !== undefined || storageRooms !== undefined) updateData.storageRooms = Number(storageUnits ?? storageRooms ?? 0);
+    if (terraceAreaM2 !== undefined || terraceM2 !== undefined) updateData.terraceAreaM2 = terraceAreaM2 != null ? Number(terraceAreaM2) : terraceM2 != null ? Number(terraceM2) : null;
+    if (gardenAreaM2 !== undefined || gardenM2 !== undefined) updateData.gardenAreaM2 = gardenAreaM2 != null ? Number(gardenAreaM2) : gardenM2 != null ? Number(gardenM2) : null;
+    if (lotAreaM2 !== undefined || lotM2 !== undefined) updateData.lotAreaM2 = lotAreaM2 != null ? Number(lotAreaM2) : lotM2 != null ? Number(lotM2) : null;
+    if (interiorAreaM2 !== undefined || interiorM2 !== undefined) updateData.interiorAreaM2 = interiorAreaM2 != null ? Number(interiorAreaM2) : interiorM2 != null ? Number(interiorM2) : null;
+    if (constructionAreaM2 !== undefined || constructionM2 !== undefined || constructionArea !== undefined) {
+      updateData.constructionAreaM2 = constructionAreaM2 != null ? Number(constructionAreaM2) : constructionM2 != null ? Number(constructionM2) : constructionArea != null ? Number(constructionArea) : null;
+    }
+    if (blueprintUrl !== undefined || floorPlan !== undefined) updateData.blueprintUrl = blueprintUrl || floorPlan || null;
+    if (renderUrls !== undefined || images !== undefined) updateData.renderUrls = Array.isArray(renderUrls) ? renderUrls : Array.isArray(images) ? images : [];
+    if (customAttributes !== undefined || priceHistory) {
       updateData.customAttributes = {
         ...((targetUnit.customAttributes as object) || {}),
-        priceHistory,
+        ...(customAttributes || {}),
+        ...(priceHistory ? { priceHistory } : {}),
       };
     }
 
