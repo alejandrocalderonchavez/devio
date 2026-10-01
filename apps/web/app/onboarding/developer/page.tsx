@@ -344,17 +344,36 @@ export default function DeveloperOnboardingPage() {
       localStorage.setItem("devio_system_users", JSON.stringify(systemUsersToSave));
       sessionStorage.setItem("devio_system_users", JSON.stringify(systemUsersToSave));
 
-      // Also persist user profile if not set
+      // Update or create user profile
       const existingUser = localStorage.getItem("devio_user_session") || sessionStorage.getItem("devio_user_session");
-      if (!existingUser) {
-        const initialUser = {
-          fullName: formData.name ? `${formData.name} Admin` : "Administrador",
-          email: formData.email,
-          role: "Super Admin",
-        };
-        localStorage.setItem("devio_user_session", JSON.stringify(initialUser));
-        sessionStorage.setItem("devio_user_session", JSON.stringify(initialUser));
-      }
+      let parsedUserObj = existingUser ? JSON.parse(existingUser) : {};
+      const updatedUser = {
+        ...parsedUserObj,
+        fullName: parsedUserObj.fullName || parsedUserObj.name || (formData.name ? `${formData.name} Admin` : "Administrador"),
+        email: parsedUserObj.email || formData.email,
+        role: parsedUserObj.role || "Super Admin",
+        activeDeveloper: formData.name,
+        developer: {
+          ...(parsedUserObj.developer || {}),
+          name: formData.name,
+          tradeName: formData.name,
+          legalName: formData.legalName,
+        },
+      };
+      localStorage.setItem("devio_user_session", JSON.stringify(updatedUser));
+      sessionStorage.setItem("devio_user_session", JSON.stringify(updatedUser));
+      localStorage.setItem("devio_active_developer", JSON.stringify({
+        name: formData.name,
+        tradeName: formData.name,
+        legalName: formData.legalName,
+        email: formData.email,
+      }));
+      sessionStorage.setItem("devio_active_developer", JSON.stringify({
+        name: formData.name,
+        tradeName: formData.name,
+        legalName: formData.legalName,
+        email: formData.email,
+      }));
 
       let existingDevId = "";
       let userEmail = "";
@@ -430,12 +449,24 @@ export default function DeveloperOnboardingPage() {
           </p>
 
           <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <Link href="/dashboard" className="btn btn-primary" style={{ padding: "0.85rem 1.85rem", fontSize: "0.95rem" }}>
+            <button
+              onClick={() => {
+                window.location.href = "/dashboard";
+              }}
+              className="btn btn-primary"
+              style={{ padding: "0.85rem 1.85rem", fontSize: "0.95rem", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "0.5rem" }}
+            >
               Ir al Dashboard Principal <ArrowRight size={16} />
-            </Link>
-            <Link href="/onboarding/project" className="btn btn-secondary" style={{ padding: "0.85rem 1.75rem", fontSize: "0.95rem" }}>
+            </button>
+            <button
+              onClick={() => {
+                window.location.href = "/onboarding/project";
+              }}
+              className="btn btn-secondary"
+              style={{ padding: "0.85rem 1.75rem", fontSize: "0.95rem", cursor: "pointer" }}
+            >
               Crear tu Primer Proyecto
-            </Link>
+            </button>
           </div>
         </div>
       </div>

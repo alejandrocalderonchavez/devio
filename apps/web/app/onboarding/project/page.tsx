@@ -1412,8 +1412,8 @@ export default function ProjectOnboardingPage() {
     }
 
     setIsSubmitting(false);
-    // Direct redirect to /projects page as requested
-    router.push("/projects");
+    // Direct redirect to /projects page with clean full browser initialization
+    window.location.href = "/projects";
   };
 
   const filteredColumnPresets = availableColumnPresets.filter((col) =>
