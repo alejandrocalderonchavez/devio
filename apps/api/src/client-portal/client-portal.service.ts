@@ -127,26 +127,33 @@ export class ClientPortalService {
       if (myOwner) {
         myOwnershipPct = myOwner.ownershipPct;
       }
+      const myOwnershipRatio = (isCoOwnership && myOwnershipPct > 0 && myOwnershipPct < 100) ? (myOwnershipPct / 100) : 1;
 
-      const paymentsList = (sale.paymentReceipts || []).map((r: any) => ({
-        id: r.id,
-        fechaPago: r.paymentDate ? new Date(r.paymentDate).toISOString().slice(0, 10) : "",
-        metodoPago: r.paymentMethod || "Transferencia SPEI",
-        monto: round2(Number(r.amount || 0)),
-        unit: unit.unitNumber,
-        reciboFolio: r.receiptFolio || `REC-${r.id.slice(0, 6).toUpperCase()}`,
-        comprobanteUrl: r.voucherDocumentId || undefined,
-        notes: r.notes || "",
-        moratoryAmount: 0,
-      }));
+      const paymentsList = (sale.paymentReceipts || []).map((r: any) => {
+        const rawAmt = Number(r.amount || 0);
+        const effectiveAmt = round2((isCoOwnership && myOwnershipRatio < 1) ? rawAmt * myOwnershipRatio : rawAmt);
+        return {
+          id: r.id,
+          fechaPago: r.paymentDate ? new Date(r.paymentDate).toISOString().slice(0, 10) : "",
+          metodoPago: r.paymentMethod || "Transferencia SPEI",
+          monto: effectiveAmt,
+          unit: unit.unitNumber,
+          reciboFolio: r.receiptFolio || `REC-${r.id.slice(0, 6).toUpperCase()}`,
+          comprobanteUrl: r.voucherDocumentId || undefined,
+          notes: r.notes || "",
+          moratoryAmount: 0,
+        };
+      });
 
       let overdueTotal = 0;
       let nextPaymentItem: any = null;
 
       const scheduleList = (sale.scheduledObligations || []).map((ob: any, idx: number) => {
-        const scheduledAmount = round2(Number(ob.amount || 0));
-        const paidAmount = round2(Number(ob.paidAmount || 0));
-        const pendingAmount = round2(Number(Math.max(0, scheduledAmount - paidAmount)));
+        const rawScheduledAmount = Number(ob.originalAmount ?? ob.amount ?? 0);
+        const scheduledAmount = round2(rawScheduledAmount * myOwnershipRatio);
+        const rawPaidAmount = Number(ob.paidAmount ?? 0);
+        const paidAmount = round2(rawPaidAmount * myOwnershipRatio);
+        const pendingAmount = round2(Math.max(0, scheduledAmount - paidAmount));
         const dueDate = new Date(ob.dueDate);
         const isOverdue = pendingAmount > 0 && dueDate.getTime() < now.getTime();
 
@@ -154,18 +161,33 @@ export class ClientPortalService {
           overdueTotal = round2(overdueTotal + pendingAmount);
         }
 
-        const isPaid = pendingAmount === 0 || ob.status === "PAID";
+        const isPaid = (scheduledAmount > 0 && pendingAmount <= 0.01) || ob.status === "PAID";
         const status = isPaid ? "Pagado" : isOverdue ? "Atrasado" : paidAmount > 0 ? "Parcial" : "Pendiente";
+
+        // Accurate concept resolution
+        let conceptName = ob.title;
+        if (!conceptName || conceptName === "Cuota" || conceptName.startsWith("Mensualidad 0")) {
+          const typeStr = String(ob.type || "").toUpperCase();
+          if (typeStr.includes("RESERV") || typeStr.includes("APART")) {
+            conceptName = "Apartado";
+          } else if (typeStr.includes("DOWN") || typeStr.includes("ENGANCHE")) {
+            conceptName = "Enganche";
+          } else if (typeStr.includes("SETTLE") || typeStr.includes("LIQUIDAC") || typeStr.includes("BALLOON")) {
+            conceptName = "Liquidación";
+          } else {
+            conceptName = `Mensualidad ${ob.obligationNumber || idx + 1}`;
+          }
+        }
 
         const schedItem = {
           id: ob.id || `cuota-${idx + 1}`,
           cuotaNumber: ob.obligationNumber || idx + 1,
-          concept: ob.obligationType === "RESERVATION" ? "Apartado" : ob.obligationType === "DOWN_PAYMENT" ? "Enganche" : `Mensualidad ${idx}`,
+          concept: conceptName,
           montoProgramado: scheduledAmount,
           fechaProgramada: dueDate.toISOString().slice(0, 10),
           montoPagado: paidAmount,
           montoPendiente: pendingAmount,
-          fechaPago: isPaid ? dueDate.toISOString().slice(0, 10) : "-",
+          fechaPago: isPaid ? (ob.paymentDate ? new Date(ob.paymentDate).toISOString().slice(0, 10) : dueDate.toISOString().slice(0, 10)) : "Pendiente",
           planPago: sale.paymentPlan?.notes || "Plan Tradicional",
           metodoPago: isPaid ? "Transferencia SPEI" : "Pendiente",
           status,
@@ -185,7 +207,8 @@ export class ClientPortalService {
         return schedItem;
       });
 
-      const agreedPrice = round2(Number(sale.finalPrice || sale.agreedPrice || unit.basePrice || 0));
+      const rawAgreedPrice = Number(sale.finalPrice || sale.agreedPrice || unit.basePrice || 0);
+      const agreedPrice = round2(rawAgreedPrice * myOwnershipRatio);
       const totalPaid = round2(paymentsList.reduce((acc: number, p: any) => acc + p.monto, 0));
       const totalPending = round2(Math.max(0, agreedPrice - totalPaid));
       const constructionPct = proj.constructionProgress?.[0]?.overallPercentage
