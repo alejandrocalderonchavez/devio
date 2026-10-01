@@ -232,16 +232,17 @@ export default function CreateSaleWizardModal({
 
   // Primary client email/name lookup & autofill
   useEffect(() => {
-    if (!primaryClient.email && !primaryClient.name) {
+    const trimmedEmail = (primaryClient.email || "").trim().toLowerCase();
+    const trimmedName = (primaryClient.name || "").trim().toLowerCase();
+    if (!trimmedEmail && !trimmedName) {
       setIsPrimaryFound(false);
       return;
     }
-    const trimmedEmail = primaryClient.email.trim().toLowerCase();
-    const trimmedName = primaryClient.name.trim().toLowerCase();
+    
     let found = existingClients.find(
       (c) =>
         (trimmedEmail && c.email && c.email.toLowerCase() === trimmedEmail) ||
-        (trimmedName && c.name && c.name.toLowerCase() === trimmedName)
+        (!trimmedEmail && trimmedName && c.name && c.name.toLowerCase() === trimmedName)
     );
 
     if (!found && typeof window !== "undefined") {
@@ -257,7 +258,7 @@ export default function CreateSaleWizardModal({
           const inUsers = combined.find(
             (u: any) =>
               (trimmedEmail && u.email && u.email.toLowerCase() === trimmedEmail) ||
-              (trimmedName && u.name && u.name.toLowerCase() === trimmedName)
+              (!trimmedEmail && trimmedName && u.name && u.name.toLowerCase() === trimmedName)
           );
           if (inUsers && inUsers.name && inUsers.name.trim().length >= 3) {
             found = {
@@ -293,11 +294,11 @@ export default function CreateSaleWizardModal({
     const trimmedName = (name || "").trim().toLowerCase();
     if (!trimmedEmail && !trimmedName) return false;
 
-    // 1. Check existingClients from projects & dbClients
+    // 1. Check existingClients from projects & dbClients (Strictly by email if provided)
     const inProjects = (existingClients || []).some(
       (c) =>
         (trimmedEmail && c.email && c.email.toLowerCase() === trimmedEmail) ||
-        (trimmedName && c.name && c.name.toLowerCase() === trimmedName)
+        (!trimmedEmail && trimmedName && c.name && c.name.toLowerCase() === trimmedName)
     );
     if (inProjects) return true;
 
@@ -315,7 +316,7 @@ export default function CreateSaleWizardModal({
           const inUsers = combined.some(
             (u: any) =>
               (trimmedEmail && u.email && u.email.toLowerCase() === trimmedEmail) ||
-              (trimmedName && u.name && u.name.toLowerCase() === trimmedName)
+              (!trimmedEmail && trimmedName && u.name && u.name.toLowerCase() === trimmedName)
           );
           if (inUsers) return true;
         }
