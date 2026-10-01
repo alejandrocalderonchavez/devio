@@ -177,107 +177,128 @@ export class SalesService {
       },
     });
 
-    // 6. Handle Co-owners
+    // 6. Handle Co-owners (Supports 2, 3, 4, 5+ co-owners seamlessly)
     const isCoOp = body.isCoOwnership === true || (Array.isArray(coOwners) && coOwners.length > 0 && body.isCoOwnership !== false);
     const createdCoClients: any[] = [];
 
     if (isCoOp && Array.isArray(coOwners) && coOwners.length > 0) {
-      for (const co of coOwners) {
-        if (!co.email && !co.name) continue;
+      for (let i = 0; i < coOwners.length; i++) {
+        const co = coOwners[i];
+        if (!co || (!co.email && !co.name)) continue;
         const coEmail = (co.email || "").toLowerCase().trim();
-        const coName = (co.name || "Co-propietario").trim();
+        const coName = (co.name || `Copropietario ${i + 1}`).trim();
 
-        // If this coOwner is the primary client, do not duplicate as a separate coOwner record
-        if ((primaryEmail && coEmail === primaryEmail.toLowerCase()) || (primaryClient && coEmail && primaryClient.email?.toLowerCase() === coEmail)) {
+        // If this coOwner is the primary client, record reference and continue
+        if (
+          (primaryEmail && coEmail && coEmail === primaryEmail) ||
+          (primaryClient && coEmail && primaryClient.email?.toLowerCase() === coEmail) ||
+          (co.isPrimary === true && primaryClient)
+        ) {
           createdCoClients.push({ ...co, clientId: primaryClient.id, client: primaryClient });
           continue;
         }
 
-        let coUser = null;
-        if (coEmail) {
-          coUser = await this.prisma.user.findUnique({ where: { email: coEmail } });
-          if (!coUser) {
-            coUser = await this.prisma.user.create({
+        try {
+          let coUser = null;
+          if (coEmail) {
+            coUser = await this.prisma.user.findUnique({ where: { email: coEmail } });
+            if (!coUser) {
+              coUser = await this.prisma.user.create({
+                data: {
+                  authUserId: randomUUID(),
+                  email: coEmail,
+                  fullName: coName,
+                  phone: co.phone ? String(co.phone).trim() : null,
+                  preferredLanguage: "ES",
+                  preferredCurrency: "MXN",
+                },
+              });
+            } else if (!coUser.fullName || coUser.fullName === "Usuario Devio") {
+              coUser = await this.prisma.user.update({
+                where: { id: coUser.id },
+                data: {
+                  fullName: coName,
+                  phone: co.phone ? String(co.phone).trim() : coUser.phone,
+                },
+              });
+            }
+
+            await this.prisma.membership.upsert({
+              where: {
+                userId_developerId: {
+                  userId: coUser.id,
+                  developerId: project.developerId,
+                },
+              },
+              create: {
+                userId: coUser.id,
+                developerId: project.developerId,
+                role: "CLIENT",
+              },
+              update: {},
+            });
+          }
+
+          let coClient = null;
+          if (coEmail) {
+            coClient = await this.prisma.client.findFirst({
+              where: { developerId: project.developerId, email: coEmail },
+            });
+          }
+          if (!coClient && coName) {
+            coClient = await this.prisma.client.findFirst({
+              where: { developerId: project.developerId, fullName: coName },
+            });
+          }
+
+          if (!coClient) {
+            coClient = await this.prisma.client.create({
               data: {
-                authUserId: randomUUID(),
-                email: coEmail,
+                developerId: project.developerId,
+                userId: coUser?.id || null,
                 fullName: coName,
+                email: coEmail || null,
                 phone: co.phone ? String(co.phone).trim() : null,
-                preferredLanguage: "ES",
-                preferredCurrency: "MXN",
+                taxId: co.rfc ? String(co.rfc).trim() : null,
               },
             });
-          } else if (!coUser.fullName || coUser.fullName === "Usuario Devio") {
-            coUser = await this.prisma.user.update({
-              where: { id: coUser.id },
+          } else {
+            coClient = await this.prisma.client.update({
+              where: { id: coClient.id },
               data: {
-                fullName: coName,
-                phone: co.phone ? String(co.phone).trim() : coUser.phone,
+                userId: coUser?.id || coClient.userId,
+                phone: co.phone ? String(co.phone).trim() : coClient.phone,
+                taxId: co.rfc ? String(co.rfc).trim() : coClient.taxId,
               },
             });
           }
 
-          await this.prisma.membership.upsert({
+          const rawPct = Number(co.percentage ?? co.ownershipPct ?? co.ownershipPercentage);
+          const pct = !isNaN(rawPct) && rawPct > 0 ? rawPct : (100 / Math.max(2, coOwners.length));
+
+          // Upsert saleCoOwner to avoid duplicate constraint failures
+          await this.prisma.saleCoOwner.upsert({
             where: {
-              userId_developerId: {
-                userId: coUser.id,
-                developerId: project.developerId,
+              saleId_clientId: {
+                saleId: sale.id,
+                clientId: coClient.id,
               },
             },
             create: {
-              userId: coUser.id,
-              developerId: project.developerId,
-              role: "CLIENT",
+              saleId: sale.id,
+              clientId: coClient.id,
+              ownershipPercentage: pct,
+              isMainContact: false,
             },
-            update: {},
-          });
-        }
-
-        let coClient = null;
-        if (coEmail) {
-          coClient = await this.prisma.client.findFirst({
-            where: { developerId: project.developerId, email: coEmail },
-          });
-        }
-        if (!coClient && coName) {
-          coClient = await this.prisma.client.findFirst({
-            where: { developerId: project.developerId, fullName: coName },
-          });
-        }
-
-        if (!coClient) {
-          coClient = await this.prisma.client.create({
-            data: {
-              developerId: project.developerId,
-              userId: coUser?.id || null,
-              fullName: coName,
-              email: coEmail || null,
-              phone: co.phone ? String(co.phone).trim() : null,
-              taxId: co.rfc ? String(co.rfc).trim() : null,
+            update: {
+              ownershipPercentage: pct,
             },
           });
-        } else {
-          coClient = await this.prisma.client.update({
-            where: { id: coClient.id },
-            data: {
-              userId: coUser?.id || coClient.userId,
-              phone: co.phone ? String(co.phone).trim() : coClient.phone,
-              taxId: co.rfc ? String(co.rfc).trim() : coClient.taxId,
-            },
-          });
+
+          createdCoClients.push({ ...co, clientId: coClient.id, client: coClient, ownershipPercentage: pct });
+        } catch (coErr) {
+          console.error(`Error registering co-owner ${coName} (${coEmail}):`, coErr);
         }
-
-        createdCoClients.push({ ...co, clientId: coClient.id, client: coClient });
-
-        const pct = Number(co.percentage ?? co.ownershipPct ?? co.ownershipPercentage ?? (100 / (coOwners.length + 1)));
-
-        await this.prisma.saleCoOwner.create({
-          data: {
-            saleId: sale.id,
-            clientId: coClient.id,
-            ownershipPercentage: pct,
-          },
-        });
       }
     }
 

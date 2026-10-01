@@ -303,14 +303,15 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
               const cEmail = (c.client?.email || c.email || "").toLowerCase().trim();
               const cName = (c.client?.fullName || c.name || "").toLowerCase().trim();
               const cId = c.clientId || c.client?.id || c.id;
+              if (c.isPrimary === true) return false;
               if (primaryClientId && cId && cId === primaryClientId) return false;
               if (cleanPrimEmail && cEmail && cEmail === cleanPrimEmail) return false;
               if (cleanPrimName && cName && cName === cleanPrimName) return false;
               return true;
             })
-            .map((c: any) => ({
-              id: c.clientId || c.client?.id || c.id || `co-${Date.now()}`,
-              name: c.client?.fullName || c.name || "Co-propietario",
+            .map((c: any, idx: number) => ({
+              id: c.clientId || c.client?.id || c.id || (c.email ? `cli-${c.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : `co-${Date.now()}-${idx}`),
+              name: c.client?.fullName || c.name || `Copropietario ${idx + 1}`,
               email: c.client?.email || c.email || "",
               phone: c.client?.phone || c.phone || "",
               rfc: c.client?.taxId || c.rfc || "",
@@ -339,8 +340,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         ];
       } else if (Array.isArray(s.coOwners) && s.coOwners.length > 0) {
         mappedCoOwners = s.coOwners.map((c: any, idx: number) => ({
-          id: c.id || c.clientId || `co-${idx}`,
-          name: c.name || c.client?.fullName || "Cliente",
+          id: c.id || c.clientId || c.client?.id || (c.email ? `cli-${c.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : `co-${Date.now()}-${idx}`),
+          name: c.name || c.client?.fullName || `Cliente ${idx + 1}`,
           email: c.email || c.client?.email || "",
           phone: c.phone || c.client?.phone || "",
           rfc: c.rfc || c.client?.taxId || "",
@@ -528,10 +529,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           : "DISPONIBLE";
 
       const client =
-        associatedSale?.clientName ||
-        u.sales?.[0]?.primaryClient?.fullName ||
-        u.client ||
-        "-";
+        associatedSale?.coOwners && associatedSale.coOwners.length > 1
+          ? associatedSale.coOwners.map((c) => `${c.name} (${c.ownershipPct || c.percentage || 50}%)`).join(" + ")
+          : associatedSale?.clientName ||
+            u.sales?.[0]?.primaryClient?.fullName ||
+            u.client ||
+            "-";
 
       const customAttrs = (u.customAttributes as Record<string, any>) || (u.extraFields as Record<string, any>) || {};
       const unitConstructionPct =

@@ -323,7 +323,7 @@ export default function CreateSaleWizardModal({
         setPrimaryClient((prev) => ({ ...prev, ownershipPct: 50 }));
         setCoOwnersList([
           {
-            id: `co-${Date.now()}`,
+            id: `co-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             name: "",
             email: "",
             phone: "",
@@ -342,7 +342,7 @@ export default function CreateSaleWizardModal({
 
   // Add new co-owner
   const handleAddCoOwner = () => {
-    const newId = `co-${Date.now()}`;
+    const newId = `co-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const newCoOwner: CoOwner = {
       id: newId,
       name: "",
@@ -1221,16 +1221,22 @@ export default function CreateSaleWizardModal({
         : `client-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
       const finalCoOwners = allOwnersCombined.map((owner, idx) => {
-        const resolvedOwnerId = (owner.id && owner.id !== "primary-1")
-          ? owner.id
-          : (owner.isPrimary || idx === 0)
-          ? clientTargetId
-          : owner.email
-          ? `cli-${owner.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
-          : `co-${Date.now()}-${idx}`;
+        const isPrim = Boolean(owner.isPrimary || idx === 0);
+        let resolvedOwnerId = "";
+        if (isPrim) {
+          resolvedOwnerId = clientTargetId;
+        } else if (owner.id && owner.id !== "primary-1" && !owner.id.startsWith("primary-")) {
+          resolvedOwnerId = owner.id;
+        } else if (owner.email) {
+          resolvedOwnerId = `cli-${owner.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+        } else {
+          resolvedOwnerId = `co-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`;
+        }
+
         return {
           ...owner,
           id: resolvedOwnerId,
+          isPrimary: isPrim,
         };
       });
 
