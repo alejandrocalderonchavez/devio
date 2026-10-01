@@ -498,9 +498,40 @@ export default function ClientDetailPage() {
   };
 
   const isCoOwned = Boolean(
-    ((currentSale?.isCoOwnership === true) || (currentUnitObj?.coOwners && currentUnitObj.coOwners.length > 0)) &&
+    currentSale?.isCoOwnership === true ||
+    (currentUnitObj?.coOwners && currentUnitObj.coOwners.length > 1) ||
+    (Array.isArray(currentSale?.coOwners) && currentSale.coOwners.length > 1) ||
     (currentUnitObj?.ownershipPct !== undefined && currentUnitObj.ownershipPct < 100)
   );
+
+  const allCoOwners = useMemo(() => {
+    let list: any[] = [];
+    if (Array.isArray(currentSale?.coOwners) && currentSale.coOwners.length > 0) {
+      list = currentSale.coOwners;
+    } else if (Array.isArray(currentUnitObj?.coOwners) && currentUnitObj.coOwners.length > 0) {
+      list = currentUnitObj.coOwners;
+    }
+
+    if (list.length === 0 && isCoOwned) {
+      list = [
+        {
+          id: rawClient.id,
+          name: rawClient.name,
+          email: rawClient.email,
+          phone: rawClient.phone,
+          ownershipPct: currentUnitObj?.ownershipPct || 50,
+          isPrimary: currentUnitObj?.isPrimary ?? true,
+        },
+      ];
+    }
+
+    return list.map((c: any, idx: number) => ({
+      ...c,
+      ownershipPct: Number(c.ownershipPct ?? c.ownershipPercentage ?? (100 / Math.max(1, list.length))),
+      isPrimary: c.isPrimary !== undefined ? Boolean(c.isPrimary) : idx === 0,
+    }));
+  }, [currentSale, currentUnitObj, isCoOwned, rawClient]);
+
   const clientShareRatio = (isCoOwned && coOwnershipViewMode === "proportional")
     ? (currentUnitObj?.ownershipPct || 100) / 100
     : 1;
@@ -1585,7 +1616,7 @@ export default function ClientDetailPage() {
           </div>
 
           {/* Card Detalle de Copropietarios (Si aplica a la unidad) */}
-          {isCoOwned && (
+          {isCoOwned && allCoOwners.length > 0 && (
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.4rem" }}>
                 <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#1F3652" }}>
@@ -1593,7 +1624,7 @@ export default function ClientDetailPage() {
                 </span>
                 <InfoTooltip
                   title="Régimen de Copropiedad"
-                  content="Esta unidad se encuentra adquirida bajo co-titularidad compartida. Aquí se desglosan los compradores legales y sus porcentajes."
+                  content="Esta unidad se encuentra adquirida bajo co-titularidad compartida. Haz clic en cualquiera de los copropietarios para ver su estado de cuenta individual."
                 />
               </div>
               <div
@@ -1606,26 +1637,72 @@ export default function ClientDetailPage() {
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "center",
-                  gap: "0.4rem",
+                  gap: "0.45rem",
                   minHeight: "95px",
                   fontSize: "0.78rem",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ color: "#1F3652", fontWeight: 600 }}>
-                    • {rawClient.name} <strong>({currentUnitObj.ownershipPct}%)</strong> - Titular
-                  </span>
-                  <span style={{ color: "#00C48C", fontWeight: 700 }}>Activo</span>
-                </div>
+                {allCoOwners.map((co: any, idx: number) => {
+                  const isCurrentClient =
+                    (co.id && (co.id === rawClient.id || co.id === clientId)) ||
+                    (co.email && rawClient.email && co.email.toLowerCase() === rawClient.email.toLowerCase()) ||
+                    (co.name && rawClient.name && co.name.toLowerCase() === rawClient.name.toLowerCase());
 
-                {currentUnitObj.coOwners?.filter((co) => !co.isPrimary && co.name.toLowerCase() !== rawClient.name.toLowerCase()).map((co) => (
-                  <div key={co.id || co.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "#64748B", borderTop: "1px dashed #E2E8F0", paddingTop: "0.3rem" }}>
-                    <span>
-                      • {co.name} <strong>({co.ownershipPct}%)</strong> - Co-titular
-                    </span>
-                    <span style={{ fontSize: "0.72rem", color: "#2F80ED", fontWeight: 600 }}>{co.phone}</span>
-                  </div>
-                ))}
+                  const targetKey = co.id || co.email || co.name;
+
+                  return (
+                    <div
+                      key={co.id || co.email || co.name || idx}
+                      onClick={() => {
+                        if (!isCurrentClient) {
+                          router.push(`/projects/${projectId}/clients/${encodeURIComponent(targetKey)}?unit=${encodeURIComponent(selectedUnit)}`);
+                        }
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "0.35rem 0.5rem",
+                        borderRadius: "0.5rem",
+                        backgroundColor: isCurrentClient ? "rgba(0, 196, 140, 0.06)" : "transparent",
+                        cursor: isCurrentClient ? "default" : "pointer",
+                        transition: "all 0.15s ease",
+                        borderTop: idx > 0 ? "1px dashed #E2E8F0" : "none",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isCurrentClient) {
+                          e.currentTarget.style.backgroundColor = "rgba(47, 128, 237, 0.06)";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isCurrentClient) {
+                          e.currentTarget.style.backgroundColor = "transparent";
+                        }
+                      }}
+                      title={isCurrentClient ? "Cliente actual que estás visualizando" : `Ir al estado de cuenta de ${co.name}`}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                        <span style={{ color: isCurrentClient ? "#1F3652" : "#2F80ED", fontWeight: isCurrentClient ? 700 : 600, textDecoration: isCurrentClient ? "none" : "underline", textUnderlineOffset: "2px" }}>
+                          • {co.name} <strong>({co.ownershipPct}%)</strong> - {co.isPrimary || idx === 0 ? "Titular" : "Co-titular"}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        {isCurrentClient ? (
+                          <span style={{ color: "#00C48C", fontWeight: 700, fontSize: "0.72rem" }}>Activo</span>
+                        ) : (
+                          <>
+                            {co.phone && (
+                              <span style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 500 }}>{co.phone}</span>
+                            )}
+                            <span style={{ fontSize: "0.68rem", color: "#2F80ED", fontWeight: 600, backgroundColor: "rgba(47, 128, 237, 0.08)", padding: "2px 6px", borderRadius: "4px" }}>
+                              Ver cuenta →
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

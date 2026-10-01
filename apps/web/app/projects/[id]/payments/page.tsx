@@ -444,7 +444,7 @@ export default function ProjectPaymentsPage() {
               result.push({
                 id: uniqueId,
                 clientId: coClientId,
-                clientName: `${coClientName} (${coPct}%)`,
+                clientName: coClientName,
                 clientEmail: coEmail,
                 unit: unitNum,
                 paymentPlan: planName,
