@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { getMexicoNow, getMexicoDateISO } from "@/lib/date-utils";
 import {
   FileSpreadsheet,
   Calendar,
@@ -124,15 +126,16 @@ export default function PaymentsMatrixView({
   onSendOverdueNotice,
   onOpenSaleDetails,
 }: PaymentsMatrixViewProps) {
+  const router = useRouter();
+
   // Granularity & Period Navigation
   const currentYear = new Date().getFullYear();
   const [granularity, setGranularity] = useState<Granularity>("MONTHS");
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
 
-  // Reference Date (Día de referencia / Fecha de corte para cálculo de mora)
-  const todayIso = new Date().toISOString().split("T")[0] || "2026-09-30";
-  const [referenceDateStr, setReferenceDateStr] = useState<string>(todayIso);
+  // Crosshair hover state (row and column highlighting)
+  const [hoveredCell, setHoveredCell] = useState<{ rowIdx: number; colKey: string } | null>(null);
 
   // Filters
   const [conceptFilter, setConceptFilter] = useState<string>("ALL");
@@ -149,12 +152,26 @@ export default function PaymentsMatrixView({
   const [showGuideModal, setShowGuideModal] = useState<boolean>(false);
   const [guideStep, setGuideStep] = useState<number>(0);
 
+  // Real-time Mexico City reference date for overdue calculations
   const referenceDate = useMemo(() => {
-    const d = parseDateFlexible(referenceDateStr);
-    if (!d) return new Date();
+    const d = getMexicoNow();
     d.setHours(23, 59, 59, 999);
     return d;
-  }, [referenceDateStr]);
+  }, []);
+
+  // Navigate to client statement page for the given unit
+  const handleNavigateToClient = (r: RowData) => {
+    const clientKey =
+      r.saleRecord?.clientId ||
+      r.saleRecord?.clientEmail ||
+      r.clientEmail ||
+      r.saleRecord?.id ||
+      r.clientName ||
+      "cli-1";
+    router.push(
+      `/projects/${project.id}/clients/${encodeURIComponent(clientKey)}?unit=${encodeURIComponent(r.unit)}`
+    );
+  };
 
   // Available Years extracted from project sales
   const availableYears = useMemo(() => {
@@ -711,32 +728,6 @@ export default function PaymentsMatrixView({
             </select>
           )}
 
-          {/* Día de Referencia (Fecha de corte) */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <span
-              style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)", fontWeight: 600 }}
-              title="Fecha límite contra la cual se evalúan los días de mora y cuotas vencidas"
-            >
-              Día de referencia:
-            </span>
-            <input
-              type="date"
-              value={referenceDateStr}
-              onChange={(e) => setReferenceDateStr(e.target.value)}
-              style={{
-                padding: "0.4rem 0.6rem",
-                borderRadius: "8px",
-                border: "1px solid #E2E8F0",
-                backgroundColor: "#FFFFFF",
-                fontSize: "0.8rem",
-                fontWeight: 600,
-                color: "var(--devio-blue-dark)",
-                outline: "none",
-                cursor: "pointer",
-              }}
-            />
-          </div>
-
           {/* Status Filter */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
             <span style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)", fontWeight: 600 }}>
@@ -958,7 +949,7 @@ export default function PaymentsMatrixView({
         </button>
       </div>
 
-      {/* 3. MATRIX TABLE (Identical to screenshot layout) */}
+      {/* 3. MATRIX TABLE (Identical to screenshot layout with Crosshair Hover & Totals) */}
       <div
         style={{
           backgroundColor: "#FFFFFF",
@@ -968,7 +959,10 @@ export default function PaymentsMatrixView({
           overflow: "hidden",
         }}
       >
-        <div style={{ overflowX: "auto", maxHeight: "72vh" }}>
+        <div
+          style={{ overflowX: "auto", maxHeight: "72vh" }}
+          onMouseLeave={() => setHoveredCell(null)}
+        >
           <table
             style={{
               width: "100%",
@@ -995,7 +989,7 @@ export default function PaymentsMatrixView({
                     position: "sticky",
                     left: 0,
                     zIndex: 25,
-                    backgroundColor: "#F8FAFC",
+                    backgroundColor: hoveredCell?.colKey === "__UNIT__" ? "#E2E8F0" : "#F8FAFC",
                     padding: "0.75rem 0.6rem",
                     textAlign: "center",
                     width: "70px",
@@ -1003,6 +997,7 @@ export default function PaymentsMatrixView({
                     color: "var(--devio-blue-dark)",
                     borderRight: "1.5px solid #E2E8F0",
                     borderBottom: "2px solid #E2E8F0",
+                    transition: "background-color 0.15s ease",
                   }}
                 >
                   Unidad
@@ -1014,7 +1009,7 @@ export default function PaymentsMatrixView({
                     position: "sticky",
                     left: 70,
                     zIndex: 25,
-                    backgroundColor: "#F8FAFC",
+                    backgroundColor: hoveredCell?.colKey === "__CLIENT__" ? "#E2E8F0" : "#F8FAFC",
                     padding: "0.75rem 0.85rem",
                     textAlign: "left",
                     minWidth: "170px",
@@ -1022,32 +1017,71 @@ export default function PaymentsMatrixView({
                     color: "var(--devio-blue-dark)",
                     borderRight: "2px solid #CBD5E1",
                     borderBottom: "2px solid #E2E8F0",
+                    transition: "background-color 0.15s ease",
                   }}
                 >
                   Cliente Comprador
                 </th>
 
                 {/* Dynamic Period Columns */}
-                {columns.map((col) => (
-                  <th
-                    key={col.key}
+                {columns.map((col) => {
+                  const isColHovered = hoveredCell?.colKey === col.key;
+                  return (
+                    <th
+                      key={col.key}
+                      style={{
+                        padding: "0.75rem 0.65rem",
+                        minWidth: "110px",
+                        textAlign: "center",
+                        fontWeight: 800,
+                        color: "var(--devio-blue-dark)",
+                        backgroundColor: isColHovered ? "#E2E8F0" : "#F8FAFC",
+                        borderRight: "1px solid #E2E8F0",
+                        borderBottom: "2px solid #E2E8F0",
+                        whiteSpace: "nowrap",
+                        transition: "background-color 0.15s ease",
+                      }}
+                    >
+                      <div style={{ fontSize: "0.75rem", letterSpacing: "0.02em" }}>{col.title}</div>
+                      <div
+                        style={{
+                          fontSize: "0.68rem",
+                          color: isColHovered ? "#1E293B" : "var(--devio-neutral-3)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {col.subtitle}
+                      </div>
+                    </th>
+                  );
+                })}
+
+                {/* Rightmost TOTAL Column */}
+                <th
+                  style={{
+                    padding: "0.75rem 0.85rem",
+                    minWidth: "135px",
+                    textAlign: "right",
+                    fontWeight: 800,
+                    color: "var(--devio-blue-dark)",
+                    backgroundColor: hoveredCell?.colKey === "__TOTAL__" ? "#E2E8F0" : "#F8FAFC",
+                    borderLeft: "2px solid #CBD5E1",
+                    borderBottom: "2px solid #E2E8F0",
+                    whiteSpace: "nowrap",
+                    transition: "background-color 0.15s ease",
+                  }}
+                >
+                  <div style={{ fontSize: "0.75rem", letterSpacing: "0.02em" }}>TOTAL</div>
+                  <div
                     style={{
-                      padding: "0.75rem 0.65rem",
-                      minWidth: "110px",
-                      textAlign: "center",
-                      fontWeight: 800,
-                      color: "var(--devio-blue-dark)",
-                      borderRight: "1px solid #E2E8F0",
-                      borderBottom: "2px solid #E2E8F0",
-                      whiteSpace: "nowrap",
+                      fontSize: "0.68rem",
+                      color: hoveredCell?.colKey === "__TOTAL__" ? "#1E293B" : "var(--devio-neutral-3)",
+                      fontWeight: 600,
                     }}
                   >
-                    <div style={{ fontSize: "0.75rem", letterSpacing: "0.02em" }}>{col.title}</div>
-                    <div style={{ fontSize: "0.68rem", color: "var(--devio-neutral-3)", fontWeight: 600 }}>
-                      {col.subtitle}
-                    </div>
-                  </th>
-                ))}
+                    COBRADO / SALDO
+                  </div>
+                </th>
               </tr>
             </thead>
 
@@ -1056,7 +1090,7 @@ export default function PaymentsMatrixView({
               {filteredRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={columns.length + 2}
+                    colSpan={columns.length + 3}
                     style={{ textAlign: "center", padding: "3rem", color: "var(--devio-neutral-3)" }}
                   >
                     No se encontraron unidades o cuotas con los filtros seleccionados.
@@ -1064,28 +1098,44 @@ export default function PaymentsMatrixView({
                 </tr>
               ) : (
                 filteredRows.map((r, rowIdx) => {
+                  const isRowHovered = hoveredCell?.rowIdx === rowIdx;
+
                   return (
                     <tr
                       key={r.unit || rowIdx}
                       style={{
                         borderBottom: "1px solid #E2E8F0",
-                        backgroundColor: rowIdx % 2 === 0 ? "#FFFFFF" : "#FAFBFD",
+                        backgroundColor: isRowHovered
+                          ? "#F1F5F9"
+                          : rowIdx % 2 === 0
+                          ? "#FFFFFF"
+                          : "#FAFBFD",
+                        transition: "background-color 0.12s ease",
                       }}
                     >
-                      {/* Left Unit Column */}
+                      {/* Left Unit Column (Clickable to Client Page) */}
                       <td
+                        onClick={() => handleNavigateToClient(r)}
+                        onMouseEnter={() => setHoveredCell({ rowIdx, colKey: "__UNIT__" })}
                         style={{
                           position: "sticky",
                           left: 0,
                           zIndex: 10,
-                          backgroundColor: rowIdx % 2 === 0 ? "#FFFFFF" : "#FAFBFD",
+                          backgroundColor: isRowHovered
+                            ? "#E2E8F0"
+                            : rowIdx % 2 === 0
+                            ? "#FFFFFF"
+                            : "#FAFBFD",
                           padding: "0.55rem 0.5rem",
                           textAlign: "center",
                           fontWeight: 800,
                           color: "var(--devio-blue-dark)",
                           borderRight: "1.5px solid #E2E8F0",
                           borderBottom: "1px solid #E2E8F0",
+                          cursor: "pointer",
+                          transition: "background-color 0.15s ease",
                         }}
+                        title={`Ir al estado de cuenta de la unidad ${r.unit}`}
                       >
                         <span
                           style={{
@@ -1101,13 +1151,19 @@ export default function PaymentsMatrixView({
                         </span>
                       </td>
 
-                      {/* Left Client Column */}
+                      {/* Left Client Column (Clickable to Client Page) */}
                       <td
+                        onClick={() => handleNavigateToClient(r)}
+                        onMouseEnter={() => setHoveredCell({ rowIdx, colKey: "__CLIENT__" })}
                         style={{
                           position: "sticky",
                           left: 70,
                           zIndex: 10,
-                          backgroundColor: rowIdx % 2 === 0 ? "#FFFFFF" : "#FAFBFD",
+                          backgroundColor: isRowHovered
+                            ? "#E2E8F0"
+                            : rowIdx % 2 === 0
+                            ? "#FFFFFF"
+                            : "#FAFBFD",
                           padding: "0.55rem 0.85rem",
                           textAlign: "left",
                           borderRight: "2px solid #CBD5E1",
@@ -1116,39 +1172,63 @@ export default function PaymentsMatrixView({
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           maxWidth: "180px",
+                          cursor: "pointer",
+                          transition: "background-color 0.15s ease",
                         }}
-                        title={`${r.clientName} (Folio: ${r.saleFolio || "-"})`}
+                        title={`Ir al estado de cuenta de ${r.clientName} (Unidad: ${r.unit})`}
                       >
-                        <span style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>
-                          {r.clientName}
-                        </span>
-                        {r.saleFolio && (
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: "0.68rem",
-                              color: "var(--devio-neutral-3)",
-                              fontWeight: 500,
-                            }}
-                          >
-                            {r.saleFolio}
-                          </span>
-                        )}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.35rem" }}>
+                          <div style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                color: "#1D4ED8",
+                                textDecoration: "underline",
+                                textDecorationColor: "rgba(29, 78, 216, 0.3)",
+                              }}
+                            >
+                              {r.clientName}
+                            </span>
+                            {r.saleFolio && (
+                              <span
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.68rem",
+                                  color: "var(--devio-neutral-3)",
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {r.saleFolio}
+                              </span>
+                            )}
+                          </div>
+                          <ExternalLink size={12} color="#94A3B8" style={{ flexShrink: 0 }} />
+                        </div>
                       </td>
 
-                      {/* Period Cells with Dynamic Background Colors */}
+                      {/* Period Cells with Dynamic Background Colors & Crosshair Hover */}
                       {columns.map((col) => {
                         const cell = r.cells[col.key];
+                        const isColHovered = hoveredCell?.colKey === col.key;
+                        const isExactCell = isRowHovered && isColHovered;
+
                         if (!cell || cell.status === "NO_OBLIGATION") {
                           return (
                             <td
                               key={col.key}
+                              onMouseEnter={() => setHoveredCell({ rowIdx, colKey: col.key })}
                               style={{
                                 padding: "0.55rem 0.65rem",
                                 textAlign: "center",
                                 color: "#CBD5E1",
                                 borderRight: "1px solid #F1F5F9",
                                 borderBottom: "1px solid #E2E8F0",
+                                backgroundColor: isExactCell
+                                  ? "#E2E8F0"
+                                  : isRowHovered || isColHovered
+                                  ? "#F1F5F9"
+                                  : undefined,
+                                transition: "background-color 0.12s ease",
                               }}
                             >
                               -
@@ -1156,14 +1236,14 @@ export default function PaymentsMatrixView({
                           );
                         }
 
-                        // Status Color Mapping (Exact screenshot styling)
+                        // Status Color Mapping (Exact styling with crosshair highlight)
                         let bg = "#F8FAFC";
                         let textColor = "#64748B";
                         let displayText = "";
 
                         if (cell.status === "PAID") {
                           // Green
-                          bg = "#D1FAE5";
+                          bg = isExactCell ? "#A7F3D0" : isRowHovered || isColHovered ? "#BBF7D0" : "#D1FAE5";
                           textColor = "#065F46";
                           displayText = cell.paidAmount.toLocaleString("es-MX", {
                             minimumFractionDigits: 0,
@@ -1171,7 +1251,7 @@ export default function PaymentsMatrixView({
                           });
                         } else if (cell.status === "OVERDUE") {
                           // Red / Salmon
-                          bg = "#FEE2E2";
+                          bg = isExactCell ? "#FECACA" : isRowHovered || isColHovered ? "#FED7D7" : "#FEE2E2";
                           textColor = "#991B1B";
                           displayText = `-${cell.pendingAmount.toLocaleString("es-MX", {
                             minimumFractionDigits: 0,
@@ -1179,7 +1259,7 @@ export default function PaymentsMatrixView({
                           })}`;
                         } else if (cell.status === "PARTIAL") {
                           // Amber / Yellow
-                          bg = "#FEF3C7";
+                          bg = isExactCell ? "#FDE68A" : isRowHovered || isColHovered ? "#FEF08A" : "#FEF3C7";
                           textColor = "#92400E";
                           displayText = `-${cell.pendingAmount.toLocaleString("es-MX", {
                             minimumFractionDigits: 0,
@@ -1187,7 +1267,7 @@ export default function PaymentsMatrixView({
                           })}`;
                         } else {
                           // Upcoming / Gray
-                          bg = "#F1F5F9";
+                          bg = isExactCell ? "#CBD5E1" : isRowHovered || isColHovered ? "#E2E8F0" : "#F1F5F9";
                           textColor = "#64748B";
                           displayText = cell.scheduledAmount.toLocaleString("es-MX", {
                             minimumFractionDigits: 0,
@@ -1199,6 +1279,7 @@ export default function PaymentsMatrixView({
                           <td
                             key={col.key}
                             onClick={() => setSelectedCellBreakdown({ row: r, cell })}
+                            onMouseEnter={() => setHoveredCell({ rowIdx, colKey: col.key })}
                             style={{
                               padding: "0.55rem 0.65rem",
                               backgroundColor: bg,
@@ -1208,20 +1289,54 @@ export default function PaymentsMatrixView({
                               borderRight: "1px solid rgba(0,0,0,0.04)",
                               borderBottom: "1px solid #E2E8F0",
                               cursor: "pointer",
-                              transition: "transform 0.1s ease, filter 0.1s ease",
+                              outline: isExactCell ? "2px solid #2563EB" : "none",
+                              outlineOffset: "-2px",
+                              zIndex: isExactCell ? 5 : 1,
+                              position: "relative",
+                              boxShadow: isExactCell ? "0 2px 8px rgba(37, 99, 235, 0.25)" : "none",
+                              transition: "all 0.12s ease",
                             }}
                             title={`Hacer clic para ver desglose de pago (${r.unit} - ${col.title})`}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.filter = "brightness(0.95)";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.filter = "none";
-                            }}
                           >
                             <span style={{ fontSize: "0.78rem" }}>{displayText}</span>
                           </td>
                         );
                       })}
+
+                      {/* Rightmost Row TOTAL Column */}
+                      <td
+                        onMouseEnter={() => setHoveredCell({ rowIdx, colKey: "__TOTAL__" })}
+                        style={{
+                          padding: "0.55rem 0.85rem",
+                          textAlign: "right",
+                          fontWeight: 700,
+                          borderLeft: "2px solid #CBD5E1",
+                          borderBottom: "1px solid #E2E8F0",
+                          backgroundColor:
+                            hoveredCell?.rowIdx === rowIdx && hoveredCell?.colKey === "__TOTAL__"
+                              ? "#E2E8F0"
+                              : isRowHovered || hoveredCell?.colKey === "__TOTAL__"
+                              ? "#F1F5F9"
+                              : rowIdx % 2 === 0
+                              ? "#FFFFFF"
+                              : "#FAFBFD",
+                          transition: "background-color 0.12s ease",
+                        }}
+                      >
+                        <div style={{ fontSize: "0.78rem", color: "#059669" }}>
+                          +{formatMoney(r.rowPaidSum)}
+                        </div>
+                        {r.rowPendingSum > 0 && (
+                          <div
+                            style={{
+                              fontSize: "0.7rem",
+                              color: r.rowOverdueSum > 0 ? "#DC2626" : "#64748B",
+                            }}
+                          >
+                            -{formatMoney(r.rowPendingSum)}
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   );
                 })
@@ -1245,11 +1360,12 @@ export default function PaymentsMatrixView({
                     position: "sticky",
                     left: 0,
                     zIndex: 25,
-                    backgroundColor: "#F8FAFC",
+                    backgroundColor: hoveredCell?.colKey === "__UNIT__" ? "#E2E8F0" : "#F8FAFC",
                     padding: "0.75rem 0.5rem",
                     textAlign: "center",
                     borderRight: "1.5px solid #E2E8F0",
                     color: "var(--devio-blue-dark)",
+                    transition: "background-color 0.15s ease",
                   }}
                 >
                   Σ
@@ -1259,11 +1375,12 @@ export default function PaymentsMatrixView({
                     position: "sticky",
                     left: 70,
                     zIndex: 25,
-                    backgroundColor: "#F8FAFC",
+                    backgroundColor: hoveredCell?.colKey === "__CLIENT__" ? "#E2E8F0" : "#F8FAFC",
                     padding: "0.75rem 0.85rem",
                     textAlign: "left",
                     borderRight: "2px solid #CBD5E1",
                     color: "var(--devio-blue-dark)",
+                    transition: "background-color 0.15s ease",
                   }}
                 >
                   TOTAL GENERAL
@@ -1272,6 +1389,8 @@ export default function PaymentsMatrixView({
                 {columns.map((col) => {
                   const tot = columnTotals[col.key];
                   const hasValues = tot && (tot.scheduled > 0 || tot.paid > 0);
+                  const isColHovered = hoveredCell?.colKey === col.key;
+
                   return (
                     <td
                       key={col.key}
@@ -1280,6 +1399,8 @@ export default function PaymentsMatrixView({
                         textAlign: "right",
                         borderRight: "1px solid #E2E8F0",
                         color: "var(--devio-blue-dark)",
+                        backgroundColor: isColHovered ? "#E2E8F0" : "#F8FAFC",
+                        transition: "background-color 0.15s ease",
                       }}
                     >
                       {hasValues ? (
@@ -1299,6 +1420,33 @@ export default function PaymentsMatrixView({
                     </td>
                   );
                 })}
+
+                {/* Rightmost Grand Total in Footer */}
+                <td
+                  style={{
+                    padding: "0.75rem 0.85rem",
+                    textAlign: "right",
+                    borderLeft: "2px solid #CBD5E1",
+                    color: "var(--devio-blue-dark)",
+                    backgroundColor: hoveredCell?.colKey === "__TOTAL__" ? "#E2E8F0" : "#F8FAFC",
+                    transition: "background-color 0.15s ease",
+                  }}
+                >
+                  <div style={{ fontSize: "0.82rem", color: "#059669", fontWeight: 800 }}>
+                    +{formatMoney(globalSummary.totalPaid)}
+                  </div>
+                  {globalSummary.totalPending > 0 && (
+                    <div
+                      style={{
+                        fontSize: "0.72rem",
+                        color: globalSummary.totalOverdue > 0 ? "#DC2626" : "#64748B",
+                        fontWeight: 700,
+                      }}
+                    >
+                      -{formatMoney(globalSummary.totalPending)}
+                    </div>
+                  )}
+                </td>
               </tr>
             </tfoot>
           </table>
@@ -1749,7 +1897,7 @@ export default function PaymentsMatrixView({
                         scheduledDate: firstOb.scheduledDate || selectedCellBreakdown.cell.periodLabel,
                         scheduledAmount: selectedCellBreakdown.cell.scheduledAmount,
                         paidAmount: selectedCellBreakdown.cell.paidAmount,
-                        paymentDate: todayIso,
+                        paymentDate: getMexicoDateISO(),
                         paymentMethod: "Transferencia",
                         status: selectedCellBreakdown.cell.status === "OVERDUE" ? "ATRASADO" : "PENDIENTE",
                       });
