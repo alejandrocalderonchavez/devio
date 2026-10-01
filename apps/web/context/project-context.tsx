@@ -2538,6 +2538,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const targetProject = projects.find((p) => p.id === projectId) || projects[0];
     if (!targetProject) return;
 
+    let saleIdToSync = "";
+    let salePayloadToSync: any = null;
+
     const updated = projects.map((p) => {
       if (p.id !== targetProject.id) return p;
 
@@ -2620,6 +2623,20 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       };
       currentSales[saleIndex] = updatedSale;
 
+      saleIdToSync = sale.id || sale.folio || unitNumber;
+      salePayloadToSync = {
+        projectId: targetProject.id,
+        unitNumber,
+        additionals: payload.additionals,
+        totalPrice: newTotalPrice,
+        finalPrice: newTotalPrice,
+        agreedPrice: newTotalPrice,
+        pendingAmount: newSalePending,
+        schedule: newSchedule,
+        adjustScheduleMode: payload.adjustScheduleMode,
+        notes: payload.notes,
+      };
+
       // Update project additionals inventory statuses
       const updatedProjectAdditionals = (p.additionals || []).map((add) => {
         const isAssignedToThisUnit = payload.additionals.some((a) => a.id === add.id);
@@ -2662,6 +2679,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
 
     saveProjects(updated);
+
+    // Persist sale updates to backend API (Prisma/Postgres)
+    if (salePayloadToSync) {
+      fetch(`/api/sales/${encodeURIComponent(saleIdToSync)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(salePayloadToSync),
+      }).catch((err) => console.warn("Could not sync sale update to API:", err));
+    }
+
     // Persist additionals changes to Supabase
     if (targetProject) {
       const updatedProj = updated.find((p) => p.id === targetProject.id);

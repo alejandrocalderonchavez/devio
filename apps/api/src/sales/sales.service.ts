@@ -609,4 +609,172 @@ export class SalesService {
 
     return this.findById(realSaleId);
   }
+
+  async update(id: string, body: any) {
+    const {
+      projectId,
+      unitNumber,
+      additionals,
+      totalPrice,
+      finalPrice,
+      agreedPrice,
+      pendingAmount,
+      schedule,
+    } = body;
+
+    let sale = await this.prisma.sale.findFirst({
+      where: {
+        OR: [
+          { id: id && id.length === 36 ? id : undefined },
+          { contractNumber: id },
+          { bubbleId: id },
+        ].filter(Boolean) as any,
+      },
+      include: { unit: true, project: true },
+    });
+
+    if (!sale && (unitNumber || id)) {
+      const uNum = String(unitNumber || id).replace(/^unit-/, "").trim();
+      sale = await this.prisma.sale.findFirst({
+        where: {
+          unit: { unitNumber: uNum },
+          ...(projectId && projectId.length === 36 ? { projectId } : {}),
+        },
+        include: { unit: true, project: true },
+      });
+    }
+
+    if (!sale) {
+      throw new NotFoundException(`Venta con identificador ${id} no encontrada.`);
+    }
+
+    const realSaleId = sale.id;
+    const newTotal = Number(totalPrice ?? finalPrice ?? agreedPrice);
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Update Sale prices if provided
+      if (!isNaN(newTotal) && newTotal > 0) {
+        await tx.sale.update({
+          where: { id: realSaleId },
+          data: {
+            agreedPrice: newTotal,
+            finalPrice: newTotal,
+            status: pendingAmount === 0 ? "LIQUIDATED" : undefined,
+          },
+        });
+
+        // 2. Update Unit base price
+        if (sale.unitId) {
+          await tx.unit.update({
+            where: { id: sale.unitId },
+            data: {
+              basePrice: newTotal,
+            },
+          });
+        }
+      }
+
+      // 3. Update Additionals assignments if provided
+      if (Array.isArray(additionals)) {
+        const currentAddonIds = additionals.map((a: any) => a.id).filter(Boolean);
+        if (sale.unitId) {
+          await tx.unitAdditional.updateMany({
+            where: {
+              unitId: sale.unitId,
+              id: { notIn: currentAddonIds },
+            },
+            data: {
+              unitId: null,
+              status: "AVAILABLE",
+            },
+          });
+
+          for (const addon of additionals) {
+            if (!addon) continue;
+            if (addon.id && addon.id.length === 36) {
+              await tx.unitAdditional.updateMany({
+                where: { id: addon.id },
+                data: {
+                  unitId: sale.unitId,
+                  status: "SOLD",
+                  price: addon.price ? Number(addon.price) : undefined,
+                },
+              });
+            } else if (addon.name && addon.price) {
+              await tx.unitAdditional.create({
+                data: {
+                  projectId: sale.projectId,
+                  unitId: sale.unitId,
+                  name: String(addon.name).trim(),
+                  price: Number(addon.price) || 0,
+                  status: "SOLD",
+                  type: String(addon.category || "PARKING").toUpperCase() === "ESTACIONAMIENTO" || String(addon.category || "").toUpperCase() === "PARKING"
+                    ? "PARKING"
+                    : String(addon.category || "").toUpperCase() === "BODEGA" || String(addon.category || "").toUpperCase() === "STORAGE"
+                    ? "STORAGE"
+                    : "OTHER",
+                },
+              });
+            }
+          }
+        }
+      }
+
+      // 4. Update Schedule obligations if provided
+      if (Array.isArray(schedule) && schedule.length > 0) {
+        await tx.scheduledObligation.deleteMany({
+          where: { saleId: realSaleId },
+        });
+
+        for (let i = 0; i < schedule.length; i++) {
+          const inst = schedule[i];
+          const rawDate = inst.scheduledDate || inst.dueDate || inst.fechaProgramada || inst.date;
+          let dueDate = new Date();
+          if (rawDate) {
+            if (typeof rawDate === "string" && rawDate.includes("/")) {
+              const parts = rawDate.split("/");
+              if (parts.length === 3) {
+                dueDate = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+              } else {
+                dueDate = new Date(rawDate);
+              }
+            } else {
+              dueDate = new Date(rawDate);
+            }
+          }
+          if (isNaN(dueDate.getTime())) dueDate = new Date();
+
+          const origAmt = Number(inst.scheduledAmount ?? inst.originalAmount ?? inst.amount) || 0;
+          const paidAmt = Number(inst.paidAmount) || 0;
+          const pendAmt = inst.pendingAmount !== undefined ? Number(inst.pendingAmount) : Math.max(0, origAmt - paidAmt);
+
+          let status: any = "PENDING";
+          if (pendAmt === 0 && origAmt > 0) status = "PAID";
+          else if (paidAmt > 0) status = "PARTIAL";
+
+          let type: any = "INSTALLMENT";
+          const titleLower = (inst.concept || inst.title || "").toLowerCase();
+          if (titleLower.includes("enganche") || titleLower.includes("inicial") || titleLower.includes("anticipo")) type = "DOWN_PAYMENT";
+          else if (titleLower.includes("liquidacion") || titleLower.includes("finiquito") || titleLower.includes("escritura")) type = "BALLOON_PAYMENT";
+
+          await tx.scheduledObligation.create({
+            data: {
+              saleId: realSaleId,
+              obligationNumber: i + 1,
+              title: inst.concept || inst.title || `Cuota ${i + 1}`,
+              type,
+              dueDate,
+              originalAmount: origAmt,
+              pendingAmount: pendAmt,
+              paidAmount: paidAmt,
+              status,
+              currency: "MXN",
+            },
+          });
+        }
+      }
+    });
+
+    return this.findById(realSaleId);
+  }
 }

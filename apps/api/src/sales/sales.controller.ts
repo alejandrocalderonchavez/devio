@@ -25,4 +25,14 @@ export class SalesController {
   async updateSchedule(@Param("id") id: string, @Body() body: any) {
     return this.salesService.updateSchedule(id, body);
   }
+
+  @Put(":id")
+  async update(@Param("id") id: string, @Body() body: any) {
+    return this.salesService.update(id, body);
+  }
+
+  @Put()
+  async updateGeneric(@Body() body: any) {
+    return this.salesService.update(body.id || body.saleId || body.unitNumber, body);
+  }
 }
