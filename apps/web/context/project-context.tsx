@@ -31,6 +31,7 @@ import {
   getRolePermissionsMap,
 } from "../lib/permissions";
 import { safeSaveProjectsState } from "../lib/storage-utils";
+import { formatDateMX, parseDateSafe, getMexicoDateISO, getMexicoNow } from "../lib/date-utils";
 
 export type Currency = "MXN" | "USD";
 
@@ -326,15 +327,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const mappedPayments: SalePaymentReceipt[] = rawReceipts.map((r: any, rIdx: number) => {
         const amt = Number(r.amount) || 0;
         const rawDate = r.paymentDate || r.createdAt;
-        let pDate = new Date().toLocaleDateString("es-MX");
-        if (rawDate) {
-          try {
-            const d = new Date(rawDate);
-            pDate = !isNaN(d.getTime()) ? d.toLocaleDateString("es-MX") : String(rawDate);
-          } catch (_) {
-            pDate = String(rawDate);
-          }
-        }
+        const pDate = rawDate ? formatDateMX(rawDate, "dd/mm/yyyy") : formatDateMX(getMexicoNow(), "dd/mm/yyyy");
 
         return {
           id: r.id || `pay-rec-${sIdx}-${rIdx + 1}`,
@@ -367,20 +360,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const mappedSchedule = rawObligations
         .map((ob: any, obIdx: number) => {
           const origAmt = Number(ob.originalAmount ?? ob.scheduledAmount ?? ob.amount) || 0;
-          const rawDate = ob.dueDate || ob.scheduledDate;
+          const rawDate = ob.dueDate || ob.scheduledDate || ob.date;
           let formattedDate = "18/09/2026";
           let rawTimestamp = 0;
           if (rawDate) {
-            try {
-              const d = new Date(rawDate);
-              if (!isNaN(d.getTime())) {
-                rawTimestamp = d.getTime();
-                formattedDate = d.toLocaleDateString("es-MX");
-              } else {
-                formattedDate = String(rawDate);
-              }
-            } catch (_) {
-              formattedDate = String(rawDate);
+            formattedDate = formatDateMX(rawDate, "dd/mm/yyyy");
+            const parsed = parseDateSafe(rawDate);
+            if (parsed) {
+              rawTimestamp = new Date(parsed.year, parsed.month, parsed.day, 12, 0, 0).getTime();
             }
           }
 

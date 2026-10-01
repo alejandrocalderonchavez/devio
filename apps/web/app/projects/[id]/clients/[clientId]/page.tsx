@@ -55,6 +55,7 @@ import CurrencyInput from "../../../../../components/ui/currency-input";
 import { DevioDatePicker } from "../../../../../components/ui/devio-date-picker";
 import { UploadPaymentsModal } from "../../../../../components/payments/upload-payments-modal";
 import { EditSaleModal } from "../../../../../components/sales/edit-sale-modal";
+import { formatDateMX, parseDateSafe, getMexicoNow } from "../../../../../lib/date-utils";
 
 interface InstallmentItem {
   id: string;
@@ -115,46 +116,13 @@ export default function ClientDetailPage() {
   } = useProject();
   const project = getProject(projectId);
 
-  const parseDateFlexible = (dateStr: string): Date | null => {
+  const parseDateFlexible = (dateStr: string | null | undefined): Date | null => {
     if (!dateStr || typeof dateStr !== "string") return null;
     const clean = dateStr.trim();
     if (!clean || clean.toLowerCase() === "pendiente" || clean === "-") return null;
-
-    // Handle ISO format YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
-      const datePart = clean.split("T")[0] || clean;
-      const parts = datePart.split("-").map(Number);
-      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-        return new Date(parts[0], parts[1] - 1, parts[2]);
-      }
-    }
-
-    // Handle DD/MM/YYYY or DD-MM-YYYY
-    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(clean)) {
-      const parts = clean.split(/[\/\-]/).map(Number);
-      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-        return new Date(parts[2], parts[1] - 1, parts[0]);
-      }
-    }
-
-    // Handle Spanish text dates like "18 Sep 2026" or "18 Septiembre 2026"
-    const monthMap: Record<string, number> = {
-      ene: 0, feb: 1, mar: 2, abr: 3, may: 4, jun: 5,
-      jul: 6, ago: 7, sep: 8, sept: 8, oct: 9, nov: 10, dic: 11,
-      jan: 0, apr: 3, aug: 7, dec: 11,
-    };
-    const parts = clean.replace(/,/g, "").split(/\s+/);
-    if (parts.length >= 3 && parts[0] && parts[1] && parts[2]) {
-      const day = parseInt(parts[0], 10);
-      const monthKey = parts[1].toLowerCase().slice(0, 3);
-      const year = parseInt(parts[2], 10);
-      if (!isNaN(day) && !isNaN(year) && monthMap[monthKey] !== undefined) {
-        return new Date(year, monthMap[monthKey], day);
-      }
-    }
-
-    const parsed = new Date(clean);
-    return isNaN(parsed.getTime()) ? null : parsed;
+    const parsed = parseDateSafe(clean);
+    if (!parsed) return null;
+    return new Date(parsed.year, parsed.month, parsed.day, 12, 0, 0);
   };
 
   // Derive rich client data from project sales and inventory
@@ -534,7 +502,7 @@ export default function ClientDetailPage() {
 
   // Statement Schedule Data (Cuotas Programadas) with Cascading Amortization
   const statementData: InstallmentItem[] = useMemo(() => {
-    const now = new Date();
+    const now = getMexicoNow();
     now.setHours(0, 0, 0, 0);
 
     const salePlanName = currentSale?.paymentPlan || "Plan Tradicional";
@@ -554,8 +522,8 @@ export default function ClientDetailPage() {
 
       // Sort obligations chronologically
       const sortedSchedule = [...currentSale.schedule].sort((a: any, b: any) => {
-        const dateA = parseDateFlexible(a.scheduledDate || a.fechaProgramada || "")?.getTime() || 0;
-        const dateB = parseDateFlexible(b.scheduledDate || b.fechaProgramada || "")?.getTime() || 0;
+        const dateA = parseDateFlexible(a.scheduledDate || a.fechaProgramada || a.dueDate || "")?.getTime() || 0;
+        const dateB = parseDateFlexible(b.scheduledDate || b.fechaProgramada || b.dueDate || "")?.getTime() || 0;
         return dateA - dateB;
       });
 
@@ -570,7 +538,7 @@ export default function ClientDetailPage() {
           ? instMatchedPlan.moratoryRatePct
           : defaultMonthlyRatePct;
 
-        const sDate = inst.scheduledDate || inst.fechaProgramada || "";
+        const sDate = formatDateMX(inst.scheduledDate || inst.fechaProgramada || inst.dueDate || "", "dd/mm/yyyy");
         const sAmount = Number(inst.scheduledAmount ?? inst.montoProgramado) || 0;
 
         const instDate = parseDateFlexible(sDate);

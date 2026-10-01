@@ -39,6 +39,14 @@ import { CoOwner, ProjectItem, ProjectAdditional, QuoteRecord } from "../../data
 import { useProject } from "../../context/project-context";
 import { sendAndLogNotification } from "../../lib/notifications";
 import { resolveProjectLogo } from "../../lib/pdf-generator";
+import {
+  getMexicoDateISO,
+  getMexicoNow,
+  parseDateSafe,
+  formatDateISO,
+  formatDateMX,
+  calculateInstallmentDate,
+} from "../../lib/date-utils";
 
 export interface CreateSaleWizardModalProps {
   isOpen: boolean;
@@ -506,8 +514,11 @@ export default function CreateSaleWizardModal({
   const [selectedPlanId, setSelectedPlanId] = useState<string>("custom");
   const [customPlanName, setCustomPlanName] = useState("Plan Personalizado de Venta");
   const [paymentType, setPaymentType] = useState<"ESQUEMA" | "CONTADO">("ESQUEMA");
-  const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [monthlyCutoffDay, setMonthlyCutoffDay] = useState<number>(() => new Date().getDate());
+  const [saleDate, setSaleDate] = useState(() => getMexicoDateISO());
+  const [monthlyCutoffDay, setMonthlyCutoffDay] = useState<number>(() => {
+    const p = parseDateSafe(getMexicoDateISO());
+    return p?.day || 1;
+  });
   const [discountPct, setDiscountPct] = useState(0);
   const [discountAppliesTo, setDiscountAppliesTo] = useState<"total" | "unit_only">("total");
   const [downPaymentPct, setDownPaymentPct] = useState(20);
@@ -618,61 +629,10 @@ export default function CreateSaleWizardModal({
   }, [totalSaleAmount, discountAmount]);
 
   const parseYearMonthDay = (dateStr: string) => {
-    if (!dateStr) {
-      const d = new Date();
-      return { year: d.getFullYear(), month: d.getMonth(), day: d.getDate() };
-    }
-    if (dateStr.includes("-")) {
-      const parts = dateStr.split("-").map(Number);
-      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-        if (parts[0] > 1000) {
-          return { year: parts[0], month: parts[1] - 1, day: parts[2] };
-        } else {
-          return { year: parts[2], month: parts[1] - 1, day: parts[0] };
-        }
-      }
-    }
-    if (dateStr.includes("/")) {
-      const parts = dateStr.split("/").map(Number);
-      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-        return { year: parts[2], month: parts[1] - 1, day: parts[0] };
-      }
-    }
-    const d = new Date(dateStr);
+    const parsed = parseDateSafe(dateStr);
+    if (parsed) return parsed;
+    const d = getMexicoNow();
     return { year: d.getFullYear(), month: d.getMonth(), day: d.getDate() };
-  };
-
-  const formatDateISO = (year: number, monthIndex: number, day: number) => {
-    const d = new Date(year, monthIndex, day, 12, 0, 0);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const dayStr = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${dayStr}`;
-  };
-
-  // Helper de cálculo de fechas de cuotas según periodicidad
-  const calculateInstallmentDate = (baseDateStr: string = "", index: number = 1, period: string = "Mensual", cutoffDay?: number) => {
-    const { year, month, day } = parseYearMonthDay(baseDateStr);
-    const safeDay = cutoffDay && cutoffDay > 0 ? Math.min(cutoffDay, 28) : day;
-
-    if (period === "Semanal") {
-      const d = new Date(year, month, day + index * 7);
-      return formatDateISO(d.getFullYear(), d.getMonth(), d.getDate());
-    } else if (period === "Quincenal") {
-      const d = new Date(year, month, day + index * 15);
-      return formatDateISO(d.getFullYear(), d.getMonth(), d.getDate());
-    } else if (period === "Bimestral") {
-      return formatDateISO(year, month + index * 2, safeDay);
-    } else if (period === "Trimestral") {
-      return formatDateISO(year, month + index * 3, safeDay);
-    } else if (period === "Semestral") {
-      return formatDateISO(year, month + index * 6, safeDay);
-    } else if (period === "Anual") {
-      return formatDateISO(year + index, month, safeDay);
-    } else {
-      // Mensual por default
-      return formatDateISO(year, month + index, safeDay);
-    }
   };
 
   // Validación de plan para el modal de personalización
@@ -1167,16 +1127,14 @@ export default function CreateSaleWizardModal({
   // Bulk update all monthly dates to a specific cutoff day
   const handleBulkCutoffDayChange = (newDay: number) => {
     setMonthlyCutoffDay(newDay);
-    const { year, month } = parseYearMonthDay(saleDate);
-    const safeDay = Math.min(Math.max(1, newDay), 28);
 
     setPaymentSchedule((prev) =>
       prev.map((row, idx) => {
         if (idx === 0) return row; // Keep down payment date
         if (row.id === "row-liquidacion") {
-          return { ...row, date: calculateInstallmentDate(saleDate, installmentsCount + 1, periodicity, safeDay) };
+          return { ...row, date: calculateInstallmentDate(saleDate, installmentsCount + 1, periodicity, newDay) };
         }
-        return { ...row, date: calculateInstallmentDate(saleDate, idx, periodicity, safeDay) };
+        return { ...row, date: calculateInstallmentDate(saleDate, idx, periodicity, newDay) };
       })
     );
   };
@@ -1481,11 +1439,11 @@ export default function CreateSaleWizardModal({
         const projLogo = resolveProjectLogo(currentProject, devLogo);
 
         const shouldSendCredentials = isCoOwnership
-          ? Boolean(cfg?.sendCredentials)
-          : !isExistingUser;
+          ? (cfg?.sendCredentials !== false)
+          : sendCredentialsToAll;
 
         const shouldSendConfirmation = isCoOwnership
-          ? Boolean(cfg?.sendSaleConfirmationEmail)
+          ? (cfg?.sendSaleConfirmationEmail !== false)
           : sendSaleConfirmationEmail;
 
         const ownerPaymentAmount = isCoOwnership
@@ -1497,7 +1455,7 @@ export default function CreateSaleWizardModal({
           : paymentMethod;
 
         const shouldSendReceipt = isCoOwnership
-          ? (cfg?.paymentOption !== "NONE" && Boolean(cfg?.sendReceiptEmail) && ownerPaymentAmount > 0)
+          ? (cfg?.paymentOption !== "NONE" && cfg?.sendReceiptEmail !== false && ownerPaymentAmount > 0)
           : (initialPaymentOption !== "NONE" && sendReceiptEmail && ownerPaymentAmount > 0);
 
         // 1. Envío obligatorio de credenciales de acceso
@@ -4084,38 +4042,32 @@ export default function CreateSaleWizardModal({
                         Notificaciones Automáticas por Correo:
                       </span>
 
-                      {/* Notificación de Credenciales de acceso al portal */}
-                      {hasAnyNewBuyer && (
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            gap: "0.65rem",
-                            padding: "0.75rem 0.9rem",
-                            borderRadius: "0.65rem",
-                            backgroundColor: "rgba(111, 172, 156, 0.1)",
-                            border: "1.5px solid rgba(111, 172, 156, 0.35)",
-                            fontSize: "0.82rem",
-                            fontWeight: 600,
-                            color: "var(--devio-blue-dark)",
-                          }}
-                        >
-                          <Mail size={17} color="#2F80ED" style={{ flexShrink: 0, marginTop: "2px" }} />
-                          <div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.15rem" }}>
-                              <strong style={{ color: "#1F3652" }}>
-                                Credenciales de Acceso al Portal de Clientes
-                              </strong>
-                              <span style={{ fontSize: "0.68rem", fontWeight: 800, padding: "0.15rem 0.45rem", borderRadius: "9999px", backgroundColor: "#00C48C", color: "#FFFFFF" }}>
-                                Automático (Nuevo Comprador)
-                              </span>
-                            </div>
-                            <span style={{ fontSize: "0.78rem", color: "#475569", lineHeight: 1.4 }}>
-                              Se enviarán las credenciales de acceso al portal de clientes de Devio por correo al nuevo comprador.
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                      {/* Checkbox 1: Credenciales de Acceso */}
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.6rem",
+                          padding: "0.65rem 0.85rem",
+                          borderRadius: "0.6rem",
+                          backgroundColor: "rgba(111, 172, 156, 0.1)",
+                          border: "1.5px solid rgba(111, 172, 156, 0.35)",
+                          cursor: "pointer",
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          color: "var(--devio-blue-dark)",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={sendCredentialsToAll}
+                          onChange={(e) => setSendCredentialsToAll(e.target.checked)}
+                          style={{ width: "16px", height: "16px", accentColor: "var(--devio-green)" }}
+                        />
+                        <span>
+                          🔑 <strong>Credenciales de Acceso:</strong> Enviar correo de bienvenida con usuario y contraseña temporal al Portal de Clientes.
+                        </span>
+                      </label>
 
                       {/* Checkbox 2: Welcome / Sale Confirmation */}
                       <label

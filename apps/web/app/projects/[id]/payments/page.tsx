@@ -39,6 +39,7 @@ import { UploadPaymentsModal } from "../../../../components/payments/upload-paym
 import PaymentsMatrixView from "../../../../components/payments/payments-matrix-view";
 import { generateReceiptPDF, openReceiptInNewTab, resolveProjectLogo } from "../../../../lib/pdf-generator";
 import { sendAndLogNotification } from "../../../../lib/notifications";
+import { formatDateMX, parseDateSafe, getMexicoNow } from "../../../../lib/date-utils";
 
 // Date range formatters
 const formatYYYYMMDD = (d: Date) => {
@@ -211,33 +212,18 @@ export default function ProjectPaymentsPage() {
   };
 
   // Helper date parser
-  const parseDateFlexible = (dStr: string): Date | null => {
+  const parseDateFlexible = (dStr: string | null | undefined): Date | null => {
     if (!dStr || dStr === "-" || dStr === "Pendiente" || dStr === "Liquidado") return null;
-    if (dStr.includes("-")) {
-      const parts = dStr.split("-");
-      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-        if (parts[0].length === 4) {
-          return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-        } else {
-          return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-        }
-      }
-    }
-    if (dStr.includes("/")) {
-      const parts = dStr.split("/");
-      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-        return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-      }
-    }
-    const parsed = new Date(dStr);
-    return isNaN(parsed.getTime()) ? null : parsed;
+    const parsed = parseDateSafe(dStr);
+    if (!parsed) return null;
+    return new Date(parsed.year, parsed.month, parsed.day, 12, 0, 0);
   };
 
   // Payments List dynamically derived from project sales and installments
   const derivedPayments = useMemo<PaymentScheduleItem[]>(() => {
     if (!project) return [];
     const result: PaymentScheduleItem[] = [];
-    const now = new Date();
+    const now = getMexicoNow();
     now.setHours(0, 0, 0, 0);
 
     const soldUnitsMap = new Map<string, UnitItem>();
@@ -259,7 +245,7 @@ export default function ProjectPaymentsPage() {
       const rawPayments: any[] = (sale.payments && sale.payments.length > 0)
         ? sale.payments.map((p: any) => ({
             id: p.id || `pay-${unitNum}-${p.receiptFolio || p.reciboFolio || Date.now()}`,
-            fechaPago: p.paymentDate || p.fechaPago || (p.createdAt ? new Date(p.createdAt).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX")),
+            fechaPago: p.paymentDate ? formatDateMX(p.paymentDate, "dd/mm/yyyy") : p.fechaPago ? formatDateMX(p.fechaPago, "dd/mm/yyyy") : p.createdAt ? formatDateMX(p.createdAt, "dd/mm/yyyy") : formatDateMX(getMexicoNow(), "dd/mm/yyyy"),
             metodoPago: p.paymentMethod || p.metodoPago || "Transferencia SPEI",
             monto: Number(p.amount ?? p.monto) || 0,
             unit: unitNum,
@@ -277,7 +263,7 @@ export default function ProjectPaymentsPage() {
       if (rawPayments.length === 0 && Number(sale.paidAmount) > 0) {
         rawPayments.push({
           id: `pay-${unitNum}-init`,
-          fechaPago: sale.saleDate ? new Date(sale.saleDate).toLocaleDateString("es-MX") : new Date().toLocaleDateString("es-MX"),
+          fechaPago: sale.saleDate ? formatDateMX(sale.saleDate, "dd/mm/yyyy") : formatDateMX(getMexicoNow(), "dd/mm/yyyy"),
           metodoPago: "Transferencia SPEI",
           monto: Number(sale.paidAmount),
           unit: unitNum,
@@ -320,7 +306,7 @@ export default function ProjectPaymentsPage() {
             : `pay-${unitNum}-${inst.id || idx}`;
 
           const sAmount = Number(inst.scheduledAmount || inst.originalAmount || inst.amount) || 0;
-          const sDate = inst.scheduledDate || (inst.dueDate ? new Date(inst.dueDate).toLocaleDateString("es-MX") : "18/09/2026");
+          const sDate = formatDateMX(inst.scheduledDate || inst.dueDate || inst.fechaProgramada || "", "dd/mm/yyyy");
 
           const instDate = parseDateFlexible(sDate);
           const isOverdue = Boolean(instDate && instDate < now);
