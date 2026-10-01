@@ -8,8 +8,8 @@ export function sanitizeProjectForStorage(p: ProjectItem, aggressive = false): P
   if (!p) return p;
 
   const rawP = p as any;
-  // If aggressive mode is requested (e.g. quota nearly full), use stricter 60KB limit, otherwise ~120KB
-  const MAX_IMAGE_LEN = aggressive ? 60000 : 130000;
+  // MAX_IMAGE_LEN is ~300KB (400,000 characters) so compressed floor plans and renders are preserved
+  const MAX_IMAGE_LEN = aggressive ? 160000 : 400000;
   const MAX_DOC_LEN = 30000;
 
   return {

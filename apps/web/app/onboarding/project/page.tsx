@@ -797,7 +797,7 @@ export default function ProjectOnboardingPage() {
 
     Object.values(columnDecisions).forEach((decision, idx) => {
       if (decision.action === "create") {
-        const colId = `custom_${Date.now()}_${idx}`;
+        const colId = decision.newColTitle?.trim() || decision.headerName.trim();
         const newCol: CustomColumn = {
           id: colId,
           title: decision.newColTitle || decision.headerName,
@@ -1069,13 +1069,67 @@ export default function ProjectOnboardingPage() {
     let newProjectId = `proj-${Date.now()}`;
     const mappedUnits: UnitItem[] = units.map((u, idx) => {
       const extra = u.extraFields || {};
-      // Use undefined when field not provided — avoids fake defaults showing as data
-      const numBed = extra.bedrooms ?? extra.recamaras ?? extra.cuartos ?? undefined;
-      const numBath = extra.bathrooms ?? extra.banos ?? extra.baños ?? undefined;
-      const numPark = extra.parkingSpaces ?? extra.parkingSpots ?? extra.estacionamientos ?? extra.cajones ?? undefined;
-      const numStor = extra.storageUnits ?? extra.bodegas ?? undefined;
-      // "piso" column from Excel now maps to "floor" key (was "level") — also keep level fallback for compatibility
-      const numFloor = extra.floor ?? extra.level ?? extra.piso ?? extra.nivel ?? undefined;
+      
+      // Extract numeric values properly even if stored as string e.g. "Piso 1", "Piso 24", "2.5", "1.5"
+      const rawFloor = extra.floor ?? extra.level ?? extra.piso ?? extra.nivel ?? undefined;
+      let parsedFloor: number | undefined = undefined;
+      if (rawFloor != null) {
+        if (typeof rawFloor === "number" && !isNaN(rawFloor)) {
+          parsedFloor = rawFloor;
+        } else {
+          const digits = String(rawFloor).replace(/[^0-9-]/g, "");
+          if (digits) {
+            const p = parseInt(digits, 10);
+            if (!isNaN(p)) parsedFloor = p;
+          }
+        }
+      }
+
+      const rawBed = extra.bedrooms ?? extra.recamaras ?? extra.cuartos ?? undefined;
+      let parsedBed: number | undefined = undefined;
+      if (rawBed != null) {
+        const p = typeof rawBed === "number" ? rawBed : parseFloat(String(rawBed).replace(/[^0-9.]/g, ""));
+        if (!isNaN(p)) parsedBed = p;
+      }
+
+      const rawBath = extra.bathrooms ?? extra.banos ?? extra.baños ?? undefined;
+      let parsedBath: number | undefined = undefined;
+      if (rawBath != null) {
+        const p = typeof rawBath === "number" ? rawBath : parseFloat(String(rawBath).replace(/[^0-9.]/g, ""));
+        if (!isNaN(p)) parsedBath = p;
+      }
+
+      const rawPark = extra.parkingSpaces ?? extra.parkingSpots ?? extra.estacionamientos ?? extra.cajones ?? undefined;
+      let parsedPark: number | undefined = undefined;
+      if (rawPark != null) {
+        const p = typeof rawPark === "number" ? rawPark : parseInt(String(rawPark).replace(/[^0-9-]/g, ""), 10);
+        if (!isNaN(p)) parsedPark = p;
+      }
+
+      const rawStor = extra.storageUnits ?? extra.bodegas ?? undefined;
+      let parsedStor: number | undefined = undefined;
+      if (rawStor != null) {
+        const p = typeof rawStor === "number" ? rawStor : parseInt(String(rawStor).replace(/[^0-9-]/g, ""), 10);
+        if (!isNaN(p)) parsedStor = p;
+      }
+
+      // Filter standard unit properties from customAttributes so they are not duplicated as extra columns in UI
+      const standardKeys = new Set([
+        "floor", "level", "piso", "nivel", "floors", "levels",
+        "bedrooms", "recamaras", "recámaras", "cuartos", "habitaciones",
+        "bathrooms", "banos", "baños",
+        "parkingspaces", "parkingspots", "estacionamientos", "cajones",
+        "storageunits", "bodegas",
+        "unitnumber", "unit", "surfacem2", "price", "status", "type",
+        "deliverydate", "floorplan"
+      ]);
+
+      const cleanCustomAttributes: Record<string, any> = {};
+      Object.entries(extra).forEach(([k, v]) => {
+        if (!standardKeys.has(k.toLowerCase()) && v !== undefined && v !== null && v !== "") {
+          cleanCustomAttributes[k] = v;
+        }
+      });
 
       return {
         id: u.id || `u-${idx + 1}`,
@@ -1083,15 +1137,15 @@ export default function ProjectOnboardingPage() {
         type: u.type || "Departamento",
         price: u.price || 3500000,
         areaM2: u.surfaceM2 || 85,
-        floor: numFloor != null ? (Number(numFloor) || 1) : undefined,
+        floor: parsedFloor != null ? parsedFloor : undefined,
         status: (u.status === "Disponible" ? "DISPONIBLE" : u.status === "Vendida" ? "VENDIDA" : u.status === "Apartada" ? "APARTADA" : "BLOQUEADA") as any,
         client: u.status === "Vendida" ? "Cliente Propietario" : "-",
         deliveryDate: u.deliveryDate || projectGeneralData.estimatedDeliveryDate,
         floorPlan: u.floorPlan || undefined,
-        bedrooms: numBed != null ? Number(numBed) : undefined,
-        bathrooms: numBath != null ? Number(numBath) : undefined,
-        parkingSpots: numPark != null ? Number(numPark) : undefined,
-        storageUnits: numStor != null ? Number(numStor) : undefined,
+        bedrooms: parsedBed,
+        bathrooms: parsedBath,
+        parkingSpots: parsedPark,
+        storageUnits: parsedStor,
         priceHistory: [
           {
             date: new Date().toLocaleDateString("es-MX"),
@@ -1102,9 +1156,7 @@ export default function ProjectOnboardingPage() {
             user: "Administrador",
           },
         ],
-        customAttributes: {
-          ...extra,
-        },
+        customAttributes: cleanCustomAttributes,
       };
     });
 

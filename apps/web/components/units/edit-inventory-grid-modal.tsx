@@ -69,12 +69,21 @@ export default function EditInventoryGridModal({
         cols.push("Planta de Conjunto");
       }
 
-      // Add any custom attributes found in the units
+      // Add any custom attributes found in the units (excluding standard fields)
+      const STANDARD_KEYS = new Set([
+        "pricehistory", "deliverydate", "unitnumber", "unit", "surfacem2", "price", "status", "type",
+        "floor", "level", "piso", "nivel", "floors", "levels",
+        "bedrooms", "recamaras", "recámaras", "cuartos", "habitaciones",
+        "bathrooms", "banos", "baños",
+        "parkingspaces", "parkingspots", "estacionamientos", "cajones",
+        "storageunits", "bodegas", "plantadeconjunto", "floorplan"
+      ]);
+
       const seenCustomKeys = new Set<string>();
       initialUnits.forEach((u) => {
         if (u.customAttributes) {
           Object.keys(u.customAttributes).forEach((k) => {
-            if (!["priceHistory", "deliveryDate"].includes(k)) {
+            if (!STANDARD_KEYS.has(k.toLowerCase()) && !STANDARD_KEYS.has(k)) {
               seenCustomKeys.add(k);
             }
           });
