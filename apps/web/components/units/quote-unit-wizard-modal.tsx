@@ -29,7 +29,8 @@ import {
   Edit2,
   Sliders,
   Users,
-  ExternalLink
+  ExternalLink,
+  Info
 } from "lucide-react";
 import { DevioDatePicker } from "../ui/devio-date-picker";
 import PhoneInput from "../ui/phone-input";
@@ -87,12 +88,49 @@ export default function QuoteUnitWizardModal({
   const [isSending, setIsSending] = useState(false);
   const [isSentSuccess, setIsSentSuccess] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [dbClients, setDbClients] = useState<ClientData[]>([]);
+
+  // Fetch registered clients from database catalog
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch("/api/clients")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.clients)) {
+          const mapped: ClientData[] = data.clients
+            .filter((c: any) => c.fullName && c.fullName.trim().length >= 2)
+            .map((c: any) => ({
+              name: c.fullName.trim(),
+              email: (c.email || "").trim(),
+              phone: (c.phone || "").trim(),
+              rfc: (c.taxId || c.rfc || "").trim(),
+              isExisting: true,
+            }));
+          setDbClients(mapped);
+        }
+      })
+      .catch((err) => console.warn("Error loading clients from API:", err));
+  }, [isOpen]);
 
   // --------------------------------------------------------------------------
   // CLIENTES REGISTRADOS (Búsqueda multi-proyecto como en Nueva Venta)
   // --------------------------------------------------------------------------
   const existingClients = useMemo(() => {
     const clientsMap: Record<string, ClientData> = {};
+
+    // 0. Desde dbClients (si existen en el backend)
+    (dbClients || []).forEach((c: any) => {
+      if (c && c.name && c.name.trim()) {
+        const key = (c.email || c.name).toLowerCase();
+        clientsMap[key] = {
+          name: c.name,
+          email: c.email || "",
+          phone: c.phone || "",
+          rfc: c.rfc || "",
+          isExisting: true,
+        };
+      }
+    });
 
     projects.forEach((p) => {
       // 1. Desde ventas registradas
@@ -166,8 +204,53 @@ export default function QuoteUnitWizardModal({
       });
     });
 
-    return Object.values(clientsMap);
-  }, [projects]);
+    return Object.values(clientsMap).sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }, [dbClients, projects]);
+
+  // Centralized client lookup helper
+  const findExistingClient = (email?: string, name?: string): ClientData | null => {
+    const trimmedEmail = (email || "").trim().toLowerCase();
+    const trimmedName = (name || "").trim().toLowerCase();
+    if (!trimmedEmail && !trimmedName) return null;
+
+    let found = (existingClients || []).find(
+      (c) =>
+        (trimmedEmail && c.email && c.email.toLowerCase() === trimmedEmail) ||
+        (!trimmedEmail && trimmedName && c.name && c.name.toLowerCase() === trimmedName)
+    );
+
+    if (!found && typeof window !== "undefined") {
+      try {
+        const storedClients = localStorage.getItem("devio_client_portal_users") || sessionStorage.getItem("devio_client_portal_users");
+        const storedSys = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
+        const combined = [
+          ...(storedClients ? JSON.parse(storedClients) : []),
+          ...(storedSys ? JSON.parse(storedSys) : []),
+        ];
+
+        if (Array.isArray(combined)) {
+          const inUsers = combined.find(
+            (u: any) =>
+              (trimmedEmail && u.email && u.email.toLowerCase() === trimmedEmail) ||
+              (!trimmedEmail && trimmedName && u.name && u.name.toLowerCase() === trimmedName)
+          );
+          if (inUsers && inUsers.name && inUsers.name.trim().length >= 3) {
+            found = {
+              name: inUsers.name || inUsers.fullName || "",
+              email: inUsers.email || "",
+              phone: inUsers.phone || "",
+              rfc: inUsers.rfc || "",
+              isExisting: true,
+            };
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return found || null;
+  };
 
   // --------------------------------------------------------------------------
   // STEP 1: CLIENTE Y COPROPIEDAD
@@ -189,17 +272,15 @@ export default function QuoteUnitWizardModal({
 
   // Autocompletado del prospecto principal por email o nombre
   useEffect(() => {
-    if (!primaryClient.email && !primaryClient.name) {
+    const trimmedEmail = (primaryClient.email || "").trim().toLowerCase();
+    const trimmedName = (primaryClient.name || "").trim().toLowerCase();
+    if (!trimmedEmail && !trimmedName) {
       setIsPrimaryFound(false);
       return;
     }
-    const trimmedEmail = (primaryClient.email || "").trim().toLowerCase();
-    const trimmedName = (primaryClient.name || "").trim().toLowerCase();
-    const found = existingClients.find(
-      (c) =>
-        (trimmedEmail && c.email && c.email.toLowerCase() === trimmedEmail) ||
-        (trimmedName && c.name && c.name.toLowerCase() === trimmedName)
-    );
+
+    const found = findExistingClient(primaryClient.email, primaryClient.name);
+
     if (found) {
       setIsPrimaryFound(true);
       setPrimaryClient((prev) => ({
@@ -214,6 +295,10 @@ export default function QuoteUnitWizardModal({
     }
   }, [primaryClient.email, primaryClient.name, existingClients]);
 
+  const isClientInCatalog = (email?: string, name?: string) => {
+    return !!findExistingClient(email, name);
+  };
+
   const handleToggleCoOwnership = (enabled: boolean) => {
     setIsCoOwnership(enabled);
     if (enabled) {
@@ -221,7 +306,7 @@ export default function QuoteUnitWizardModal({
         setPrimaryClient((prev) => ({ ...prev, ownershipPct: 50 }));
         setCoOwnersList([
           {
-            id: `co-${Date.now()}`,
+            id: `co-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             name: "",
             email: "",
             phone: "",
@@ -239,7 +324,7 @@ export default function QuoteUnitWizardModal({
   };
 
   const handleAddCoOwner = () => {
-    const newId = `co-${Date.now()}`;
+    const newId = `co-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const newCoOwner: CoOwner = {
       id: newId,
       name: "",
@@ -270,7 +355,28 @@ export default function QuoteUnitWizardModal({
     setCoOwnersList((prev) =>
       prev.map((co) => {
         if (co.id !== id) return co;
-        return { ...co, [field]: val };
+        const updated: any = { ...co, [field]: val };
+
+        if (field === "email" || field === "name") {
+          const checkEmail = field === "email" ? val : co.email;
+          const checkName = field === "name" ? val : co.name;
+          const found = findExistingClient(checkEmail, checkName);
+          if (found) {
+            if (field === "email") {
+              if (found.name) updated.name = found.name;
+              if (found.phone) updated.phone = found.phone;
+              if (found.rfc) updated.rfc = found.rfc;
+            } else if (field === "name" && !co.email && found.email) {
+              updated.email = found.email;
+              if (found.phone) updated.phone = found.phone;
+              if (found.rfc) updated.rfc = found.rfc;
+            }
+            updated.isFound = true;
+          } else {
+            updated.isFound = false;
+          }
+        }
+        return updated;
       })
     );
   };
@@ -1211,58 +1317,14 @@ export default function QuoteUnitWizardModal({
                   gap: "0.85rem",
                 }}
               >
-                {/* Selector rápido de cliente existente */}
-                {existingClients.length > 0 && (
-                  <div>
-                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-neutral-4)", display: "block", marginBottom: "0.25rem" }}>
-                      Seleccionar de clientes registrados ({existingClients.length}):
-                    </label>
-                    <select
-                      onChange={(e) => {
-                        const found = existingClients.find(
-                          (c) => (c.email || c.name).toLowerCase() === e.target.value.toLowerCase()
-                        );
-                        if (found) {
-                          setPrimaryClient((prev) => ({
-                            ...prev,
-                            name: found.name,
-                            email: found.email,
-                            phone: found.phone,
-                            rfc: found.rfc,
-                          }));
-                          setIsPrimaryFound(true);
-                        }
-                      }}
-                      defaultValue=""
-                      style={{
-                        width: "100%",
-                        padding: "0.55rem 0.85rem",
-                        borderRadius: "0.5rem",
-                        border: "1px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        backgroundColor: "#FFFFFF",
-                        color: "var(--devio-blue-dark)",
-                        outline: "none",
-                        fontWeight: 600,
-                      }}
-                    >
-                      <option value="">-- Buscar o seleccionar cliente existente --</option>
-                      {existingClients.map((c, idx) => (
-                        <option key={idx} value={c.email || c.name}>
-                          {c.name} ({c.email || "Sin correo"}{c.phone ? ` • ${c.phone}` : ""})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: existingClients.length > 0 ? "1px solid var(--devio-neutral-1)" : "none", paddingTop: existingClients.length > 0 ? "0.6rem" : "0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span
                       style={{
                         fontSize: "0.72rem",
                         fontWeight: 800,
                         textTransform: "uppercase",
+                        letterSpacing: "0.04em",
                         backgroundColor: "var(--devio-blue-dark)",
                         color: "#FFFFFF",
                         padding: "0.2rem 0.55rem",
@@ -1272,7 +1334,7 @@ export default function QuoteUnitWizardModal({
                       Titular Principal
                     </span>
                     <strong style={{ fontSize: "0.88rem", color: "var(--devio-blue-dark)" }}>
-                      Contacto y Ficha Comercial
+                      Responsable Financiero y Firmante
                     </strong>
                     {isPrimaryFound ? (
                       <span
@@ -1286,7 +1348,7 @@ export default function QuoteUnitWizardModal({
                           border: "1px solid rgba(0, 196, 140, 0.3)",
                         }}
                       >
-                        ✓ Cliente Registrado
+                        ✓ Cliente Existente
                       </span>
                     ) : primaryClient.email.trim() ? (
                       <span
@@ -1308,7 +1370,7 @@ export default function QuoteUnitWizardModal({
                   {isCoOwnership && (
                     <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                       <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
-                        % Participación:
+                        % Copropiedad:
                       </label>
                       <input
                         type="number"
@@ -1337,10 +1399,59 @@ export default function QuoteUnitWizardModal({
                   )}
                 </div>
 
+                {/* Status Notice */}
+                {isPrimaryFound ? (
+                  <div
+                    style={{
+                      backgroundColor: "rgba(47, 128, 237, 0.05)",
+                      border: "1px solid rgba(47, 128, 237, 0.2)",
+                      borderRadius: "0.6rem",
+                      padding: "0.65rem 0.85rem",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "0.5rem",
+                      fontSize: "0.76rem",
+                      color: "var(--devio-blue-dark)",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <Info size={16} style={{ color: "var(--devio-blue)", flexShrink: 0, marginTop: "1px" }} />
+                    <div>
+                      <strong>Información precargada:</strong> Puedes modificar el nombre, teléfono o RFC para este contrato/proyecto.
+                      <div style={{ color: "var(--devio-neutral-3)", marginTop: "2px" }}>
+                        * Los cambios realizados aquí se guardarán exclusivamente para este proyecto sin alterar el perfil global del cliente ni registros en otros desarrollos.
+                      </div>
+                    </div>
+                  </div>
+                ) : primaryClient.email.trim() ? (
+                  <div
+                    style={{
+                      backgroundColor: "rgba(0, 196, 140, 0.06)",
+                      border: "1px solid rgba(0, 196, 140, 0.25)",
+                      borderRadius: "0.6rem",
+                      padding: "0.65rem 0.85rem",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "0.5rem",
+                      fontSize: "0.76rem",
+                      color: "var(--devio-blue-dark)",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <Sparkles size={16} style={{ color: "var(--devio-green)", flexShrink: 0, marginTop: "1px" }} />
+                    <div>
+                      <strong>Nuevo Prospecto en Devio:</strong> Al formalizar la venta se generará su cuenta de usuario y se le enviarán sus accesos para ingresar a Devio (Portal Web y App Móvil).
+                      <div style={{ color: "var(--devio-neutral-3)", marginTop: "2px" }}>
+                        * La información que captures quedará resguardada para tu desarrolladora; si el cliente actualiza su nombre en su portal, tu expediente conservará tus registros.
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
                   <div style={{ gridColumn: "span 2" }}>
                     <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.25rem" }}>
-                      <Mail size={13} style={{ color: "var(--devio-blue)" }} /> Correo Electrónico *
+                      <Mail size={13} style={{ color: "var(--devio-blue)" }} /> Correo Electrónico (Acceso a Devio) *
                     </label>
                     <input
                       type="email"
@@ -1392,7 +1503,7 @@ export default function QuoteUnitWizardModal({
 
                   <div>
                     <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                      RFC / Identificación (Opcional)
+                      RFC / Identificación Fiscal
                     </label>
                     <input
                       type="text"
@@ -1416,73 +1527,79 @@ export default function QuoteUnitWizardModal({
               {/* Co-Owners list */}
               {isCoOwnership && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  {coOwnersList.map((co, index) => (
-                    <div
-                      key={co.id}
-                      style={{
-                        backgroundColor: "#FAFBFD",
-                        padding: "1.25rem",
-                        borderRadius: "1rem",
-                        border: "1px solid var(--devio-neutral-2)",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.85rem",
-                      }}
-                    >
-                      {/* Selector rápido para copropietario */}
-                      {existingClients.length > 0 && (
-                        <div>
-                          <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--devio-neutral-4)", display: "block", marginBottom: "0.25rem" }}>
-                            Cargar de clientes registrados:
-                          </label>
-                          <select
-                            onChange={(e) => {
-                              const found = existingClients.find(
-                                (c) => (c.email || c.name).toLowerCase() === e.target.value.toLowerCase()
-                              );
-                              if (found) {
-                                handleUpdateCoOwner(co.id, "name", found.name);
-                                handleUpdateCoOwner(co.id, "email", found.email);
-                                handleUpdateCoOwner(co.id, "phone", found.phone);
-                                handleUpdateCoOwner(co.id, "rfc", found.rfc);
-                              }
-                            }}
-                            defaultValue=""
-                            style={{
-                              width: "100%",
-                              padding: "0.45rem 0.75rem",
-                              borderRadius: "0.4rem",
-                              border: "1px solid var(--devio-neutral-2)",
-                              fontSize: "0.8rem",
-                              backgroundColor: "#FFFFFF",
-                              color: "var(--devio-blue-dark)",
-                              outline: "none",
-                            }}
-                          >
-                            <option value="">-- Seleccionar copropietario existente --</option>
-                            {existingClients.map((c, idx) => (
-                              <option key={idx} value={c.email || c.name}>
-                                {c.name} ({c.email || "Sin correo"}{c.phone ? ` • ${c.phone}` : ""})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span
-                          style={{
-                            fontSize: "0.72rem",
-                            fontWeight: 800,
-                            textTransform: "uppercase",
-                            backgroundColor: "var(--devio-blue)",
-                            color: "#FFFFFF",
-                            padding: "0.2rem 0.55rem",
-                            borderRadius: "0.35rem",
-                          }}
-                        >
-                          Copropietario #{index + 1}
-                        </span>
+                  {coOwnersList.map((co, index) => {
+                    const coIsFound = (co as any).isFound || isClientInCatalog(co.email, co.name);
+                    return (
+                      <div
+                        key={co.id}
+                        style={{
+                          backgroundColor: "#FAFBFD",
+                          padding: "1.25rem",
+                          borderRadius: "1rem",
+                          border: coIsFound ? "1.5px solid var(--devio-green)" : "1px solid var(--devio-neutral-2)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.85rem",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span
+                              style={{
+                                fontSize: "0.72rem",
+                                fontWeight: 800,
+                                textTransform: "uppercase",
+                                backgroundColor: "var(--devio-blue)",
+                                color: "#FFFFFF",
+                                padding: "0.2rem 0.55rem",
+                                borderRadius: "0.35rem",
+                              }}
+                            >
+                              Copropietario #{index + 1}
+                            </span>
+                            {coIsFound ? (
+                              <span
+                                style={{
+                                  fontSize: "0.7rem",
+                                  fontWeight: 800,
+                                  backgroundColor: "rgba(0, 196, 140, 0.12)",
+                                  color: "var(--devio-green)",
+                                  padding: "0.15rem 0.5rem",
+                                  borderRadius: "9999px",
+                                  border: "1px solid rgba(0, 196, 140, 0.3)",
+                                }}
+                              >
+                                ✓ Cliente Existente
+                              </span>
+                            ) : co.email?.trim() ? (
+                              <span
+                                style={{
+                                  fontSize: "0.7rem",
+                                  fontWeight: 800,
+                                  backgroundColor: "rgba(47, 128, 237, 0.1)",
+                                  color: "var(--devio-blue)",
+                                  padding: "0.15rem 0.5rem",
+                                  borderRadius: "9999px",
+                                  border: "1px solid rgba(47, 128, 237, 0.25)",
+                                }}
+                              >
+                                + Nuevo Prospecto
+                              </span>
+                            ) : null}
+                            <input
+                              type="text"
+                              placeholder="Relación (ej. Cónyuge, Socio)"
+                              value={co.relationship || ""}
+                              onChange={(e) => handleUpdateCoOwner(co.id, "relationship", e.target.value)}
+                              style={{
+                                border: "none",
+                                backgroundColor: "transparent",
+                                fontSize: "0.78rem",
+                                color: "var(--devio-neutral-3)",
+                                outline: "none",
+                              }}
+                            />
+                          </div>
 
                         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
@@ -1525,61 +1642,132 @@ export default function QuoteUnitWizardModal({
                         </div>
                       </div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
-                        <div style={{ gridColumn: "span 2" }}>
-                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                            Correo Electrónico *
-                          </label>
-                          <input
-                            type="email"
-                            value={co.email}
-                            onChange={(e) => handleUpdateCoOwner(co.id, "email", e.target.value)}
-                            placeholder="copropietario@ejemplo.com"
+                        {/* Status Notice */}
+                        {coIsFound ? (
+                          <div
                             style={{
-                              width: "100%",
+                              backgroundColor: "rgba(47, 128, 237, 0.05)",
+                              border: "1px solid rgba(47, 128, 237, 0.2)",
+                              borderRadius: "0.6rem",
                               padding: "0.65rem 0.85rem",
-                              borderRadius: "0.5rem",
-                              border: "1px solid var(--devio-neutral-2)",
-                              fontSize: "0.9rem",
-                              backgroundColor: "#FFFFFF",
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: "0.5rem",
+                              fontSize: "0.76rem",
+                              color: "var(--devio-blue-dark)",
+                              lineHeight: 1.4,
                             }}
-                            required
-                          />
-                        </div>
-
-                        <div>
-                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                            Nombre Completo *
-                          </label>
-                          <input
-                            type="text"
-                            value={co.name}
-                            onChange={(e) => handleUpdateCoOwner(co.id, "name", e.target.value)}
-                            placeholder="Nombre del Copropietario"
+                          >
+                            <Info size={16} style={{ color: "var(--devio-blue)", flexShrink: 0, marginTop: "1px" }} />
+                            <div>
+                              <strong>Información precargada:</strong> Puedes modificar el nombre, teléfono o RFC para este contrato/proyecto.
+                              <div style={{ color: "var(--devio-neutral-3)", marginTop: "2px" }}>
+                                * Los cambios realizados aquí se guardarán exclusivamente para este proyecto sin alterar el perfil global del cliente ni registros en otros desarrollos.
+                              </div>
+                            </div>
+                          </div>
+                        ) : co.email?.trim() ? (
+                          <div
                             style={{
-                              width: "100%",
+                              backgroundColor: "rgba(0, 196, 140, 0.06)",
+                              border: "1px solid rgba(0, 196, 140, 0.25)",
+                              borderRadius: "0.6rem",
                               padding: "0.65rem 0.85rem",
-                              borderRadius: "0.5rem",
-                              border: "1px solid var(--devio-neutral-2)",
-                              fontSize: "0.88rem",
-                              backgroundColor: "#FFFFFF",
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: "0.5rem",
+                              fontSize: "0.76rem",
+                              color: "var(--devio-blue-dark)",
+                              lineHeight: 1.4,
                             }}
-                            required
-                          />
-                        </div>
+                          >
+                            <Sparkles size={16} style={{ color: "var(--devio-green)", flexShrink: 0, marginTop: "1px" }} />
+                            <div>
+                              <strong>Nuevo Prospecto en Devio:</strong> Al formalizar la venta se generará su cuenta de usuario y se le enviarán sus accesos para ingresar a Devio (Portal Web y App Móvil).
+                              <div style={{ color: "var(--devio-neutral-3)", marginTop: "2px" }}>
+                                * La información que captures quedará resguardada para tu desarrolladora; si el cliente actualiza su nombre en su portal, tu expediente conservará tus registros.
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
 
-                        <div>
-                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                            Teléfono
-                          </label>
-                          <PhoneInput
-                            value={co.phone}
-                            onChange={(fullVal) => handleUpdateCoOwner(co.id, "phone", fullVal)}
-                          />
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+                          <div style={{ gridColumn: "span 2" }}>
+                            <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.25rem" }}>
+                              <Mail size={13} style={{ color: "var(--devio-blue)" }} /> Correo Electrónico (Acceso propio) *
+                            </label>
+                            <input
+                              type="email"
+                              value={co.email}
+                              onChange={(e) => handleUpdateCoOwner(co.id, "email", e.target.value)}
+                              placeholder="copropietario@ejemplo.com"
+                              style={{
+                                width: "100%",
+                                padding: "0.65rem 0.85rem",
+                                borderRadius: "0.5rem",
+                                border: coIsFound ? "1.5px solid var(--devio-green)" : "1px solid var(--devio-neutral-2)",
+                                fontSize: "0.9rem",
+                                backgroundColor: "#FFFFFF",
+                              }}
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                              Nombre Completo *
+                            </label>
+                            <input
+                              type="text"
+                              value={co.name}
+                              onChange={(e) => handleUpdateCoOwner(co.id, "name", e.target.value)}
+                              placeholder="Nombre del Copropietario"
+                              style={{
+                                width: "100%",
+                                padding: "0.65rem 0.85rem",
+                                borderRadius: "0.5rem",
+                                border: "1px solid var(--devio-neutral-2)",
+                                fontSize: "0.88rem",
+                                backgroundColor: "#FFFFFF",
+                              }}
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                              Teléfono
+                            </label>
+                            <PhoneInput
+                              value={co.phone}
+                              onChange={(fullVal) => handleUpdateCoOwner(co.id, "phone", fullVal)}
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                              RFC / Identificación
+                            </label>
+                            <input
+                              type="text"
+                              value={co.rfc}
+                              onChange={(e) => handleUpdateCoOwner(co.id, "rfc", e.target.value.toUpperCase())}
+                              placeholder="RFC Copropietario"
+                              style={{
+                                width: "100%",
+                                padding: "0.65rem 0.85rem",
+                                borderRadius: "0.5rem",
+                                border: "1px solid var(--devio-neutral-2)",
+                                fontSize: "0.88rem",
+                                backgroundColor: "#FFFFFF",
+                                textTransform: "uppercase",
+                              }}
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   <button
                     type="button"
@@ -2532,12 +2720,19 @@ export default function QuoteUnitWizardModal({
               onClick={() => {
                 if (currentStep === 1) {
                   if (!primaryClient.email.trim() || !primaryClient.name.trim()) {
-                    alert("Por favor completa los datos del prospecto.");
+                    alert("Por favor completa el correo y nombre del prospecto principal.");
                     return;
                   }
-                  if (isCoOwnership && !isOwnershipBalanced) {
-                    alert(`El porcentaje de copropiedad debe sumar 100%. Actualmente suma ${totalOwnershipPct}%.`);
-                    return;
+                  if (isCoOwnership) {
+                    const invalidCo = coOwnersList.find((co) => !co.email?.trim() || !co.name?.trim());
+                    if (invalidCo) {
+                      alert("Por favor completa el correo y nombre de todos los copropietarios.");
+                      return;
+                    }
+                    if (!isOwnershipBalanced) {
+                      alert(`El porcentaje de copropiedad debe sumar exactamente 100%. Actualmente suma ${totalOwnershipPct}%.`);
+                      return;
+                    }
                   }
                 }
                 if (currentStep === 3) {
