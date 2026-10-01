@@ -36,6 +36,7 @@ import { exportTableToExcel, exportTableToPDF } from "../../../../lib/export-uti
 import { InfoTooltip } from "../../../../components/ui/tooltip";
 import { DevioDatePicker } from "../../../../components/ui/devio-date-picker";
 import { UploadPaymentsModal } from "../../../../components/payments/upload-payments-modal";
+import PaymentsMatrixView from "../../../../components/payments/payments-matrix-view";
 import { generateReceiptPDF, openReceiptInNewTab, resolveProjectLogo } from "../../../../lib/pdf-generator";
 import { sendAndLogNotification } from "../../../../lib/notifications";
 
@@ -84,6 +85,7 @@ export default function ProjectPaymentsPage() {
   const project = getProject(projectId);
 
   // States
+  const [paymentsActiveTab, setPaymentsActiveTab] = useState<"list" | "matrix">("list");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<keyof PaymentScheduleItem>("scheduledDate");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -776,7 +778,7 @@ export default function ProjectPaymentsPage() {
         <div style={{ marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <h1 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
-              Pagos
+              Pagos y Cobranza
             </h1>
             <InfoTooltip
               title="Módulo Central de Pagos"
@@ -785,16 +787,64 @@ export default function ProjectPaymentsPage() {
           </div>
         </div>
 
-        {/* CONTENEDOR PRINCIPAL BLANCO */}
-        <div
-          style={{
-            backgroundColor: "#FFFFFF",
-            borderRadius: "1.25rem",
-            padding: "1.5rem",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
-            border: "1px solid rgba(22, 43, 63, 0.05)",
-          }}
-        >
+        {/* NAVEGACIÓN POR PESTAÑAS (TAB MENU) */}
+        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => setPaymentsActiveTab("list")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.55rem 1.25rem",
+              borderRadius: "9999px",
+              fontSize: "0.84rem",
+              fontWeight: 700,
+              border: "none",
+              cursor: "pointer",
+              backgroundColor: paymentsActiveTab === "list" ? "#1B3047" : "#FFFFFF",
+              color: paymentsActiveTab === "list" ? "#FFFFFF" : "#64748B",
+              boxShadow: paymentsActiveTab === "list" ? "0 2px 6px rgba(27, 48, 71, 0.2)" : "0 1px 3px rgba(0,0,0,0.03)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <CreditCard size={15} /> Lista de Cobranza y Recibos
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPaymentsActiveTab("matrix")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.55rem 1.25rem",
+              borderRadius: "9999px",
+              fontSize: "0.84rem",
+              fontWeight: 700,
+              border: "none",
+              cursor: "pointer",
+              backgroundColor: paymentsActiveTab === "matrix" ? "#1B3047" : "#FFFFFF",
+              color: paymentsActiveTab === "matrix" ? "#FFFFFF" : "#64748B",
+              boxShadow: paymentsActiveTab === "matrix" ? "0 2px 6px rgba(27, 48, 71, 0.2)" : "0 1px 3px rgba(0,0,0,0.03)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <FileSpreadsheet size={15} /> Tabla de Cobranza (Matriz)
+          </button>
+        </div>
+
+        {/* PESTAÑA 1: VISTA LISTA DE COBRANZA Y RECIBOS */}
+        {paymentsActiveTab === "list" && (
+          <div
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: "1.25rem",
+              padding: "1.5rem",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+              border: "1px solid rgba(22, 43, 63, 0.05)",
+            }}
+          >
           {/* BARRA SUPERIOR: BUSCADOR + FECHA + DESCARGAR */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", marginBottom: "1.25rem" }}>
             
@@ -1635,6 +1685,30 @@ export default function ProjectPaymentsPage() {
             <span>Total Cobrado en periodo: <strong>{formatMoney(payments.reduce((acc, p) => acc + p.paidAmount, 0))}</strong></span>
           </div>
         </div>
+        )}
+
+        {/* PESTAÑA 2: VISTA TABLA DE COBRANZA (MATRIZ ANUAL/MENSUAL/SEMANAL) */}
+        {paymentsActiveTab === "matrix" && (
+          <PaymentsMatrixView
+            project={project}
+            currency={project?.currency || "MXN"}
+            formatMoney={formatMoney}
+            onRecordPayment={(paymentItem) => {
+              setSelectedPaymentForRecord(paymentItem);
+              setPaymentForm({
+                paidAmount: paymentItem.scheduledAmount - (paymentItem.paidAmount || 0),
+                paymentDate: new Date().toISOString().split("T")[0] || "",
+                paymentMethod: "Transferencia",
+                reference: "",
+              });
+            }}
+            onSendReminder={handleSendPaymentReminder}
+            onSendOverdueNotice={handleSendOverdueNotice}
+            onOpenSaleDetails={(sale) => {
+              router.push(`/projects/${projectId}/sales?folio=${encodeURIComponent(sale.folio || "")}`);
+            }}
+          />
+        )}
 
         {/* MODAL 1: REGISTRAR PAGO RÁPIDO */}
         {selectedPaymentForRecord && (
