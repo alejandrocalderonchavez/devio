@@ -2178,6 +2178,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const targetProject = projects.find((p) => p.id === projectId) || projects[0];
     if (!targetProject) return;
 
+    let saleToSync: any = null;
+    let scheduleToSync: any[] = [];
+
     const updated = projects.map((p) => {
       if (p.id !== targetProject.id) return p;
 
@@ -2185,9 +2188,27 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const sale = existingSales.find((s) => s.unit === unitNumber);
       if (!sale) return p;
 
-      // 1. Update the scheduled installment fields
-      const updatedScheduleTemplate = (sale.schedule || []).map((inst) => {
-        if (inst.id !== installmentId) return inst;
+      saleToSync = sale;
+
+      // 1. Flexible ID matching
+      const cleanTargetId = installmentId.replace(/-co-\d+$/, "");
+      let matchIdx = -1;
+      const indexMatch = cleanTargetId.match(/(?:inst-|pay-[^-]+-)(\d+)$/);
+      if (indexMatch && indexMatch[1]) {
+        matchIdx = parseInt(indexMatch[1], 10);
+      }
+
+      let matchedAny = false;
+      const updatedScheduleTemplate = (sale.schedule || []).map((inst, idx) => {
+        const isMatch =
+          inst.id === installmentId ||
+          inst.id === cleanTargetId ||
+          (inst.id && cleanTargetId.includes(inst.id)) ||
+          (inst.id && inst.id.includes(cleanTargetId)) ||
+          (!matchedAny && matchIdx >= 0 && idx === matchIdx);
+
+        if (!isMatch) return inst;
+        matchedAny = true;
         return {
           ...inst,
           concept: updatedFields.concept !== undefined ? updatedFields.concept : inst.concept,
@@ -2216,12 +2237,21 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           ...inst,
           paidAmount: alloc,
           pendingAmount: pending,
-          status: (pending === 0 ? "Pagado" : alloc > 0 ? "Parcial" : "Pendiente") as "Pagado" | "Parcial" | "Pendiente",
+          status: (pending === 0 && scheduled > 0 ? "Pagado" : alloc > 0 ? "Parcial" : "Pendiente") as "Pagado" | "Parcial" | "Pendiente",
         };
       });
 
+      scheduleToSync = cascadedSchedule;
+
+      const newScheduleTotal = cascadedSchedule.reduce((sum, inst) => sum + (Number(inst.scheduledAmount) || 0), 0);
+      const updatedPaidAmount = totalPaymentsReceived;
+      const updatedPendingAmount = Math.max(0, (newScheduleTotal > 0 ? newScheduleTotal : sale.totalPrice) - updatedPaidAmount);
+
       const updatedSale: SaleRecord = {
         ...sale,
+        totalPrice: newScheduleTotal > 0 ? newScheduleTotal : sale.totalPrice,
+        paidAmount: updatedPaidAmount,
+        pendingAmount: updatedPendingAmount,
         schedule: cascadedSchedule,
       };
 
@@ -2234,6 +2264,15 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     });
 
     saveProjects(updated);
+
+    if (saleToSync && saleToSync.id) {
+      fetch(`/api/sales/${saleToSync.id}/schedule`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ schedule: scheduleToSync }),
+      }).catch((err) => console.error("Error al persistir cuotas en backend:", err));
+    }
+
     showToast("Cuota Actualizada", `Se modificó la cuota de la unidad ${unitNumber} y se aplicó el efecto cascada.`);
   };
 

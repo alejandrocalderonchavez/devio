@@ -1202,9 +1202,34 @@ export default function ProjectSalesPage() {
                           {sale.paymentPlan}
                         </td>
 
-                        {/* Precio total */}
-                        <td style={{ padding: "1rem 1rem", fontSize: "0.85rem", fontWeight: 600, color: "#1F3652", textAlign: "right" }}>
-                          {formatMoney(sale.totalPrice)}
+                        {/* Precio total / Total a pagar */}
+                        <td style={{ padding: "1rem 1rem", fontSize: "0.85rem", color: "#1F3652", textAlign: "right" }}>
+                          <div style={{ fontWeight: 700 }}>
+                            {formatMoney(sale.totalPrice)}
+                          </div>
+                          {(() => {
+                            const invU = (project.unitsInventory || []).find((u) => u.unit === sale.unit);
+                            const listP = Number(invU?.price || (sale as any).listPrice) || 0;
+                            if (listP > 0 && Math.abs(listP - sale.totalPrice) > 100) {
+                              const diff = sale.totalPrice - listP;
+                              const diffPct = Math.round((Math.abs(diff) / listP) * 1000) / 10;
+                              return (
+                                <div style={{ fontSize: "0.68rem", color: "#64748B", marginTop: "2px", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "4px" }}>
+                                  <span>Lista: {formatMoney(listP)}</span>
+                                  {diff < 0 ? (
+                                    <span style={{ color: "#00C48C", backgroundColor: "rgba(0,196,140,0.12)", padding: "1px 4px", borderRadius: "3px", fontWeight: 700 }}>
+                                      -{diffPct}% desc.
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: "#2F80ED", backgroundColor: "rgba(47,128,237,0.12)", padding: "1px 4px", borderRadius: "3px", fontWeight: 700 }}>
+                                      +{diffPct}% ajuste
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </td>
 
                         {/* Pagado */}

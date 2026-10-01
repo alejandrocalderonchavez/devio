@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Query, HttpCode, HttpStatus } from "@nestjs/common";
+import { Controller, Post, Get, Put, Body, Param, Query, HttpCode, HttpStatus } from "@nestjs/common";
 import { SalesService } from "./sales.service";
 
 @Controller("sales")
@@ -19,5 +19,10 @@ export class SalesController {
   @Get(":id")
   async findById(@Param("id") id: string) {
     return this.salesService.findById(id);
+  }
+
+  @Put(":id/schedule")
+  async updateSchedule(@Param("id") id: string, @Body() body: any) {
+    return this.salesService.updateSchedule(id, body);
   }
 }

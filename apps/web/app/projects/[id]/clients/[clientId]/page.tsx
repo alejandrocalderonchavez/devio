@@ -1309,9 +1309,14 @@ export default function ClientDetailPage() {
     e.preventDefault();
     if (!editingInstallment) return;
 
+    const enteredAmount = Number(editInstallmentForm.scheduledAmount);
+    const finalUnitScheduledAmount = (isCoOwned && coOwnershipViewMode === "proportional" && clientShareRatio > 0 && clientShareRatio < 1)
+      ? Math.round(enteredAmount / clientShareRatio)
+      : enteredAmount;
+
     updateSaleScheduleInstallment(projectId, selectedUnit, editingInstallment.id, {
       concept: editInstallmentForm.concept,
-      scheduledAmount: Number(editInstallmentForm.scheduledAmount),
+      scheduledAmount: finalUnitScheduledAmount,
       scheduledDate: editInstallmentForm.scheduledDate,
     });
 
@@ -1816,14 +1821,41 @@ export default function ClientDetailPage() {
                 Total a pagar
               </span>
               <InfoTooltip
-                title="Total a Pagar"
-                content="Valor total acordado en el contrato de compraventa para la unidad seleccionada."
+                title="Total Pactado a Pagar"
+                content="Valor total acordado en el contrato de compraventa para la unidad seleccionada (incluye descuentos, intereses o adicionales pactados)."
               />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
               <DollarSign size={16} color="#00C48C" />
               <strong style={{ fontSize: "1.05rem", color: "#1F3652" }}>{formatMoney(totalAPagar)}</strong>
             </div>
+            {(() => {
+              const currentInvUnit = project?.unitsInventory?.find((u) => u.unit === selectedUnit);
+              const rawListPrice = currentInvUnit?.price || 0;
+              const listPriceForClient = isCoOwned && coOwnershipViewMode === "proportional"
+                ? Math.round(rawListPrice * clientShareRatio)
+                : rawListPrice;
+
+              if (listPriceForClient > 0 && Math.abs(listPriceForClient - totalAPagar) > 100) {
+                const diff = totalAPagar - listPriceForClient;
+                const diffPct = Math.round((Math.abs(diff) / listPriceForClient) * 1000) / 10;
+                return (
+                  <div style={{ fontSize: "0.68rem", color: "#64748B", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span>Lista: {formatMoney(listPriceForClient)}</span>
+                    {diff < 0 ? (
+                      <span style={{ color: "#00C48C", backgroundColor: "rgba(0,196,140,0.12)", padding: "1px 4px", borderRadius: "3px", fontWeight: 700 }}>
+                        -{diffPct}% desc.
+                      </span>
+                    ) : (
+                      <span style={{ color: "#2F80ED", backgroundColor: "rgba(47,128,237,0.12)", padding: "1px 4px", borderRadius: "3px", fontWeight: 700 }}>
+                        +{diffPct}% ajuste
+                      </span>
+                    )}
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
 
           {/* 2. Total Pendiente */}

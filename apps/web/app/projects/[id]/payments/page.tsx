@@ -838,9 +838,18 @@ export default function ProjectPaymentsPage() {
     e.preventDefault();
     if (!selectedPaymentForEdit) return;
 
+    const coOwner = (selectedPaymentForEdit as any).coOwner;
+    const coPct = Number(coOwner?.ownershipPct) || 50;
+    const coRatio = coPct / 100;
+    const enteredAmount = Number(editPaymentForm.scheduledAmount);
+
+    const finalUnitScheduledAmount = ((selectedPaymentForEdit as any).isCoOwnership && coRatio > 0 && coRatio < 1)
+      ? Math.round(enteredAmount / coRatio)
+      : enteredAmount;
+
     updateSaleScheduleInstallment(projectId, selectedPaymentForEdit.unit, selectedPaymentForEdit.id, {
       concept: editPaymentForm.concept,
-      scheduledAmount: Number(editPaymentForm.scheduledAmount),
+      scheduledAmount: finalUnitScheduledAmount,
       scheduledDate: editPaymentForm.scheduledDate,
     });
 

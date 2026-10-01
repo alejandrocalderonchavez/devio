@@ -504,4 +504,88 @@ export class SalesService {
 
     return sale;
   }
+
+  async updateSchedule(saleId: string, body: { schedule: any[] }) {
+    let sale = await this.prisma.sale.findFirst({
+      where: {
+        OR: [
+          { id: saleId.length === 36 ? saleId : undefined },
+          { contractNumber: saleId },
+          { bubbleId: saleId },
+        ].filter(Boolean) as any,
+      },
+      include: { scheduledObligations: true, paymentReceipts: true },
+    });
+
+    if (!sale) {
+      const unitNum = saleId.replace(/^unit-/, "");
+      sale = await this.prisma.sale.findFirst({
+        where: { unit: { unitNumber: unitNum } },
+        include: { scheduledObligations: true, paymentReceipts: true },
+      });
+    }
+
+    if (!sale) {
+      throw new NotFoundException(`Venta con identificador ${saleId} no encontrada.`);
+    }
+
+    const realSaleId = sale.id;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.scheduledObligation.deleteMany({
+        where: { saleId: realSaleId },
+      });
+
+      if (Array.isArray(body.schedule) && body.schedule.length > 0) {
+        for (let i = 0; i < body.schedule.length; i++) {
+          const inst = body.schedule[i];
+          const rawDate = inst.scheduledDate || inst.dueDate || inst.fechaProgramada;
+          let dueDate = new Date();
+          if (rawDate) {
+            if (typeof rawDate === "string" && rawDate.includes("/")) {
+              const parts = rawDate.split("/");
+              if (parts.length === 3) {
+                dueDate = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+              } else {
+                dueDate = new Date(rawDate);
+              }
+            } else {
+              dueDate = new Date(rawDate);
+            }
+          }
+          if (isNaN(dueDate.getTime())) dueDate = new Date();
+
+          const origAmt = Number(inst.scheduledAmount || inst.originalAmount || inst.amount) || 0;
+          const paidAmt = Number(inst.paidAmount) || 0;
+          const pendAmt = inst.pendingAmount !== undefined ? Number(inst.pendingAmount) : Math.max(0, origAmt - paidAmt);
+
+          let status: any = "PENDING";
+          if (pendAmt === 0 && origAmt > 0) status = "PAID";
+          else if (paidAmt > 0) status = "PARTIAL";
+
+          let type: any = "INSTALLMENT";
+          const titleLower = (inst.concept || inst.title || "").toLowerCase();
+          if (titleLower.includes("enganche") || titleLower.includes("inicial") || titleLower.includes("anticipo")) type = "DOWN_PAYMENT";
+          else if (titleLower.includes("liquidacion") || titleLower.includes("finiquito") || titleLower.includes("escritura")) type = "BALLOON_PAYMENT";
+
+          await tx.scheduledObligation.create({
+            data: {
+              saleId: realSaleId,
+              obligationNumber: i + 1,
+              title: inst.concept || inst.title || `Cuota ${i + 1}`,
+              type,
+              dueDate,
+              originalAmount: origAmt,
+              pendingAmount: pendAmt,
+              paidAmount: paidAmt,
+              status,
+              currency: "MXN",
+            },
+          });
+        }
+      }
+    });
+
+    return this.findById(realSaleId);
+  }
 }
