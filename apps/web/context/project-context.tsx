@@ -113,7 +113,7 @@ interface ProjectContextType {
   deletePaymentPlan: (id: string) => void;
   setPaymentPlans: (plans: DeveloperPaymentPlan[]) => void;
   getProject: (id: string) => ProjectItem | undefined;
-  addProject: (project: ProjectItem) => void;
+  addProject: (project: ProjectItem, skipApiSync?: boolean) => void;
   refreshProjects: () => void;
   updateUnit: (projectId: string, unitNumber: string, updatedFields: Partial<UnitItem>) => void;
   updateMultipleUnits: (projectId: string, updatedUnits: UnitItem[]) => void;
@@ -1151,13 +1151,15 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     loadFromStorage();
   };
 
-  const addProject = (newProject: ProjectItem) => {
+  const addProject = (newProject: ProjectItem, skipApiSync = false) => {
     const mappedNew = mapDbProjectToProjectItem(newProject);
     setProjects((prev) => {
       const updated = [mappedNew, ...prev.filter((p) => p.id !== mappedNew.id)];
       safeSaveProjectsState(updated);
       return updated;
     });
+
+    if (skipApiSync) return;
 
     // Persistir en Supabase (Prisma)
     let devId = (newProject as any).developerId;

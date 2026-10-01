@@ -130,7 +130,6 @@ export default function ProjectOnboardingPage() {
   const router = useRouter();
   const { addProject } = useProject();
   const [step, setStep] = useState<number>(1);
-  const [isNavigating, setIsNavigating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [projectType, setProjectType] = useState<ProjectType>("VERTICAL");
   const [baseCurrency, setBaseCurrency] = useState<Currency>("MXN");
@@ -714,8 +713,6 @@ export default function ProjectOnboardingPage() {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [createdProjectId, setCreatedProjectId] = useState<string>("");
 
   // Tipologías
   const projectTypesList = [
@@ -1341,9 +1338,9 @@ export default function ProjectOnboardingPage() {
       const updatedList = [newProject, ...currentProjects.filter((p) => p.id !== newProject.id)];
       safeSaveProjectsState(updatedList);
 
-      // Also update React Context directly
+      // Also update React Context directly with skipApiSync=true to avoid duplicate creation
       try {
-        addProject(newProject);
+        addProject(newProject, true);
       } catch (_) {}
 
       try {
@@ -1365,9 +1362,9 @@ export default function ProjectOnboardingPage() {
       } catch (_) {}
     }
 
-    setCreatedProjectId(newProjectId);
     setIsSubmitting(false);
-    setIsSuccess(true);
+    // Direct redirect to /projects page as requested
+    router.push("/projects");
   };
 
   const filteredColumnPresets = availableColumnPresets.filter((col) =>
@@ -1377,106 +1374,6 @@ export default function ProjectOnboardingPage() {
   const activeProjectPaymentPlans = globalPlanLibrary.filter((p) =>
     selectedPlanIds.includes(p.id)
   );
-
-  if (isSuccess) {
-    const projectDashboardUrl = createdProjectId ? `/projects/${createdProjectId}` : "/dashboard";
-    const projectUnitsUrl = createdProjectId ? `/projects/${createdProjectId}/units` : "/dashboard";
-
-    // Helper: navigate with a brief loading screen so the project context has time to hydrate
-    const handleNavigate = async (url: string) => {
-      setIsNavigating(true);
-      // Dispatch update event one more time to ensure context picks up the new project
-      try { window.dispatchEvent(new Event("devio_projects_updated")); } catch (_) {}
-      // Small delay so context can process the storage update before navigation
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      router.push(url);
-    };
-
-    if (isNavigating) {
-      return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: "1.5rem" }}>
-          <div style={{ width: "52px", height: "52px", border: "4px solid #e2e8f0", borderTopColor: "#1B3047", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          <p style={{ color: "var(--devio-neutral-4)", fontSize: "1rem" }}>Cargando tu nuevo proyecto…</p>
-        </div>
-      );
-    }
-
-    return (
-      <div style={{ maxWidth: "700px", margin: "4rem auto", padding: "0 1.5rem" }}>
-        <div className="card modal-content" style={{ textAlign: "center", padding: "3.5rem 2.5rem" }}>
-          <div
-            style={{
-              width: "70px",
-              height: "70px",
-              borderRadius: "50%",
-              backgroundColor: "rgba(111, 172, 156, 0.15)",
-              color: "var(--devio-green)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 1.5rem",
-            }}
-          >
-            <CheckCircle2 size={40} />
-          </div>
-          <h1 style={{ fontSize: "2rem", marginBottom: "1rem", color: "var(--devio-blue-dark)" }}>
-            ¡Proyecto Creado Exitosamente!
-          </h1>
-          <p style={{ fontSize: "1.05rem", color: "var(--devio-neutral-4)", marginBottom: "0.5rem" }}>
-            El desarrollo <strong>{projectGeneralData.name || "Nuevo Proyecto"}</strong> ha quedado registrado.
-          </p>
-
-          <p style={{ color: "var(--text-muted)", marginBottom: "1.5rem", fontSize: "0.95rem" }}>
-            Se configuraron {units.length} unidades, {additionals.length} adicionales, {activeProjectPaymentPlans.length} plan(es) de pago activos y {documents.length} documento(s).
-          </p>
-
-          {units.length === 0 && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                padding: "0.85rem 1rem",
-                backgroundColor: "rgba(199, 178, 139, 0.15)",
-                border: "1px solid var(--devio-beige)",
-                borderRadius: "0.5rem",
-                color: "var(--devio-neutral-4)",
-                textAlign: "left",
-                fontSize: "0.875rem",
-                marginBottom: "2rem",
-              }}
-            >
-              <Info size={20} color="var(--devio-blue)" style={{ flexShrink: 0 }} />
-              <span>
-                <strong>Aviso de inventario:</strong> Tu proyecto fue creado sin unidades iniciales. Podrás cargarlas individualmente o mediante plantilla Excel en cualquier momento desde la sección de <strong>Inventario</strong> del proyecto.
-              </span>
-            </div>
-          )}
-
-          <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <button
-              onClick={() => handleNavigate(projectDashboardUrl)}
-              className="btn btn-primary"
-              style={{ padding: "0.85rem 1.5rem", fontSize: "0.95rem" }}
-            >
-              Ir al Dashboard del Proyecto <ArrowRight size={16} />
-            </button>
-            <button
-              onClick={() => handleNavigate(projectUnitsUrl)}
-              className="btn btn-secondary"
-              style={{ padding: "0.85rem 1.5rem", fontSize: "0.95rem" }}
-            >
-              <Building2 size={16} /> Ver Unidades
-            </button>
-            <Link href="/dashboard" className="btn btn-outline" style={{ padding: "0.85rem 1.5rem", fontSize: "0.95rem" }}>
-              Todos los Proyectos
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
 
   return (
