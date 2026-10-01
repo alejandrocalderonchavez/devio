@@ -12,16 +12,23 @@ import {
   Users,
   Check,
   ChevronDown,
+  Mail,
+  Phone,
 } from "lucide-react";
 import {
   PostventaIncident,
   PostventaCategory,
   PostventaPriority,
-  POSTVENTA_SUPPLIERS,
 } from "../../data/postventa-data";
 import { useProject } from "../../context/project-context";
 import { DevioFileUploader, DevioUploadedFile } from "../ui/devio-file-uploader";
-import PhoneInput from "../ui/phone-input";
+
+interface OwnerInfo {
+  name: string;
+  pct: number;
+  email?: string;
+  phone?: string;
+}
 
 interface NewIncidentModalProps {
   isOpen: boolean;
@@ -48,19 +55,14 @@ export function NewIncidentModal({
   const [isUnitDropdownOpen, setIsUnitDropdownOpen] = useState<boolean>(false);
   const unitDropdownRef = useRef<HTMLDivElement>(null);
 
-  const [clientName, setClientName] = useState<string>("");
-  const [clientEmail, setClientEmail] = useState<string>("");
-  const [clientPhone, setClientPhone] = useState<string>("");
+  // Read-only Owners State
+  const [ownersList, setOwnersList] = useState<OwnerInfo[]>([]);
   const [hasCoOwners, setHasCoOwners] = useState<boolean>(false);
-  const [coOwnersList, setCoOwnersList] = useState<Array<{ name: string; pct: number }>>([]);
-  const [coOwnerName, setCoOwnerName] = useState<string>("");
-  const [coOwnerPct, setCoOwnerPct] = useState<number>(50);
 
   const [category, setCategory] = useState<PostventaCategory>("Plomería / Hidráulico");
   const [priority, setPriority] = useState<PostventaPriority>("Media");
   const [title, setTitle] = useState<string>("");
   const [description, setDescription] = useState<string>("");
-  const [supplierId, setSupplierId] = useState<string>("");
   const [assignedStaff, setAssignedStaff] = useState<string>("");
   const [assignedStaffRole, setAssignedStaffRole] = useState<string>("Coordinador de Postventa");
   const [availableStaff, setAvailableStaff] = useState<Array<{ name: string; role: string; email?: string }>>([]);
@@ -73,7 +75,7 @@ export function NewIncidentModal({
     return projects.find((p) => p.id === selectedProjectId) || projects[0];
   }, [projects, selectedProjectId]);
 
-  // Load sold units for the selected project
+  // Load ONLY sold units for the selected project
   const soldUnitsList = useMemo(() => {
     if (!currentProject || !Array.isArray(currentProject.unitsInventory)) return [];
     return currentProject.unitsInventory.filter(
@@ -162,6 +164,38 @@ export function NewIncidentModal({
     }
   }, [currentProject, userName, assignedStaff]);
 
+  // Helper to extract and set owners from a unit
+  const populateOwnersFromUnit = (matchedUnit: any) => {
+    if (!matchedUnit) {
+      setOwnersList([]);
+      setHasCoOwners(false);
+      return;
+    }
+
+    const coOwners = matchedUnit.coOwners;
+    if (Array.isArray(coOwners) && coOwners.length > 0) {
+      setHasCoOwners(true);
+      const list: OwnerInfo[] = coOwners.map((c: any) => ({
+        name: c.name || "Copropietario",
+        pct: Number(c.ownershipPct || c.percentage || c.pct) || Math.round(100 / coOwners.length),
+        email: c.email || matchedUnit.clientEmail || matchedUnit.buyerEmail || "",
+        phone: c.phone || matchedUnit.clientPhone || matchedUnit.buyerPhone || "",
+      }));
+      setOwnersList(list);
+    } else {
+      setHasCoOwners(false);
+      const clientName = matchedUnit.client && matchedUnit.client !== "-" ? matchedUnit.client : "Cliente Propietario";
+      setOwnersList([
+        {
+          name: clientName,
+          pct: 100,
+          email: matchedUnit.clientEmail || matchedUnit.buyerEmail || "",
+          phone: matchedUnit.clientPhone || matchedUnit.buyerPhone || "",
+        },
+      ]);
+    }
+  };
+
   // Initialize modal state
   useEffect(() => {
     if (isOpen) {
@@ -173,9 +207,16 @@ export function NewIncidentModal({
       if (defaultUnit) {
         setUnit(defaultUnit);
         setUnitSearchQuery(defaultUnit);
+        const proj = projects.find((p) => p.id === (defaultProjectId || selectedProjectId));
+        const matched = (proj?.unitsInventory || []).find(
+          (u: any) => (u.unit || "").toLowerCase().trim() === defaultUnit.toLowerCase().trim()
+        );
+        if (matched) {
+          populateOwnersFromUnit(matched);
+        }
       }
     }
-  }, [isOpen, defaultProjectId, defaultUnit]);
+  }, [isOpen, defaultProjectId, defaultUnit, projects, selectedProjectId]);
 
   // Close unit dropdown on click outside
   useEffect(() => {
@@ -196,41 +237,7 @@ export function NewIncidentModal({
     setUnit(matchedUnit.unit);
     setUnitSearchQuery(matchedUnit.unit);
     setIsUnitDropdownOpen(false);
-
-    if (matchedUnit.client) {
-      setClientName(matchedUnit.client);
-    }
-    if (matchedUnit.clientEmail || matchedUnit.buyerEmail) {
-      setClientEmail(matchedUnit.clientEmail || matchedUnit.buyerEmail);
-    }
-    if (matchedUnit.clientPhone || matchedUnit.buyerPhone) {
-      setClientPhone(matchedUnit.clientPhone || matchedUnit.buyerPhone);
-    }
-
-    if (
-      matchedUnit.coOwners &&
-      Array.isArray(matchedUnit.coOwners) &&
-      matchedUnit.coOwners.length > 0
-    ) {
-      setHasCoOwners(true);
-      setCoOwnersList(
-        matchedUnit.coOwners.map((c: any) => ({
-          name: c.name || "",
-          pct: c.ownershipPct || c.percentage || c.pct || 50,
-        }))
-      );
-      setCoOwnerName(matchedUnit.coOwners[0]?.name || "");
-      setCoOwnerPct(
-        (matchedUnit.coOwners[0] as any)?.ownershipPct ||
-          (matchedUnit.coOwners[0] as any)?.percentage ||
-          50
-      );
-    } else {
-      setHasCoOwners(false);
-      setCoOwnersList([]);
-      setCoOwnerName("");
-      setCoOwnerPct(50);
-    }
+    populateOwnersFromUnit(matchedUnit);
   };
 
   // SLA calculation based on Priority
@@ -254,7 +261,7 @@ export function NewIncidentModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!unit.trim()) {
-      alert("Por favor selecciona o ingresa la unidad correspondiente.");
+      alert("Por favor selecciona una unidad vendida.");
       return;
     }
     if (!title.trim() || !description.trim()) {
@@ -262,7 +269,12 @@ export function NewIncidentModal({
       return;
     }
 
-    const matchedSupplier = POSTVENTA_SUPPLIERS.find((s) => s.id === supplierId);
+    const primaryOwner = ownersList[0] || {
+      name: "Cliente Propietario",
+      email: "cliente@devio.mx",
+      phone: "",
+      pct: 100,
+    };
 
     const now = new Date();
     const formattedDate = `${now.getDate()} ${now.toLocaleString("es-MX", {
@@ -278,15 +290,13 @@ export function NewIncidentModal({
       projectId: selectedProjectId,
       projectName: currentProject?.name || "Desarrollo",
       unit: unit.trim().toUpperCase(),
-      clientName: clientName.trim() || "Cliente Propietario",
-      clientEmail: clientEmail.trim() || "cliente@devio.mx",
-      clientPhone: clientPhone.trim() || "",
+      clientName: hasCoOwners
+        ? ownersList.map((o) => `${o.name} (${o.pct}%)`).join(" + ")
+        : primaryOwner.name,
+      clientEmail: primaryOwner.email || "cliente@devio.mx",
+      clientPhone: primaryOwner.phone || "",
       coOwners: hasCoOwners
-        ? coOwnersList.length > 0
-          ? coOwnersList
-          : coOwnerName.trim()
-          ? [{ name: coOwnerName.trim(), pct: coOwnerPct }]
-          : []
+        ? ownersList.map((o) => ({ name: o.name, pct: o.pct }))
         : [],
       category,
       priority,
@@ -303,7 +313,7 @@ export function NewIncidentModal({
         name: assignedStaff || "Alejandro Calderón",
         role: assignedStaffRole || "Coordinador de Postventa",
       },
-      supplier: matchedSupplier,
+      supplier: undefined,
       appointments: [],
       evidences: uploadedFiles.map((f, idx) => ({
         id: `ev-new-${idx}-${Date.now()}`,
@@ -499,7 +509,7 @@ export function NewIncidentModal({
             </span>
           </div>
 
-          {/* 1. Ubicación y Cliente */}
+          {/* 1. Ubicación y Titulares (Cards fijas, solo lectura) */}
           <div
             style={{
               backgroundColor: "#FAFBFD",
@@ -519,7 +529,7 @@ export function NewIncidentModal({
                 marginBottom: "0.85rem",
               }}
             >
-              1. Selección de Unidad y Propietario
+              1. Selección de Unidad y Titulares
             </span>
 
             {/* Searchable Unit Input with Dropdown Popover */}
@@ -533,7 +543,7 @@ export function NewIncidentModal({
                   marginBottom: "0.35rem",
                 }}
               >
-                Unidad Vendida / Asignada *
+                Unidad Vendida *
               </label>
               <div
                 style={{
@@ -551,7 +561,7 @@ export function NewIncidentModal({
                     setIsUnitDropdownOpen(true);
                   }}
                   onFocus={() => setIsUnitDropdownOpen(true)}
-                  placeholder="Escribe el número de unidad o nombre del cliente..."
+                  placeholder="Escribe el número de unidad (ej. 104, 4B)..."
                   required
                   style={{
                     width: "100%",
@@ -682,7 +692,7 @@ export function NewIncidentModal({
                                   borderRadius: "4px",
                                 }}
                               >
-                                Copropiedad ({u.coOwners.length + 1})
+                                Copropiedad ({u.coOwners.length})
                               </span>
                             )}
                             {isSelected && <Check size={16} color="#2F80ED" />}
@@ -695,208 +705,149 @@ export function NewIncidentModal({
               )}
             </div>
 
-            {/* Ownership Status Badge */}
-            <div style={{ marginBottom: "0.85rem" }}>
-              {hasCoOwners ? (
+            {/* Read-Only Ownership Cards */}
+            {unit && ownersList.length > 0 ? (
+              <div>
                 <div
                   style={{
-                    display: "inline-flex",
+                    display: "flex",
                     alignItems: "center",
-                    gap: "0.4rem",
-                    padding: "0.3rem 0.65rem",
-                    borderRadius: "9999px",
-                    backgroundColor: "rgba(47, 128, 237, 0.1)",
-                    color: "#2F80ED",
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
+                    justifyContent: "space-between",
+                    marginBottom: "0.6rem",
                   }}
                 >
-                  <Users size={14} /> Copropiedad ({coOwnersList.length > 0 ? coOwnersList.length + 1 : 2} Titulares)
+                  <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#1F3652" }}>
+                    Titular{ownersList.length > 1 ? "es Registrados" : " Registrado"}
+                  </span>
+                  {hasCoOwners ? (
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: "9999px",
+                        backgroundColor: "rgba(47, 128, 237, 0.1)",
+                        color: "#2F80ED",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <Users size={13} /> Copropiedad ({ownersList.length} Titulares)
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: "9999px",
+                        backgroundColor: "rgba(16, 185, 129, 0.1)",
+                        color: "#10B981",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <User size={13} /> Propietario Único (100%)
+                    </span>
+                  )}
                 </div>
-              ) : (
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    padding: "0.3rem 0.65rem",
-                    borderRadius: "9999px",
-                    backgroundColor: "rgba(0, 196, 140, 0.1)",
-                    color: "#059669",
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
-                  }}
-                >
-                  <User size={14} /> Propietario Único (100%)
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {ownersList.map((owner, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        backgroundColor: "#FFFFFF",
+                        border: "1px solid #E2E8F0",
+                        borderRadius: "0.65rem",
+                        padding: "0.75rem 1rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                        <div
+                          style={{
+                            width: "34px",
+                            height: "34px",
+                            borderRadius: "50%",
+                            backgroundColor: "rgba(31, 54, 82, 0.06)",
+                            color: "#1F3652",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "0.8rem",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {owner.name.charAt(0).toUpperCase() || "C"}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1F3652" }}>
+                            {owner.name}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "0.74rem",
+                              color: "#64748B",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.85rem",
+                              marginTop: "2px",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            {owner.email && (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                <Mail size={12} color="#94A3B8" /> {owner.email}
+                              </span>
+                            )}
+                            {owner.phone && (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                <Phone size={12} color="#94A3B8" /> {owner.phone}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 800,
+                          color: "#1F3652",
+                          backgroundColor: "#F1F5F9",
+                          padding: "0.25rem 0.65rem",
+                          borderRadius: "9999px",
+                          border: "1px solid #E2E8F0",
+                        }}
+                      >
+                        {owner.pct}% Propiedad
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
-
-            {/* Cliente y Datos de Contacto */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1.2fr 1fr 1fr",
-                gap: "0.75rem",
-                marginBottom: "0.75rem",
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
-                    color: "#1F3652",
-                    display: "block",
-                    marginBottom: "0.25rem",
-                  }}
-                >
-                  Nombre del Propietario *
-                </label>
-                <input
-                  type="text"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  placeholder="Nombre y Apellidos"
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem 0.65rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid #CBD5E1",
-                    fontSize: "0.82rem",
-                    color: "#1F3652",
-                    backgroundColor: "#FFFFFF",
-                  }}
-                />
               </div>
-
-              <div>
-                <label
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
-                    color: "#1F3652",
-                    display: "block",
-                    marginBottom: "0.25rem",
-                  }}
-                >
-                  Correo Electrónico
-                </label>
-                <input
-                  type="email"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  placeholder="correo@ejemplo.com"
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem 0.65rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid #CBD5E1",
-                    fontSize: "0.82rem",
-                    color: "#1F3652",
-                    backgroundColor: "#FFFFFF",
-                  }}
-                />
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
-                    color: "#1F3652",
-                    display: "block",
-                    marginBottom: "0.25rem",
-                  }}
-                >
-                  Teléfono Celular
-                </label>
-                <PhoneInput
-                  value={clientPhone}
-                  onChange={(fullVal) => setClientPhone(fullVal)}
-                  placeholder="(33) 1234-5678"
-                />
-              </div>
-            </div>
-
-            {/* Toggle Copropietario */}
-            <div style={{ marginTop: "0.5rem" }}>
-              <label
+            ) : (
+              <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.45rem",
-                  fontSize: "0.78rem",
-                  fontWeight: 600,
-                  color: "#1F3652",
-                  cursor: "pointer",
+                  padding: "1rem",
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "0.65rem",
+                  border: "1px dashed #CBD5E1",
+                  textAlign: "center",
+                  color: "#64748B",
+                  fontSize: "0.8rem",
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={hasCoOwners}
-                  onChange={(e) => setHasCoOwners(e.target.checked)}
-                  style={{ accentColor: "#1B3047" }}
-                />
-                Registrar Copropietario(s) vinculados a la unidad
-              </label>
-
-              {hasCoOwners && (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "2fr 100px",
-                    gap: "0.75rem",
-                    marginTop: "0.5rem",
-                    padding: "0.6rem 0.85rem",
-                    backgroundColor: "#FFFFFF",
-                    borderRadius: "0.5rem",
-                    border: "1px solid #E2E8F0",
-                  }}
-                >
-                  <div>
-                    <span style={{ fontSize: "0.72rem", color: "#64748B", display: "block" }}>
-                      Nombre de Copropietario
-                    </span>
-                    <input
-                      type="text"
-                      value={coOwnerName}
-                      onChange={(e) => setCoOwnerName(e.target.value)}
-                      placeholder="Ej. Carlos Calderón"
-                      style={{
-                        width: "100%",
-                        border: "none",
-                        outline: "none",
-                        fontSize: "0.82rem",
-                        fontWeight: 600,
-                        color: "#1F3652",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <span style={{ fontSize: "0.72rem", color: "#64748B", display: "block" }}>
-                      % Propiedad
-                    </span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={99}
-                      value={coOwnerPct}
-                      onChange={(e) => setCoOwnerPct(Number(e.target.value))}
-                      style={{
-                        width: "100%",
-                        border: "none",
-                        outline: "none",
-                        fontSize: "0.82rem",
-                        fontWeight: 600,
-                        color: "#1F3652",
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+                Selecciona una unidad arriba para visualizar los datos del propietario.
+              </div>
+            )}
           </div>
 
           {/* 2. Categoría, Prioridad y SLA */}
@@ -1081,80 +1032,44 @@ export function NewIncidentModal({
           </div>
 
           {/* 4. Responsable Interno */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-            <div>
-              <label
-                style={{
-                  fontSize: "0.8rem",
-                  fontWeight: 700,
-                  color: "#1F3652",
-                  display: "block",
-                  marginBottom: "0.35rem",
-                }}
-              >
-                Responsable Interno Asignado
-              </label>
-              <select
-                value={assignedStaff}
-                onChange={(e) => {
-                  const staffName = e.target.value;
-                  setAssignedStaff(staffName);
-                  const matched = availableStaff.find((s) => s.name === staffName);
-                  if (matched) {
-                    setAssignedStaffRole(matched.role);
-                  }
-                }}
-                style={{
-                  width: "100%",
-                  padding: "0.55rem 0.75rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid #CBD5E1",
-                  fontSize: "0.82rem",
-                  color: "#1F3652",
-                  backgroundColor: "#FFFFFF",
-                }}
-              >
-                {availableStaff.map((s, idx) => (
-                  <option key={`${s.name}-${idx}`} value={s.name}>
-                    {s.name} ({s.role})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                style={{
-                  fontSize: "0.8rem",
-                  fontWeight: 700,
-                  color: "#1F3652",
-                  display: "block",
-                  marginBottom: "0.35rem",
-                }}
-              >
-                Proveedor / Contratista (Opcional)
-              </label>
-              <select
-                value={supplierId}
-                onChange={(e) => setSupplierId(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "0.55rem 0.75rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid #CBD5E1",
-                  fontSize: "0.82rem",
-                  color: "#1F3652",
-                  backgroundColor: "#FFFFFF",
-                }}
-              >
-                <option value="">-- Sin asignar / Pendiente de revisión --</option>
-                {POSTVENTA_SUPPLIERS.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.specialty})
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label
+              style={{
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                color: "#1F3652",
+                display: "block",
+                marginBottom: "0.35rem",
+              }}
+            >
+              Responsable Interno Asignado *
+            </label>
+            <select
+              value={assignedStaff}
+              onChange={(e) => {
+                const staffName = e.target.value;
+                setAssignedStaff(staffName);
+                const matched = availableStaff.find((s) => s.name === staffName);
+                if (matched) {
+                  setAssignedStaffRole(matched.role);
+                }
+              }}
+              style={{
+                width: "100%",
+                padding: "0.6rem 0.85rem",
+                borderRadius: "0.5rem",
+                border: "1px solid #CBD5E1",
+                fontSize: "0.85rem",
+                color: "#1F3652",
+                backgroundColor: "#FFFFFF",
+              }}
+            >
+              {availableStaff.map((s, idx) => (
+                <option key={`${s.name}-${idx}`} value={s.name}>
+                  {s.name} ({s.role})
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* 5. Evidencias Iniciales */}
