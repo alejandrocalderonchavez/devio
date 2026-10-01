@@ -164,7 +164,7 @@ export function NewIncidentModal({
     }
   }, [currentProject, userName, assignedStaff]);
 
-  // Helper to extract and set owners from a unit
+  // Helper to extract and set owners from a unit (handles any number of co-owners)
   const populateOwnersFromUnit = (matchedUnit: any) => {
     if (!matchedUnit) {
       setOwnersList([]);
@@ -173,27 +173,70 @@ export function NewIncidentModal({
     }
 
     const coOwners = matchedUnit.coOwners;
+    const clientStr = (matchedUnit.client || "").trim();
+
+    // 1. If structured coOwners array has multiple entries
     if (Array.isArray(coOwners) && coOwners.length > 0) {
-      setHasCoOwners(true);
-      const list: OwnerInfo[] = coOwners.map((c: any) => ({
-        name: c.name || "Copropietario",
-        pct: Number(c.ownershipPct || c.percentage || c.pct) || Math.round(100 / coOwners.length),
-        email: c.email || matchedUnit.clientEmail || matchedUnit.buyerEmail || "",
-        phone: c.phone || matchedUnit.clientPhone || matchedUnit.buyerPhone || "",
-      }));
-      setOwnersList(list);
-    } else {
-      setHasCoOwners(false);
-      const clientName = matchedUnit.client && matchedUnit.client !== "-" ? matchedUnit.client : "Cliente Propietario";
-      setOwnersList([
-        {
-          name: clientName,
-          pct: 100,
+      const list: OwnerInfo[] = coOwners.map((c: any) => {
+        let pct = Number(c.ownershipPct || c.percentage || c.pct);
+        if (!pct && typeof c.percentage === "string") {
+          pct = parseFloat(c.percentage.replace("%", ""));
+        }
+        return {
+          name: c.name || "Copropietario",
+          pct: pct || Math.round(100 / coOwners.length),
+          email: c.email || c.buyerEmail || matchedUnit.clientEmail || matchedUnit.buyerEmail || "",
+          phone: c.phone || c.buyerPhone || matchedUnit.clientPhone || matchedUnit.buyerPhone || "",
+        };
+      });
+
+      // If clientStr contains another owner not in coOwners (e.g. main buyer + co-owners)
+      if (clientStr && !clientStr.includes("+") && !list.some((o) => o.name.toLowerCase() === clientStr.toLowerCase())) {
+        const remainingPct = Math.max(1, 100 - list.reduce((acc, o) => acc + o.pct, 0));
+        list.unshift({
+          name: clientStr,
+          pct: remainingPct,
           email: matchedUnit.clientEmail || matchedUnit.buyerEmail || "",
           phone: matchedUnit.clientPhone || matchedUnit.buyerPhone || "",
-        },
-      ]);
+        });
+      }
+
+      setHasCoOwners(list.length > 1);
+      setOwnersList(list);
+      return;
     }
+
+    // 2. If client string contains " + " with multiple co-owners (e.g. "cliente3 (50%) + cliente4 (50%)")
+    if (clientStr.includes("+")) {
+      const parts = clientStr.split(/\s*\+\s*/);
+      const list: OwnerInfo[] = parts.map((part: string) => {
+        const matchPct = part.match(/\((\d+(?:\.\d+)?)\s*%\)/);
+        const pct = matchPct ? parseFloat(matchPct[1]!) : Math.round(100 / parts.length);
+        const cleanName = part.replace(/\(\d+(?:\.\d+)?\s*%\)/, "").trim();
+        return {
+          name: cleanName || "Copropietario",
+          pct: pct || Math.round(100 / parts.length),
+          email: matchedUnit.clientEmail || matchedUnit.buyerEmail || "",
+          phone: matchedUnit.clientPhone || matchedUnit.buyerPhone || "",
+        };
+      });
+
+      setHasCoOwners(list.length > 1);
+      setOwnersList(list);
+      return;
+    }
+
+    // 3. Single Owner 100%
+    setHasCoOwners(false);
+    const clientName = clientStr && clientStr !== "-" ? clientStr : "Cliente Propietario";
+    setOwnersList([
+      {
+        name: clientName,
+        pct: 100,
+        email: matchedUnit.clientEmail || matchedUnit.buyerEmail || "",
+        phone: matchedUnit.clientPhone || matchedUnit.buyerPhone || "",
+      },
+    ]);
   };
 
   // Initialize modal state
