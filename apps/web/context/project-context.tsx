@@ -738,6 +738,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
     return {
       id: dbProj.id,
+      developerId: dbProj.developerId,
+      developerName: dbProj.developer?.name || dbProj.developerName || undefined,
       name: dbProj.name,
       type: dbProj.projectType || dbProj.type || "VERTICAL",
       currency: dbProj.baseCurrency || dbProj.currency || "MXN",
@@ -941,10 +943,20 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           } catch (e) {}
         }
 
-        if (devData && devData.success && Array.isArray(devData.developers) && devData.developers.length > 0) {
-          matchedDev = devData.developers.find((d: any) => {
+        const allDevs: any[] = Array.isArray(devData)
+          ? devData
+          : Array.isArray(devData?.developers)
+          ? devData.developers
+          : devData?.developer
+          ? [devData.developer]
+          : [];
+
+        if (allDevs.length > 0) {
+          matchedDev = allDevs.find((d: any) => {
             if (activeDevId && d.id === activeDevId) return true;
             if (activeDevName && d.name && d.name.toLowerCase().trim() === activeDevName.toLowerCase().trim()) return true;
+            if (activeDevName && d.commercialName && d.commercialName.toLowerCase().trim() === activeDevName.toLowerCase().trim()) return true;
+            if (activeDevName && d.legalName && d.legalName.toLowerCase().trim() === activeDevName.toLowerCase().trim()) return true;
             if (currentEmail) {
               return (
                 (d.memberships || []).some((m: any) => m.user?.email?.toLowerCase().trim() === currentEmail.toLowerCase().trim()) ||
@@ -955,7 +967,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           });
 
           if (matchedDev) {
-            setDeveloperName(matchedDev.name);
+            setDeveloperName(matchedDev.name || matchedDev.commercialName || matchedDev.legalName || activeDevName);
             const dLogo = matchedDev.logoPath || matchedDev.logo || matchedDev.logoUrl || "";
             if (dLogo) {
               setDeveloperLogo(dLogo);
@@ -973,19 +985,28 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         );
 
         let candidateProjects: any[] = [];
-        if (projData && projData.success && Array.isArray(projData.projects)) {
+        const rawProjList = Array.isArray(projData)
+          ? projData
+          : Array.isArray(projData?.projects)
+          ? projData.projects
+          : [];
+
+        if (rawProjList.length > 0) {
           if (targetDevId || targetDevName) {
             // Strictly filter projects belonging to this developer
-            candidateProjects = projData.projects.filter((p: any) => {
+            candidateProjects = rawProjList.filter((p: any) => {
               if (targetDevId && p.developerId === targetDevId) return true;
               if (targetDevName && p.developer?.name && p.developer.name.toLowerCase().trim() === targetDevName) return true;
+              if (matchedDev && p.developerId === matchedDev.id) return true;
               return false;
             });
           } else if (isGlobalSuperAdmin) {
-            candidateProjects = projData.projects;
+            candidateProjects = rawProjList;
           } else if (matchedDev && Array.isArray(matchedDev.projects)) {
             candidateProjects = matchedDev.projects;
           }
+        } else if (matchedDev && Array.isArray(matchedDev.projects)) {
+          candidateProjects = matchedDev.projects;
         }
 
         let currentLocal: ProjectItem[] = [];

@@ -535,7 +535,7 @@ export class DevelopersService {
   }
 
   async findAll() {
-    return this.prisma.developer.findMany({
+    const dbDevs = await this.prisma.developer.findMany({
       include: {
         projects: {
           include: {
@@ -557,5 +557,7 @@ export class DevelopersService {
       },
       orderBy: { createdAt: "desc" },
     });
+
+    return { success: true, developers: dbDevs };
   }
 }

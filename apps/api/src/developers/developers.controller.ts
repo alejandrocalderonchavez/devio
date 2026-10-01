@@ -13,10 +13,7 @@ export class DevelopersController {
 
   @Get()
   async findByQuery(@Query("email") email?: string, @Query("id") id?: string) {
-    if (email || id) {
-      return this.developersService.findByQuery(email, id);
-    }
-    return this.developersService.findAll();
+    return this.developersService.findByQuery(email, id);
   }
 
   @Put()

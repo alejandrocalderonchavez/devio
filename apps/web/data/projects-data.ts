@@ -118,6 +118,8 @@ export interface ProjectTeamMember {
 
 export interface ProjectItem {
   id: string;
+  developerId?: string;
+  developerName?: string;
   name: string;
   type: string;
   image: string;
