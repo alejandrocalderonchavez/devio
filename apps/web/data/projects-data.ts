@@ -24,7 +24,7 @@ export interface UnitItem {
   type: string;
   price: number;
   areaM2: number;
-  floor: number;
+  floor?: number;
   status: "DISPONIBLE" | "VENDIDA" | "BLOQUEADA" | "APARTADA";
   client: string;
   coOwners?: CoOwner[];

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import PaymentPlanModal from "@/components/plans/payment-plan-modal";
@@ -124,7 +125,9 @@ interface ProjectDocumentItem {
 const STORAGE_KEY_GLOBAL_PLANS = "devio_payment_plans_library";
 
 export default function ProjectOnboardingPage() {
+  const router = useRouter();
   const [step, setStep] = useState<number>(1);
+  const [isNavigating, setIsNavigating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [projectType, setProjectType] = useState<ProjectType>("VERTICAL");
   const [baseCurrency, setBaseCurrency] = useState<Currency>("MXN");
@@ -1061,11 +1064,13 @@ export default function ProjectOnboardingPage() {
     let newProjectId = `proj-${Date.now()}`;
     const mappedUnits: UnitItem[] = units.map((u, idx) => {
       const extra = u.extraFields || {};
-      const numBed = extra.bedrooms ?? extra.recamaras ?? extra.cuartos ?? 2;
-      const numBath = extra.bathrooms ?? extra.banos ?? extra.baños ?? 2;
-      const numPark = extra.parkingSpaces ?? extra.parkingSpots ?? extra.estacionamientos ?? extra.cajones ?? 1;
-      const numStor = extra.storageUnits ?? extra.bodegas ?? 0;
-      const numFloor = extra.floor ?? extra.piso ?? extra.nivel ?? (parseInt(u.unitNumber.replace(/\D/g, "") || "1", 10) || 1);
+      // Use undefined when field not provided — avoids fake defaults showing as data
+      const numBed = extra.bedrooms ?? extra.recamaras ?? extra.cuartos ?? undefined;
+      const numBath = extra.bathrooms ?? extra.banos ?? extra.baños ?? undefined;
+      const numPark = extra.parkingSpaces ?? extra.parkingSpots ?? extra.estacionamientos ?? extra.cajones ?? undefined;
+      const numStor = extra.storageUnits ?? extra.bodegas ?? undefined;
+      // "piso" column from Excel now maps to "floor" key (was "level") — also keep level fallback for compatibility
+      const numFloor = extra.floor ?? extra.level ?? extra.piso ?? extra.nivel ?? undefined;
 
       return {
         id: u.id || `u-${idx + 1}`,
@@ -1073,15 +1078,15 @@ export default function ProjectOnboardingPage() {
         type: u.type || "Departamento",
         price: u.price || 3500000,
         areaM2: u.surfaceM2 || 85,
-        floor: Number(numFloor) || 1,
+        floor: numFloor != null ? (Number(numFloor) || 1) : undefined,
         status: (u.status === "Disponible" ? "DISPONIBLE" : u.status === "Vendida" ? "VENDIDA" : u.status === "Apartada" ? "APARTADA" : "BLOQUEADA") as any,
         client: u.status === "Vendida" ? "Cliente Propietario" : "-",
         deliveryDate: u.deliveryDate || projectGeneralData.estimatedDeliveryDate,
         floorPlan: u.floorPlan || undefined,
-        bedrooms: Number(numBed),
-        bathrooms: Number(numBath),
-        parkingSpots: Number(numPark),
-        storageUnits: Number(numStor),
+        bedrooms: numBed != null ? Number(numBed) : undefined,
+        bathrooms: numBath != null ? Number(numBath) : undefined,
+        parkingSpots: numPark != null ? Number(numPark) : undefined,
+        storageUnits: numStor != null ? Number(numStor) : undefined,
         priceHistory: [
           {
             date: new Date().toLocaleDateString("es-MX"),
@@ -1297,6 +1302,26 @@ export default function ProjectOnboardingPage() {
     const projectDashboardUrl = createdProjectId ? `/projects/${createdProjectId}` : "/dashboard";
     const projectUnitsUrl = createdProjectId ? `/projects/${createdProjectId}/units` : "/dashboard";
 
+    // Helper: navigate with a brief loading screen so the project context has time to hydrate
+    const handleNavigate = async (url: string) => {
+      setIsNavigating(true);
+      // Dispatch update event one more time to ensure context picks up the new project
+      try { window.dispatchEvent(new Event("devio_projects_updated")); } catch (_) {}
+      // Small delay so context can process the storage update before navigation
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      router.push(url);
+    };
+
+    if (isNavigating) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: "1.5rem" }}>
+          <div style={{ width: "52px", height: "52px", border: "4px solid #e2e8f0", borderTopColor: "#1B3047", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          <p style={{ color: "var(--devio-neutral-4)", fontSize: "1rem" }}>Cargando tu nuevo proyecto…</p>
+        </div>
+      );
+    }
+
     return (
       <div style={{ maxWidth: "700px", margin: "4rem auto", padding: "0 1.5rem" }}>
         <div className="card modal-content" style={{ textAlign: "center", padding: "3.5rem 2.5rem" }}>
@@ -1350,12 +1375,20 @@ export default function ProjectOnboardingPage() {
           )}
 
           <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <Link href={projectDashboardUrl} className="btn btn-primary" style={{ padding: "0.85rem 1.5rem", fontSize: "0.95rem" }}>
+            <button
+              onClick={() => handleNavigate(projectDashboardUrl)}
+              className="btn btn-primary"
+              style={{ padding: "0.85rem 1.5rem", fontSize: "0.95rem" }}
+            >
               Ir al Dashboard del Proyecto <ArrowRight size={16} />
-            </Link>
-            <Link href={projectUnitsUrl} className="btn btn-secondary" style={{ padding: "0.85rem 1.5rem", fontSize: "0.95rem" }}>
+            </button>
+            <button
+              onClick={() => handleNavigate(projectUnitsUrl)}
+              className="btn btn-secondary"
+              style={{ padding: "0.85rem 1.5rem", fontSize: "0.95rem" }}
+            >
               <Building2 size={16} /> Ver Unidades
-            </Link>
+            </button>
             <Link href="/dashboard" className="btn btn-outline" style={{ padding: "0.85rem 1.5rem", fontSize: "0.95rem" }}>
               Todos los Proyectos
             </Link>
@@ -1364,6 +1397,7 @@ export default function ProjectOnboardingPage() {
       </div>
     );
   }
+
 
   return (
     <div style={{ maxWidth: "1140px", margin: "2.5rem auto", padding: "0 1.5rem" }}>

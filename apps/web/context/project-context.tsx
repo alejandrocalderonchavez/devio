@@ -541,9 +541,11 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
       const bedVal = u.bedrooms != null ? Number(u.bedrooms) : customAttrs.bedrooms != null ? Number(customAttrs.bedrooms) : customAttrs.recamaras != null ? Number(customAttrs.recamaras) : undefined;
       const bathVal = u.bathrooms != null ? Number(u.bathrooms) : customAttrs.bathrooms != null ? Number(customAttrs.bathrooms) : customAttrs.banos != null ? Number(customAttrs.banos) : customAttrs.baños != null ? Number(customAttrs.baños) : undefined;
-      const parkVal = u.parkingSpaces != null ? Number(u.parkingSpaces) : u.parkingSpots != null ? Number(u.parkingSpots) : customAttrs.parkingSpots != null ? Number(customAttrs.parkingSpots) : customAttrs.estacionamientos != null ? Number(customAttrs.estacionamientos) : customAttrs.cajones != null ? Number(customAttrs.cajones) : 0;
-      const storVal = u.storageRooms != null ? Number(u.storageRooms) : u.storageUnits != null ? Number(u.storageUnits) : customAttrs.storageUnits != null ? Number(customAttrs.storageUnits) : customAttrs.bodegas != null ? Number(customAttrs.bodegas) : 0;
-      const floorVal = Number(u.level ?? u.floor ?? customAttrs.piso ?? customAttrs.nivel ?? 1) || 1;
+      const parkVal = u.parkingSpaces != null ? Number(u.parkingSpaces) : u.parkingSpots != null ? Number(u.parkingSpots) : customAttrs.parkingSpaces != null ? Number(customAttrs.parkingSpaces) : customAttrs.parkingSpots != null ? Number(customAttrs.parkingSpots) : customAttrs.estacionamientos != null ? Number(customAttrs.estacionamientos) : customAttrs.cajones != null ? Number(customAttrs.cajones) : undefined;
+      const storVal = u.storageRooms != null ? Number(u.storageRooms) : u.storageUnits != null ? Number(u.storageUnits) : customAttrs.storageUnits != null ? Number(customAttrs.storageUnits) : customAttrs.bodegas != null ? Number(customAttrs.bodegas) : undefined;
+      // Check all possible floor keys: u.level (DB field), u.floor (local), customAttrs.floor (from Excel alias fix), customAttrs.level, customAttrs.piso/nivel
+      const rawFloor = u.level ?? u.floor ?? customAttrs.floor ?? customAttrs.level ?? customAttrs.piso ?? customAttrs.nivel ?? undefined;
+      const floorVal = rawFloor != null ? (Number(rawFloor) || 1) : undefined;
 
       return {
         id: u.id || `u-${idx + 1}`,
@@ -1007,9 +1009,19 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
             }
             return mappedItem;
           });
-          setProjects(mapped);
-          safeSaveProjectsState(mapped);
+
+          // Preserve local-only projects not yet returned by the API (e.g. just created, API hasn't indexed them yet)
+          const apiIds = new Set(candidateProjects.map((cp: any) => cp.id));
+          const apiNames = new Set(candidateProjects.map((cp: any) => (cp.name || "").toLowerCase().trim()));
+          const localOnly = currentLocal.filter(
+            (lp) => !apiIds.has(lp.id) && !apiNames.has((lp.name || "").toLowerCase().trim())
+          );
+
+          const finalProjects = [...localOnly, ...mapped];
+          setProjects(finalProjects);
+          safeSaveProjectsState(finalProjects);
         }
+
       })
       .catch((err) => console.warn("Could not sync projects from API:", err));
 

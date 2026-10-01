@@ -92,11 +92,12 @@ const COLUMN_ALIASES: Record<string, string> = {
   "delivery_date": "deliveryDate",
 
   // Presets / Additional real fields
-  "piso / nivel.": "level",
-  "piso / nivel": "level",
-  "piso": "level",
-  "nivel": "level",
-  "niveles": "level",
+  "piso / nivel.": "floor",
+  "piso / nivel": "floor",
+  "piso": "floor",
+  "nivel": "floor",
+  "niveles": "floor",
+  "level": "floor",
   "número de recámaras.": "bedrooms",
   "número de recámaras": "bedrooms",
   "recámaras": "bedrooms",
