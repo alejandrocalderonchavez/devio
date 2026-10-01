@@ -481,6 +481,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         saleDate: saleDateIso,
         isCoOwnership: Boolean(s.isCoOwnership || (mappedCoOwners.length > 0)),
         coOwners: mappedCoOwners,
+        coOwnerPayments: Array.isArray(s.coOwnerPayments) ? s.coOwnerPayments : [],
+        client: s.client || {
+          id: s.primaryClientId || s.clientId || primaryClientId,
+          name: primaryClientName,
+          email: primaryClientEmail,
+          phone: primaryClientPhone,
+          rfc: primaryClientRfc,
+        },
         additionals: matchingAddons.length > 0 ? matchingAddons : Array.isArray(s.additionals) ? s.additionals : [],
         schedule: mappedSchedule,
         payments: mappedPayments,
@@ -1123,25 +1131,69 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           const localProj = currentLocal.find((lp) => lp.id === cp.id || lp.name === cp.name);
           const mappedItem = mapDbProjectToProjectItem(cp);
           if (localProj) {
-            return {
-              ...mappedItem,
-              floorPlans: (mappedItem.floorPlans && mappedItem.floorPlans.length > 0) ? mappedItem.floorPlans : (localProj.floorPlans || []),
-              unitsInventory: mappedItem.unitsInventory.map((u) => {
-                const localUnit = (localProj.unitsInventory || []).find((lu) => lu.unit === u.unit);
-                if (localUnit) {
+            // 1. Merge sales: keep local sales that are not yet in API or have richer local details
+            const apiSaleUnits = new Set((mappedItem.sales || []).map((s) => (s.unit || "").toLowerCase().trim()));
+            const localOnlySales = (localProj.sales || []).filter((ls) => !apiSaleUnits.has((ls.unit || "").toLowerCase().trim()));
+            const mergedSales = [
+              ...(mappedItem.sales || []).map((ms) => {
+                const localMatch = (localProj.sales || []).find((ls) => (ls.unit || "").toLowerCase().trim() === (ms.unit || "").toLowerCase().trim());
+                if (localMatch) {
                   return {
-                    ...localUnit,
-                    ...u,
-                    floorPlan: u.floorPlan || localUnit.floorPlan,
-                    images: (u.images && u.images.length > 0) ? u.images : (localUnit.images || []),
-                    customAttributes: {
-                      ...(localUnit.customAttributes || {}),
-                      ...(u.customAttributes || {}),
-                    },
+                    ...localMatch,
+                    ...ms,
+                    payments: (localMatch.payments && localMatch.payments.length >= (ms.payments?.length || 0)) ? localMatch.payments : ms.payments,
+                    coOwners: (localMatch.coOwners && localMatch.coOwners.length >= (ms.coOwners?.length || 0)) ? localMatch.coOwners : ms.coOwners,
+                    coOwnerPayments: (localMatch.coOwnerPayments && localMatch.coOwnerPayments.length > 0) ? localMatch.coOwnerPayments : (ms.coOwnerPayments || []),
+                    schedule: (localMatch.schedule && localMatch.schedule.length >= (ms.schedule?.length || 0)) ? localMatch.schedule : ms.schedule,
                   };
                 }
-                return u;
+                return ms;
               }),
+              ...localOnlySales,
+            ];
+
+            // 2. Merge unitsInventory: protect local sold/reserved units from being reverted to available
+            const mergedUnitsInventory = (mappedItem.unitsInventory || []).map((u) => {
+              const localUnit = (localProj.unitsInventory || []).find((lu) => lu.unit.toLowerCase().trim() === u.unit.toLowerCase().trim());
+              if (localUnit) {
+                const isLocalSold = localUnit.status === "VENDIDA" || localUnit.status === "APARTADA";
+                const isApiAvailable = u.status === "DISPONIBLE" || (u as any).status === "AVAILABLE";
+                const finalStatus = (isLocalSold && isApiAvailable) ? localUnit.status : u.status;
+                const finalClient = (isLocalSold && isApiAvailable && localUnit.client) ? localUnit.client : u.client;
+                const finalCoOwners = (isLocalSold && isApiAvailable && localUnit.coOwners) ? localUnit.coOwners : u.coOwners;
+                const finalSaleFolio = (isLocalSold && isApiAvailable && localUnit.saleFolio) ? localUnit.saleFolio : u.saleFolio;
+                const finalSaleDate = (isLocalSold && isApiAvailable && localUnit.saleDate) ? localUnit.saleDate : u.saleDate;
+                const finalSalePlanName = (isLocalSold && isApiAvailable && localUnit.salePlanName) ? localUnit.salePlanName : u.salePlanName;
+                const finalSalePaidAmount = (isLocalSold && isApiAvailable && localUnit.salePaidAmount !== undefined) ? localUnit.salePaidAmount : u.salePaidAmount;
+                const finalSalePendingAmount = (isLocalSold && isApiAvailable && localUnit.salePendingAmount !== undefined) ? localUnit.salePendingAmount : u.salePendingAmount;
+
+                return {
+                  ...localUnit,
+                  ...u,
+                  status: finalStatus,
+                  client: finalClient,
+                  coOwners: finalCoOwners,
+                  saleFolio: finalSaleFolio,
+                  saleDate: finalSaleDate,
+                  salePlanName: finalSalePlanName,
+                  salePaidAmount: finalSalePaidAmount,
+                  salePendingAmount: finalSalePendingAmount,
+                  floorPlan: u.floorPlan || localUnit.floorPlan,
+                  images: (u.images && u.images.length > 0) ? u.images : (localUnit.images || []),
+                  customAttributes: {
+                    ...(localUnit.customAttributes || {}),
+                    ...(u.customAttributes || {}),
+                  },
+                };
+              }
+              return u;
+            });
+
+            return {
+              ...mappedItem,
+              sales: mergedSales,
+              unitsInventory: mergedUnitsInventory,
+              floorPlans: (mappedItem.floorPlans && mappedItem.floorPlans.length > 0) ? mappedItem.floorPlans : (localProj.floorPlans || []),
             };
           }
           return mappedItem;

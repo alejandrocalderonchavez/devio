@@ -162,10 +162,12 @@ export default function ClientDetailPage() {
 
       const matchesCoOwner = s.coOwners?.some((co) => {
         const coEmailSlug = co.email ? `cli-${co.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : "";
+        const coNameSlug = co.name ? `cli-${co.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : "";
         return (
           (co.id && co.id !== "primary-1" && co.id === clientId) ||
           (co.email && co.email.toLowerCase() === clientId.toLowerCase()) ||
           (coEmailSlug && coEmailSlug === clientId) ||
+          (coNameSlug && coNameSlug === clientId) ||
           co.name.toLowerCase() === clientId.toLowerCase()
         );
       });
@@ -179,10 +181,12 @@ export default function ClientDetailPage() {
       const firstSale = candidateSales[0]!;
       const coOwnerMatch = firstSale.coOwners?.find((co) => {
         const coEmailSlug = co.email ? `cli-${co.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : "";
+        const coNameSlug = co.name ? `cli-${co.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : "";
         return (
           (co.id && co.id !== "primary-1" && co.id === clientId) ||
           (co.email && co.email.toLowerCase() === clientId.toLowerCase()) ||
           (coEmailSlug && coEmailSlug === clientId) ||
+          (coNameSlug && coNameSlug === clientId) ||
           co.name.toLowerCase() === clientId.toLowerCase()
         );
       });
