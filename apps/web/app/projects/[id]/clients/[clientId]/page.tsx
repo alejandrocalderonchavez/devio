@@ -143,14 +143,12 @@ export default function ClientDetailPage() {
 
     const soldUnitsMap = new Map<string, (typeof project.unitsInventory)[0]>();
     (project.unitsInventory || []).forEach((u) => {
-      if (u.status === "VENDIDA" || u.status === "APARTADA") {
-        soldUnitsMap.set(u.unit, u);
-      }
+      soldUnitsMap.set(u.unit.toLowerCase().trim(), u);
     });
 
-    // 1. Try finding in project.sales (active only and sold/apartada unit)
+    // 1. Try finding in project.sales (active only)
     const candidateSales = (project.sales || []).filter((s) => {
-      if (s.status === "CANCELADA" || !soldUnitsMap.has(s.unit)) return false;
+      if (s.status === "CANCELADA") return false;
 
       const emailSlug = s.clientEmail ? `cli-${s.clientEmail.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : "";
       const nameSlug = s.clientName ? `cli-${s.clientName.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : "";
@@ -196,7 +194,7 @@ export default function ClientDetailPage() {
 
       // Filter strictly to ALL sales in the project belonging to THIS client (by matching email or name)
       const matchingSales = (project.sales || []).filter((s) => {
-        if (s.status === "CANCELADA" || !soldUnitsMap.has(s.unit)) return false;
+        if (s.status === "CANCELADA") return false;
         if (clientEmail && clientEmail !== "-" && s.clientEmail) {
           if (s.clientEmail.toLowerCase() === clientEmail.toLowerCase()) return true;
         }
@@ -210,7 +208,7 @@ export default function ClientDetailPage() {
       });
 
       const ownedUnits: ClientOwnedUnit[] = matchingSales.map((s) => {
-        const uObj = soldUnitsMap.get(s.unit);
+        const uObj = soldUnitsMap.get((s.unit || "").toLowerCase().trim());
         const coMatch = s.coOwners?.find(
           (co) =>
             co.name.toLowerCase() === clientName.toLowerCase() ||
@@ -423,28 +421,30 @@ export default function ClientDetailPage() {
   // Sync selectedUnit when unitParam in URL changes or client loads
   useEffect(() => {
     if (unitParam) {
-      const match = rawClient.ownedUnits.find((u) => u.unit.toLowerCase() === unitParam.toLowerCase());
+      const match = rawClient.ownedUnits.find((u) => u.unit.toLowerCase().trim() === unitParam.toLowerCase().trim());
       if (match) {
         setSelectedUnit(match.unit);
         return;
       }
-      if (project?.unitsInventory?.some((u) => u.unit.toLowerCase() === unitParam.toLowerCase())) {
+      if (project?.unitsInventory?.some((u) => u.unit.toLowerCase().trim() === unitParam.toLowerCase().trim())) {
         setSelectedUnit(unitParam);
         return;
       }
     }
     // If no unitParam or unitParam not found, ensure a valid owned unit is selected
     if (rawClient.ownedUnits.length > 0) {
-      const exists = rawClient.ownedUnits.some((u) => u.unit === selectedUnit);
+      const exists = rawClient.ownedUnits.some((u) => u.unit.toLowerCase().trim() === selectedUnit.toLowerCase().trim());
       if (!exists && rawClient.ownedUnits[0]?.unit) {
         setSelectedUnit(rawClient.ownedUnits[0].unit);
       }
     }
-  }, [unitParam, rawClient.ownedUnits, project?.unitsInventory]);
+  }, [unitParam, rawClient.ownedUnits, project?.unitsInventory, selectedUnit]);
 
   // Current Sale for Selected Unit
   const currentSale = useMemo(() => {
-    return (project?.sales || []).find((s) => s.unit === selectedUnit && s.status !== "CANCELADA");
+    return (project?.sales || []).find(
+      (s) => s.unit && s.unit.toLowerCase().trim() === selectedUnit.toLowerCase().trim() && s.status !== "CANCELADA"
+    );
   }, [project, selectedUnit]);
 
   // Co-ownership view mode: "global" (100% of unit) vs "proportional" (client's share %)
@@ -460,7 +460,7 @@ export default function ClientDetailPage() {
       (q) =>
         q.clientName?.toLowerCase() === rawClient.name?.toLowerCase() ||
         (q.clientEmail && rawClient.email && q.clientEmail.toLowerCase() === rawClient.email.toLowerCase()) ||
-        (rawClient.ownedUnits && rawClient.ownedUnits.some((ou) => ou.unit === q.unit))
+        (rawClient.ownedUnits && rawClient.ownedUnits.some((ou) => ou.unit.toLowerCase().trim() === (q.unit || "").toLowerCase().trim()))
     );
   }, [project, rawClient]);
 
@@ -496,7 +496,7 @@ export default function ClientDetailPage() {
   // Current Unit Object & Co-ownership Info
   const currentUnitObj: ClientOwnedUnit = useMemo(() => {
     return (
-      rawClient.ownedUnits.find((u) => u.unit === selectedUnit) ||
+      rawClient.ownedUnits.find((u) => u.unit.toLowerCase().trim() === selectedUnit.toLowerCase().trim()) ||
       rawClient.ownedUnits[0] || {
         unit: selectedUnit || "1A",
         type: "Departamento",

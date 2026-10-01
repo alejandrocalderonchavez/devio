@@ -1591,7 +1591,8 @@ export default function CreateSaleWizardModal({
       });
 
       onClose();
-      router.push(`/projects/${targetProjId}/clients/${clientTargetId}`);
+      const unitQuery = selectedUnitNumber ? `?unit=${encodeURIComponent(selectedUnitNumber)}` : "";
+      router.push(`/projects/${targetProjId}/clients/${clientTargetId}${unitQuery}`);
     }, 700);
   };
 
