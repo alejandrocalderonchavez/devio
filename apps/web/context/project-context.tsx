@@ -95,6 +95,7 @@ export const DEFAULT_DEVELOPER_PAYMENT_PLANS: DeveloperPaymentPlan[] = [
 
 interface ProjectContextType {
   projects: ProjectItem[];
+  isLoadingProjects: boolean;
   currency: Currency;
   setCurrency: (c: Currency) => void;
   banxicoRate: number;
@@ -212,6 +213,7 @@ const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState<boolean>(true);
   const [currency, setCurrency] = useState<Currency>("MXN");
   const [developerName, setDeveloperName] = useState<string>("Mi Desarrolladora");
   const [developerLogo, setDeveloperLogo] = useState<string>("");
@@ -895,6 +897,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
             });
           }
           setProjects(projectItems);
+          if (projectItems.length > 0) {
+            setIsLoadingProjects(false);
+          }
         }
       } catch (e) {}
     } else {
@@ -1119,9 +1124,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         const finalProjects = [...localOnly, ...mapped];
         setProjects(finalProjects);
         safeSaveProjectsState(finalProjects);
-
+        setIsLoadingProjects(false);
       })
-      .catch((err) => console.warn("Could not sync projects from API:", err));
+      .catch((err) => {
+        console.warn("Could not sync projects from API:", err);
+        setIsLoadingProjects(false);
+      });
 
     const handleStorageUpdate = () => {
       loadFromStorage();
@@ -3350,6 +3358,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     <ProjectContext.Provider
       value={{
         projects,
+        isLoadingProjects,
         currency,
         setCurrency,
         banxicoRate,

@@ -17,7 +17,7 @@ import { useProject } from "../../context/project-context";
 
 export default function ProjectsPage() {
   const router = useRouter();
-  const { projects } = useProject();
+  const { projects, isLoadingProjects } = useProject();
 
   const totalUnitsAll = projects.reduce(
     (acc, p) => acc + (Number(p.totalUnits) || (p.unitsInventory?.length || 0)),
@@ -110,8 +110,68 @@ export default function ProjectsPage() {
           </Link>
         </div>
 
-        {/* GRID DE PROYECTOS O EMPTY STATE */}
-        {projects.length === 0 ? (
+        {/* GRID DE PROYECTOS O CARGANDO O EMPTY STATE */}
+        {isLoadingProjects && projects.length === 0 ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.25rem" }}>
+            {[1, 2, 3].map((idx) => (
+              <div
+                key={idx}
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "1.25rem",
+                  overflow: "hidden",
+                  boxShadow: "0 4px 15px rgba(0,0,0,0.04)",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  flexDirection: "column",
+                  position: "relative",
+                  animation: "pulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                }}
+              >
+                {/* Skeleton Header */}
+                <div
+                  style={{
+                    width: "100%",
+                    height: "150px",
+                    backgroundColor: "#F1F5F9",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "24px",
+                      height: "24px",
+                      border: "3px solid #CBD5E1",
+                      borderTopColor: "#1B3047",
+                      borderRadius: "50%",
+                      animation: "spin 0.8s linear infinite",
+                    }}
+                  />
+                  <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#64748B" }}>
+                    Cargando y sincronizando proyecto...
+                  </span>
+                </div>
+
+                {/* Skeleton Body */}
+                <div style={{ padding: "1.15rem" }}>
+                  <div style={{ height: "18px", width: "65%", backgroundColor: "#E2E8F0", borderRadius: "6px", marginBottom: "0.6rem" }} />
+                  <div style={{ height: "14px", width: "40%", backgroundColor: "#F1F5F9", borderRadius: "4px", marginBottom: "1rem" }} />
+                  <div style={{ height: "8px", width: "100%", backgroundColor: "#F1F5F9", borderRadius: "4px", marginBottom: "1rem" }} />
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.45rem", marginBottom: "0.85rem" }}>
+                    <div style={{ height: "36px", backgroundColor: "#F8FAFC", borderRadius: "0.5rem" }} />
+                    <div style={{ height: "36px", backgroundColor: "#F8FAFC", borderRadius: "0.5rem" }} />
+                    <div style={{ height: "36px", backgroundColor: "#F8FAFC", borderRadius: "0.5rem" }} />
+                  </div>
+                  <div style={{ height: "32px", width: "100%", backgroundColor: "#F1F5F9", borderRadius: "0.5rem" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : projects.length === 0 ? (
           <div
             style={{
               backgroundColor: "#FFFFFF",
