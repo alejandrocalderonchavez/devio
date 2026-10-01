@@ -40,6 +40,7 @@ import {
   Package,
   Box,
   LayoutGrid,
+  Users,
 } from "lucide-react";
 import { UnitItem, UnitPriceHistoryItem, ProjectAdditional, ProjectItem } from "../../data/projects-data";
 import { DevioDatePicker } from "../ui/devio-date-picker";
@@ -179,10 +180,22 @@ export default function UnitDetailHistoryModal({
       setUnitType(unit.type || (projectType === "HORIZONTAL" ? "Casa" : projectType === "LOTES" ? "Lote" : projectType === "INDUSTRIAL" ? "Bodega" : projectType === "COMERCIAL" ? "Local Comercial" : "Departamento"));
       setAreaM2(unit.areaM2 || 75);
       setDeliveryDate(unit.deliveryDate || currentProject?.estimatedDeliveryDate || "");
+      const matchingSale = (currentProject?.sales || []).find((s: any) =>
+        (s.unit?.number && s.unit.number === unit.unit) ||
+        (s.unitNumber && s.unitNumber === unit.unit) ||
+        (s.unit && (s.unit === unit.unit || s.unit.number === unit.unit))
+      );
+      const effectiveCoOwners = (unit.coOwners && unit.coOwners.length > 0)
+        ? unit.coOwners
+        : (matchingSale?.coOwners || []);
+      const effectiveClient = (unit.client && unit.client !== "-")
+        ? unit.client
+        : (matchingSale?.client?.name || matchingSale?.clientName || "-");
+
       setUnitStatus(unit.status || "DISPONIBLE");
-      setUnitClient(unit.client || "-");
+      setUnitClient(effectiveClient);
       setAdvisor(unit.advisor || "");
-      setCoOwners(unit.coOwners || []);
+      setCoOwners(effectiveCoOwners);
       setCurrentPrice(unit.price || 0);
       setFloorLevel(unit.floor !== undefined ? unit.floor : ((unit.customAttributes?.floor as number) ?? (unit.customAttributes?.nivel as number) ?? 1));
       setBedrooms(unit.bedrooms !== undefined ? unit.bedrooms : ((unit.customAttributes?.bedrooms as number) ?? (unit.customAttributes?.recamaras as number) ?? 2));
@@ -664,7 +677,24 @@ export default function UnitDetailHistoryModal({
             <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
               Acciones Comerciales Rápidas:
             </span>
-            {unitClient && unitClient !== "-" && (
+            {coOwners && coOwners.length > 1 ? (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  padding: "0.25rem 0.65rem",
+                  borderRadius: "0.5rem",
+                  backgroundColor: "rgba(47, 128, 237, 0.08)",
+                  border: "1px solid rgba(47, 128, 237, 0.25)",
+                  fontSize: "0.78rem",
+                  color: "var(--devio-blue-dark)",
+                }}
+              >
+                <Users size={13} style={{ color: "var(--devio-blue)" }} />
+                <span>Copropiedad ({coOwners.length}): <strong>{coOwners.map((c: any) => `${c.name} (${c.ownershipPct || c.percentage || 50}%)`).join(" + ")}</strong></span>
+              </div>
+            ) : (unitClient && unitClient !== "-" && (
               <div
                 style={{
                   display: "inline-flex",
@@ -681,7 +711,7 @@ export default function UnitDetailHistoryModal({
                 <User size={13} style={{ color: "var(--devio-green)" }} />
                 <span>Titular: <strong>{unitClient}</strong></span>
               </div>
-            )}
+            ))}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -1273,39 +1303,94 @@ export default function UnitDetailHistoryModal({
                     </select>
                   </div>
 
-                  {/* Propietarios Card si está vendida */}
+                  {/* Propietarios Card si está vendida / copropiedad */}
                   {coOwners && coOwners.length > 0 && (
                     <div
                       style={{
                         gridColumn: "1 / -1",
-                        backgroundColor: "rgba(31, 54, 82, 0.03)",
+                        backgroundColor: "rgba(47, 128, 237, 0.03)",
                         borderRadius: "0.75rem",
                         padding: "1rem",
-                        border: "1px solid var(--devio-neutral-1)",
+                        border: "1px solid rgba(47, 128, 237, 0.2)",
                       }}
                     >
-                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.5rem" }}>
-                        Copropietarios Registrados ({coOwners.length})
-                      </span>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                        {coOwners.map((owner: any, idx: number) => (
-                          <div
-                            key={owner.id || idx}
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              backgroundColor: "#FFFFFF",
-                              padding: "0.5rem 0.75rem",
-                              borderRadius: "0.5rem",
-                              border: "1px solid var(--devio-neutral-1)",
-                              fontSize: "0.8rem",
-                            }}
-                          >
-                            <span style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>{owner.name}</span>
-                            <span style={{ fontSize: "0.75rem", color: "var(--devio-green)", fontWeight: 800 }}>{owner.ownershipPct}%</span>
-                          </div>
-                        ))}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
+                        <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                          <Users size={14} style={{ color: "var(--devio-blue)" }} /> Copropietarios Registrados ({coOwners.length})
+                        </span>
+                        <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)" }}>
+                          Estructura de Titularidad y Participación
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+                        {coOwners.map((owner: any, idx: number) => {
+                          const pct = Number(owner.ownershipPct || owner.percentage || 50);
+                          const isPrimary = owner.isPrimary ?? (idx === 0);
+                          const propPrice = currentPrice ? Math.round(currentPrice * (pct / 100)) : 0;
+                          return (
+                            <div
+                              key={owner.id || idx}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                backgroundColor: "#FFFFFF",
+                                padding: "0.6rem 0.85rem",
+                                borderRadius: "0.55rem",
+                                border: "1px solid var(--devio-neutral-1)",
+                                fontSize: "0.8rem",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                <div
+                                  style={{
+                                    width: "26px",
+                                    height: "26px",
+                                    borderRadius: "50%",
+                                    backgroundColor: isPrimary ? "rgba(0, 196, 140, 0.12)" : "rgba(47, 128, 237, 0.1)",
+                                    color: isPrimary ? "var(--devio-green)" : "var(--devio-blue)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: "0.7rem",
+                                    fontWeight: 800,
+                                  }}
+                                >
+                                  {owner.name?.charAt(0)?.toUpperCase() || "C"}
+                                </div>
+                                <div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                    <span style={{ fontWeight: 700, color: "var(--devio-blue-dark)" }}>{owner.name}</span>
+                                    {isPrimary ? (
+                                      <span style={{ fontSize: "0.65rem", padding: "0.1rem 0.4rem", borderRadius: "9999px", backgroundColor: "rgba(0, 196, 140, 0.1)", color: "var(--devio-green)", fontWeight: 700 }}>
+                                        Titular
+                                      </span>
+                                    ) : (
+                                      <span style={{ fontSize: "0.65rem", padding: "0.1rem 0.4rem", borderRadius: "9999px", backgroundColor: "rgba(47, 128, 237, 0.1)", color: "var(--devio-blue)", fontWeight: 700 }}>
+                                        Copropietario
+                                      </span>
+                                    )}
+                                  </div>
+                                  {owner.email && (
+                                    <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", display: "block" }}>
+                                      {owner.email} {owner.phone ? `• ${owner.phone}` : ""}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div style={{ textAlign: "right" }}>
+                                <span style={{ fontSize: "0.85rem", color: "var(--devio-green)", fontWeight: 800, display: "block" }}>
+                                  {pct}%
+                                </span>
+                                {propPrice > 0 && (
+                                  <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)" }}>
+                                    {formatMoney(propPrice)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

@@ -5,6 +5,8 @@ export interface CoOwner {
   phone: string;
   rfc: string;
   ownershipPct: number;
+  percentage?: number;
+  ownershipPercentage?: number;
   isPrimary: boolean;
   relationship?: string;
 }
@@ -269,14 +271,30 @@ export interface SaleRecord {
   clientEmail: string;
   clientPhone: string;
   clientRfc?: string;
-  unit: string;
+  client?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+    rfc?: string;
+  };
+  unit: string | any;
   paymentPlan: string;
   totalPrice: number;
   paidAmount: number;
   pendingAmount: number;
   saleDate: string; // ISO or DD/MM/YY
+  createdAt?: string;
   isCoOwnership?: boolean;
   coOwners?: CoOwner[];
+  coOwnerPayments?: Array<{
+    ownerId?: string;
+    ownerName?: string;
+    ownerEmail?: string;
+    amount?: number;
+    method?: string;
+    reference?: string;
+  }>;
   additionals?: ProjectAdditional[];
   schedule?: SaleScheduleInstallment[];
   payments?: SalePaymentReceipt[];

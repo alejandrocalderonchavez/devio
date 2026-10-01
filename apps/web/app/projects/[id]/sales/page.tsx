@@ -37,6 +37,7 @@ import {
   ChevronRight,
   Filter,
   ChevronDown,
+  Users,
 } from "lucide-react";
 import AppLayout from "../../../../components/layout/app-layout";
 import { useProject } from "../../../../context/project-context";
@@ -125,6 +126,11 @@ export default function ProjectSalesPage() {
         .map((s) => {
           const rawUnitStr = typeof s.unit === "object" && s.unit !== null ? (s.unit as any).unitNumber : s.unit;
           const uNum = String(rawUnitStr || "").trim();
+          const isCoOwned = Boolean(s.isCoOwnership || (s.coOwners && s.coOwners.length > 1));
+          const clientName = isCoOwned && s.coOwners && s.coOwners.length > 1
+            ? s.coOwners.map((c: any) => `${c.name} (${c.ownershipPct || c.percentage || 50}%)`).join(" + ")
+            : s.clientName || (s as any).primaryClient?.fullName || (s.coOwners && s.coOwners.length > 0 ? s.coOwners[0]?.name || "Cliente Comprador" : "Cliente Comprador");
+
           const matchingAddons =
             s.additionals && s.additionals.length > 0
               ? s.additionals
@@ -134,7 +140,7 @@ export default function ProjectSalesPage() {
             id: s.id,
             folio: s.folio || (s as any).contractNumber || `VTA-2026-${uNum || "01"}`,
             unit: uNum,
-            clientName: s.clientName || (s as any).primaryClient?.fullName || (s.coOwners && s.coOwners.length > 0 ? s.coOwners[0]?.name || "Cliente Comprador" : "Cliente Comprador"),
+            clientName,
             clientEmail: s.clientEmail || (s as any).primaryClient?.email || s.coOwners?.[0]?.email || "-",
             clientPhone: s.clientPhone || (s as any).primaryClient?.phone || s.coOwners?.[0]?.phone || "-",
             clientRfc: s.clientRfc || (s as any).primaryClient?.taxId || s.coOwners?.[0]?.rfc || "-",
@@ -142,6 +148,7 @@ export default function ProjectSalesPage() {
             totalPrice: Number(s.totalPrice || (s as any).finalPrice || (s as any).agreedPrice) || 0,
             paidAmount: Number(s.paidAmount) || 0,
             pendingAmount: Number(s.pendingAmount) || 0,
+            isCoOwnership: isCoOwned,
             additionals: matchingAddons,
           };
         });
@@ -1131,7 +1138,32 @@ export default function ProjectSalesPage() {
                       >
                         {/* Nombre */}
                         <td style={{ padding: "1rem 1.25rem", fontWeight: 600, color: "#1F3652", fontSize: "0.85rem" }}>
-                          {sale.clientName}
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
+                              <span>{sale.clientName}</span>
+                              {(sale.isCoOwnership || (sale.coOwners && sale.coOwners.length > 1)) && (
+                                <span
+                                  style={{
+                                    fontSize: "0.68rem",
+                                    fontWeight: 800,
+                                    padding: "0.15rem 0.45rem",
+                                    borderRadius: "4px",
+                                    backgroundColor: "rgba(47, 128, 237, 0.1)",
+                                    color: "#2F80ED",
+                                    border: "1px solid rgba(47, 128, 237, 0.25)",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  Copropiedad
+                                </span>
+                              )}
+                            </div>
+                            {sale.clientEmail && sale.clientEmail !== "-" && (
+                              <span style={{ fontSize: "0.72rem", color: "#64748B", display: "block" }}>
+                                {sale.clientEmail}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Unidad */}
@@ -2681,6 +2713,63 @@ export default function ProjectSalesPage() {
                   </span>
                 </div>
               </div>
+
+              {/* Copropietarios de la Venta si aplica */}
+              {selectedSale.coOwners && selectedSale.coOwners.length > 1 && (
+                <div style={{ backgroundColor: "#F8FAFC", borderRadius: "0.85rem", padding: "1.25rem", border: "1px solid #E2E8F0", marginBottom: "1.5rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                    <h4 style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1F3652", margin: 0, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <Users size={15} color="#2F80ED" /> Copropietarios Registrados ({selectedSale.coOwners.length})
+                    </h4>
+                    <span style={{ fontSize: "0.72rem", color: "#64748B" }}>
+                      Estructura Patrimonial (100%)
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+                    {selectedSale.coOwners.map((co: any, coIdx: number) => {
+                      const coPct = Number(co.ownershipPct || co.percentage || (100 / selectedSale.coOwners!.length));
+                      const coPrice = Math.round((selectedSale.totalPrice * coPct) / 100);
+                      return (
+                        <div
+                          key={co.id || coIdx}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            backgroundColor: "#FFFFFF",
+                            padding: "0.65rem 0.85rem",
+                            borderRadius: "0.5rem",
+                            border: "1px solid #E2E8F0",
+                            fontSize: "0.82rem",
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                              <strong style={{ color: "#1F3652" }}>{co.name}</strong>
+                              {co.isPrimary && (
+                                <span style={{ fontSize: "0.65rem", fontWeight: 700, padding: "0.1rem 0.35rem", borderRadius: "4px", backgroundColor: "rgba(0, 196, 140, 0.1)", color: "#00C48C" }}>
+                                  Titular
+                                </span>
+                              )}
+                            </div>
+                            <span style={{ fontSize: "0.72rem", color: "#64748B" }}>
+                              {co.email || "-"} • {co.phone || "-"}
+                            </span>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <span style={{ fontWeight: 800, color: "#2F80ED", fontSize: "0.85rem" }}>
+                              {coPct}%
+                            </span>
+                            <span style={{ display: "block", fontSize: "0.7rem", color: "#64748B" }}>
+                              {formatMoney(coPrice)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Adicionales / Addons Incluidos */}
               {selectedSale.additionals && selectedSale.additionals.length > 0 && (

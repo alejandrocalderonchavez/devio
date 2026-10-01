@@ -459,8 +459,21 @@ export default function ClientDetailPage() {
 
   // Payments History List (Transacciones Reales)
   const paymentsList: PaymentReceipt[] = useMemo(() => {
+    // 1. Check if there are explicit payments on the sale
     if (currentSale?.payments && currentSale.payments.length > 0) {
-      return currentSale.payments.map((p: any) => ({
+      let filteredPayments = currentSale.payments;
+      if (isCoOwned && coOwnershipViewMode === "proportional") {
+        const hasOwnerTagged = currentSale.payments.some((p: any) => p.ownerId || p.clientId || p.clientEmail || p.ownerEmail);
+        if (hasOwnerTagged) {
+          filteredPayments = currentSale.payments.filter((p: any) =>
+            (p.ownerId && (p.ownerId === rawClient.id || p.ownerId === clientId)) ||
+            (p.clientId && (p.clientId === rawClient.id || p.clientId === clientId)) ||
+            (p.ownerEmail && rawClient.email && p.ownerEmail.toLowerCase() === rawClient.email.toLowerCase()) ||
+            (p.clientEmail && rawClient.email && p.clientEmail.toLowerCase() === rawClient.email.toLowerCase())
+          );
+        }
+      }
+      return filteredPayments.map((p: any) => ({
         id: p.id,
         fechaPago: p.paymentDate || p.fechaPago || "",
         metodoPago: formatPaymentMethodFriendly(p.paymentMethod || p.metodoPago),
@@ -476,8 +489,47 @@ export default function ClientDetailPage() {
         waiveReason: p.waiveReason,
       }));
     }
+
+    // 2. Check if coOwnerPayments exists for co-ownership sales
+    if (currentSale?.coOwnerPayments && currentSale.coOwnerPayments.length > 0 && isCoOwned && coOwnershipViewMode === "proportional") {
+      const myCoPayment = currentSale.coOwnerPayments.find((cp: any) =>
+        (cp.ownerId && (cp.ownerId === rawClient.id || cp.ownerId === clientId)) ||
+        (cp.ownerEmail && rawClient.email && cp.ownerEmail.toLowerCase() === rawClient.email.toLowerCase()) ||
+        (cp.ownerName && rawClient.name && cp.ownerName.toLowerCase() === rawClient.name.toLowerCase())
+      );
+      if (myCoPayment) {
+        const coPaidAmt = Number(myCoPayment.amount) || 0;
+        if (coPaidAmt > 0) {
+          const saleDate = currentSale?.saleDate || currentSale?.createdAt;
+          const formattedDate = saleDate
+            ? new Date(saleDate).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })
+            : new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+          return [
+            {
+              id: `pay-${selectedUnit}-${rawClient.id || "init"}`,
+              fechaPago: formattedDate,
+              metodoPago: formatPaymentMethodFriendly(myCoPayment.method),
+              monto: coPaidAmt,
+              unit: selectedUnit,
+              reciboFolio: `REC-${(currentSale?.id || selectedUnit || "001").replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()}`,
+              notes: `Abono de enganche inicial (${currentUnitObj?.ownershipPct || 50}% proporcional)`,
+              scheduledAmount: coPaidAmt,
+              scheduledDate: formattedDate,
+            },
+          ];
+        } else {
+          return [];
+        }
+      }
+    }
+
+    // 3. Fallback to sale paidAmount or inventory unit paidAmount
     const invUnit = project?.unitsInventory?.find((u) => u.unit === selectedUnit);
-    const totalPaid = (currentSale?.paidAmount || 0) > 0 ? (currentSale?.paidAmount || 0) : (invUnit?.salePaidAmount || 0);
+    const rawTotalPaid = (currentSale?.paidAmount || 0) > 0 ? (currentSale?.paidAmount || 0) : (invUnit?.salePaidAmount || 0);
+    const totalPaid = isCoOwned && coOwnershipViewMode === "proportional"
+      ? Math.round(rawTotalPaid * clientShareRatio)
+      : rawTotalPaid;
+
     if (totalPaid > 0) {
       const saleDate = currentSale?.saleDate || invUnit?.saleDate;
       const formattedDate = saleDate
@@ -498,7 +550,7 @@ export default function ClientDetailPage() {
       ];
     }
     return [];
-  }, [currentSale, selectedUnit, project]);
+  }, [currentSale, selectedUnit, project, isCoOwned, coOwnershipViewMode, clientShareRatio, rawClient, clientId, currentUnitObj]);
 
   // Statement Schedule Data (Cuotas Programadas) with Cascading Amortization
   const statementData: InstallmentItem[] = useMemo(() => {
@@ -515,7 +567,7 @@ export default function ClientDetailPage() {
 
     const totalPaidAvailable = paymentsList.length > 0
       ? paymentsList.reduce((acc, p) => acc + (Number(p.monto) || 0), 0)
-      : (Number(currentSale?.paidAmount) || 0);
+      : (isCoOwned && coOwnershipViewMode === "proportional" ? Math.round((Number(currentSale?.paidAmount) || 0) * clientShareRatio) : (Number(currentSale?.paidAmount) || 0));
 
     if (currentSale?.schedule && currentSale.schedule.length > 0) {
       let remainingPaid = totalPaidAvailable;
@@ -539,7 +591,10 @@ export default function ClientDetailPage() {
           : defaultMonthlyRatePct;
 
         const sDate = formatDateMX(inst.scheduledDate || inst.fechaProgramada || inst.dueDate || "", "dd/mm/yyyy");
-        const sAmount = Number(inst.scheduledAmount ?? inst.montoProgramado) || 0;
+        const rawSAmount = Number(inst.scheduledAmount ?? inst.montoProgramado ?? inst.amount) || 0;
+        const sAmount = isCoOwned && coOwnershipViewMode === "proportional"
+          ? Math.round(rawSAmount * clientShareRatio)
+          : rawSAmount;
 
         const instDate = parseDateFlexible(sDate);
         const isPastDue = Boolean(instDate && instDate < now);
@@ -592,9 +647,12 @@ export default function ClientDetailPage() {
     }
 
     // Fallback if no explicit sale record exists yet
-    const unitPrice = currentUnitObj.price || 5000000;
+    const rawUnitPrice = currentUnitObj.price || 5000000;
+    const unitPrice = isCoOwned && coOwnershipViewMode === "proportional"
+      ? Math.round(rawUnitPrice * clientShareRatio)
+      : rawUnitPrice;
     const invUnit = project?.unitsInventory?.find((u) => u.unit === selectedUnit);
-    const unitPaid = totalPaidAvailable > 0 ? totalPaidAvailable : (invUnit?.salePaidAmount !== undefined ? invUnit.salePaidAmount : 0);
+    const unitPaid = totalPaidAvailable > 0 ? totalPaidAvailable : (invUnit?.salePaidAmount !== undefined ? (isCoOwned && coOwnershipViewMode === "proportional" ? Math.round(invUnit.salePaidAmount * clientShareRatio) : invUnit.salePaidAmount) : 0);
     const engancheAmount = Math.round(unitPrice * 0.2);
     const m1Amount = Math.round(unitPrice * 0.1);
     const m2Amount = Math.round(unitPrice * 0.1);
@@ -656,7 +714,7 @@ export default function ClientDetailPage() {
         interesMoratorio: calculatedMoratorio,
       };
     });
-  }, [currentSale, selectedUnit, currentUnitObj, project, paymentPlans, paymentsList]);
+  }, [currentSale, selectedUnit, currentUnitObj, project, paymentPlans, paymentsList, isCoOwned, coOwnershipViewMode, clientShareRatio]);
 
   // Documents List derived directly from project context (Strictly real documents, NO synthetic dummy data)
   const clientDocuments: ClientDocument[] = useMemo(() => {
@@ -896,18 +954,18 @@ export default function ClientDetailPage() {
   }, [selectedCuotaForAbonos, cuotaContributionsMap]);
 
   // Financial Summary
-  const fullUnitAPagar = currentSale?.totalPrice || (currentSale as any)?.totalAmount || (statementData.reduce((acc, s) => acc + s.montoProgramado, 0) > 0 ? statementData.reduce((acc, s) => acc + s.montoProgramado, 0) : currentUnitObj?.price || 0);
-  const fullUnitPagado = paymentsList.length > 0
+  const rawUnitAPagar = currentSale?.totalPrice || (currentSale as any)?.totalAmount || currentUnitObj?.price || 0;
+  const totalAPagar = isCoOwned && coOwnershipViewMode === "proportional"
+    ? Math.round(rawUnitAPagar * clientShareRatio)
+    : rawUnitAPagar;
+  const totalPagado = paymentsList.length > 0
     ? paymentsList.reduce((acc, p) => acc + (Number(p.monto) || 0), 0)
     : statementData.reduce((acc, s) => acc + s.montoPagado, 0);
-  const fullUnitMoratorioPagado = paymentsList.reduce((acc, p) => acc + (p.moratoryAmount || 0), 0);
-  const totalAPagar = fullUnitAPagar * clientShareRatio;
-  const totalPagado = fullUnitPagado * clientShareRatio;
-  const totalMoratorioPagado = fullUnitMoratorioPagado * clientShareRatio;
-  const totalCobradoTotal = (fullUnitPagado + fullUnitMoratorioPagado) * clientShareRatio;
+  const totalMoratorioPagado = paymentsList.reduce((acc, p) => acc + (p.moratoryAmount || 0), 0);
+  const totalCobradoTotal = totalPagado + totalMoratorioPagado;
   const totalPendiente = Math.max(0, totalAPagar - totalPagado);
-  const saldoAtrasado = baseSaldoAtrasado * clientShareRatio;
-  const interesMoratorio = baseCalculatedMoratorio * clientShareRatio;
+  const saldoAtrasado = baseSaldoAtrasado;
+  const interesMoratorio = baseCalculatedMoratorio;
 
   // Sorting handlers for Statement Table
   const handleSortStatement = (field: keyof InstallmentItem) => {

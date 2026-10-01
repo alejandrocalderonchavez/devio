@@ -53,89 +53,165 @@ export default function ProjectClientsPage() {
     const knownUnits = new Set<string>();
     const nameToKeyMap = new Map<string, string>(); // normalized name -> clientMap key
 
-    // 1. Process from real active sales records first
+    // 1. Process from real active sales records first (including all co-owners)
     (project.sales || []).forEach((sale) => {
       if (sale.status === "CANCELADA") return;
 
       const rawUnitStr = typeof sale.unit === "object" && sale.unit !== null ? (sale.unit as any).unitNumber : sale.unit;
       const unitNum = String(rawUnitStr || "").trim();
-      const clientName = sale.clientName || (sale as any).primaryClient?.fullName || (sale.coOwners && sale.coOwners.length > 0 ? sale.coOwners[0]?.name : "") || "Cliente";
-      const clientEmail = sale.clientEmail || (sale as any).primaryClient?.email || (sale.coOwners && sale.coOwners.length > 0 ? sale.coOwners[0]?.email : "") || "-";
-      const clientPhone = sale.clientPhone || (sale as any).primaryClient?.phone || (sale.coOwners && sale.coOwners.length > 0 ? sale.coOwners[0]?.phone : "") || "-";
-      const clientRfc = sale.clientRfc || (sale as any).primaryClient?.taxId || (sale.coOwners && sale.coOwners.length > 0 ? sale.coOwners[0]?.rfc : "") || "-";
-
-      const normName = (clientName || "").trim().toLowerCase();
-      const normEmail = (clientEmail || "").trim().toLowerCase();
-      const primaryKey = normEmail && normEmail !== "-" ? normEmail : normName;
-
-      if (!primaryKey) return;
-
-      const targetClientId = (sale.clientId && sale.clientId !== "primary-1")
-        ? sale.clientId
-        : normEmail && normEmail !== "-"
-        ? `cli-${normEmail.replace(/[^a-z0-9]/g, "-")}`
-        : normName
-        ? `cli-${normName.replace(/[^a-z0-9]/g, "-")}`
-        : `cli-${Date.now()}`;
-
       const uObj = soldUnitsMap.get(unitNum) || (project.unitsInventory || []).find((u) => u.unit.toLowerCase() === unitNum.toLowerCase());
       if (unitNum) knownUnits.add(unitNum);
 
-      let existingKey = clientMap.has(primaryKey) 
-        ? primaryKey 
-        : (normName && nameToKeyMap.has(normName) ? nameToKeyMap.get(normName)! : null);
+      const matchingAddons = sale.additionals && sale.additionals.length > 0 
+        ? sale.additionals 
+        : (project.additionals || []).filter(a => a.assignedToUnit && a.assignedToUnit.toLowerCase() === unitNum.toLowerCase());
 
-      if (!existingKey || !clientMap.has(existingKey)) {
-        clientMap.set(primaryKey, {
+      // Extract all buyers (both primary and all co-owners)
+      const buyersList: Array<{
+        id: string;
+        name: string;
+        email: string;
+        phone: string;
+        rfc: string;
+        ownershipPct: number;
+        isPrimary: boolean;
+      }> = [];
+
+      if (sale.coOwners && sale.coOwners.length > 0) {
+        sale.coOwners.forEach((co, idx) => {
+          const coName = (co.name || "").trim();
+          if (!coName) return;
+          const coEmail = (co.email || "").trim();
+          const coPhone = (co.phone || "").trim();
+          const coRfc = (co.rfc || "").trim();
+          const coPct = Number(co.ownershipPct || co.percentage || (100 / sale.coOwners!.length)) || 100;
+          const isPrimary = Boolean(co.isPrimary || idx === 0);
+          const resolvedCoId = co.id && co.id !== "primary-1"
+            ? co.id
+            : coEmail
+            ? `cli-${coEmail.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
+            : coName
+            ? `cli-${coName.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
+            : `co-${Date.now()}-${idx}`;
+
+          buyersList.push({
+            id: resolvedCoId,
+            name: coName,
+            email: coEmail || "-",
+            phone: coPhone || "-",
+            rfc: coRfc || "-",
+            ownershipPct: coPct,
+            isPrimary,
+          });
+        });
+      }
+
+      // If no co-owners list, use primary client
+      if (buyersList.length === 0) {
+        const clientName = sale.clientName || (sale as any).primaryClient?.fullName || "Cliente";
+        const clientEmail = sale.clientEmail || (sale as any).primaryClient?.email || "-";
+        const clientPhone = sale.clientPhone || (sale as any).primaryClient?.phone || "-";
+        const clientRfc = sale.clientRfc || (sale as any).primaryClient?.taxId || "-";
+        const targetClientId = (sale.clientId && sale.clientId !== "primary-1")
+          ? sale.clientId
+          : clientEmail && clientEmail !== "-"
+          ? `cli-${clientEmail.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
+          : clientName
+          ? `cli-${clientName.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
+          : `cli-${Date.now()}`;
+
+        buyersList.push({
           id: targetClientId,
           name: clientName,
           email: clientEmail,
           phone: clientPhone,
           rfc: clientRfc,
-          totalPaid: Number(sale.paidAmount) || 0,
-          totalPending: Number(sale.pendingAmount) || 0,
-          unitsCount: 1,
-          ownedUnits: [
-            {
+          ownershipPct: 100,
+          isPrimary: true,
+        });
+      }
+
+      // Process each buyer into the client map
+      buyersList.forEach((buyer) => {
+        const normName = buyer.name.trim().toLowerCase();
+        const normEmail = buyer.email && buyer.email !== "-" ? buyer.email.trim().toLowerCase() : "";
+        const primaryKey = normEmail || normName;
+
+        if (!primaryKey) return;
+
+        // Calculate proportional economic figures
+        const salePrice = Number(sale.totalPrice || (sale as any).finalPrice || uObj?.price) || 0;
+        const proportionalPrice = Math.round((salePrice * buyer.ownershipPct) / 100);
+
+        // Find specific payment recorded for this buyer if available
+        let buyerPaid = 0;
+        if (Array.isArray(sale.coOwnerPayments) && sale.coOwnerPayments.length > 0) {
+          const matchedCp = sale.coOwnerPayments.find(
+            (cp: any) =>
+              (cp.clientId && cp.clientId === buyer.id) ||
+              (normEmail && cp.email && cp.email.toLowerCase().trim() === normEmail) ||
+              (cp.name && cp.name.toLowerCase().trim() === normName)
+          );
+          if (matchedCp) {
+            buyerPaid = Number(matchedCp.amount) || 0;
+          } else {
+            buyerPaid = Math.round(((Number(sale.paidAmount) || 0) * buyer.ownershipPct) / 100);
+          }
+        } else {
+          buyerPaid = Math.round(((Number(sale.paidAmount) || 0) * buyer.ownershipPct) / 100);
+        }
+        const buyerPending = Math.max(0, proportionalPrice - buyerPaid);
+
+        let existingKey = clientMap.has(primaryKey)
+          ? primaryKey
+          : (normName && nameToKeyMap.has(normName) ? nameToKeyMap.get(normName)! : null);
+
+        if (!existingKey || !clientMap.has(existingKey)) {
+          clientMap.set(primaryKey, {
+            id: buyer.id,
+            name: buyer.name,
+            email: buyer.email,
+            phone: buyer.phone,
+            rfc: buyer.rfc,
+            totalPaid: buyerPaid,
+            totalPending: buyerPending,
+            unitsCount: 1,
+            ownedUnits: [
+              {
+                unit: unitNum,
+                type: uObj?.type || "Departamento",
+                price: proportionalPrice,
+                ownershipPct: buyer.ownershipPct,
+                isPrimary: buyer.isPrimary,
+                saleFolio: sale.folio || (sale as any).contractNumber,
+                additionals: matchingAddons,
+              },
+            ],
+          });
+          if (normName) nameToKeyMap.set(normName, primaryKey);
+          if (normEmail) nameToKeyMap.set(normEmail, primaryKey);
+        } else {
+          const existing = clientMap.get(existingKey)!;
+          if (existing.email === "-" && buyer.email !== "-") existing.email = buyer.email;
+          if (existing.phone === "-" && buyer.phone !== "-") existing.phone = buyer.phone;
+          if (existing.rfc === "-" && buyer.rfc !== "-") existing.rfc = buyer.rfc;
+
+          if (!existing.ownedUnits.some((u) => u.unit.toLowerCase() === unitNum.toLowerCase())) {
+            existing.unitsCount += 1;
+            existing.totalPaid += buyerPaid;
+            existing.totalPending += buyerPending;
+            existing.ownedUnits.push({
               unit: unitNum,
               type: uObj?.type || "Departamento",
-              price: Number(sale.totalPrice || (sale as any).finalPrice || uObj?.price) || 0,
-              ownershipPct: sale.coOwners && sale.coOwners.length > 0 ? (sale.coOwners[0]?.ownershipPct || 100) : 100,
-              isPrimary: true,
-              saleFolio: sale.folio || (sale as any).contractNumber,
-              additionals: sale.additionals && sale.additionals.length > 0 ? sale.additionals : (project.additionals || []).filter(a => a.assignedToUnit && a.assignedToUnit.toLowerCase() === unitNum.toLowerCase()),
-            },
-          ],
-        });
-        if (normName) nameToKeyMap.set(normName, primaryKey);
-        if (normEmail && normEmail !== "-") nameToKeyMap.set(normEmail, primaryKey);
-      } else {
-        const existing = clientMap.get(existingKey)!;
-        // update contact info if previous was '-'
-        if (existing.email === "-" && sale.clientEmail && sale.clientEmail !== "-") {
-          existing.email = sale.clientEmail;
+              price: proportionalPrice,
+              ownershipPct: buyer.ownershipPct,
+              isPrimary: buyer.isPrimary,
+              saleFolio: sale.folio,
+              additionals: matchingAddons,
+            });
+          }
         }
-        if (existing.phone === "-" && sale.clientPhone && sale.clientPhone !== "-") {
-          existing.phone = sale.clientPhone;
-        }
-        if (existing.rfc === "-" && sale.clientRfc && sale.clientRfc !== "-") {
-          existing.rfc = sale.clientRfc;
-        }
-        if (!existing.ownedUnits.some((u) => u.unit === sale.unit)) {
-          existing.unitsCount += 1;
-          existing.totalPaid += sale.paidAmount || 0;
-          existing.totalPending += sale.pendingAmount || 0;
-          existing.ownedUnits.push({
-            unit: sale.unit,
-            type: uObj?.type || "Departamento",
-            price: sale.totalPrice || uObj?.price || 0,
-            ownershipPct: sale.coOwners && sale.coOwners.length > 0 ? (sale.coOwners[0]?.ownershipPct || 100) : 100,
-            isPrimary: true,
-            saleFolio: sale.folio,
-            additionals: sale.additionals && sale.additionals.length > 0 ? sale.additionals : (project.additionals || []).filter(a => a.assignedToUnit === sale.unit),
-          });
-        }
-      }
+      });
     });
 
     // 2. Only check unsold / unassociated units from unitsInventory if NOT already in knownUnits
@@ -785,11 +861,19 @@ export default function ProjectClientsPage() {
                               <strong style={{ fontSize: "0.88rem", color: "#1F3652", display: "block" }}>
                                 {client.name}
                               </strong>
-                              {client.ownedUnits.length > 1 && (
+                              {client.ownedUnits.length > 1 ? (
                                 <span style={{ fontSize: "0.7rem", color: "#2F80ED", fontWeight: 600 }}>
-                                  Múltiples Unidades ({client.ownedUnits.map((u) => u.unit).join(", ")})
+                                  Múltiples Unidades ({client.ownedUnits.map((u) => u.ownershipPct < 100 ? `${u.unit} (${u.ownershipPct}%)` : u.unit).join(", ")})
                                 </span>
-                              )}
+                              ) : client.ownedUnits[0] && client.ownedUnits[0].ownershipPct < 100 ? (
+                                <span style={{ fontSize: "0.7rem", color: "#2F80ED", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+                                  <Users size={11} /> Copropiedad ({client.ownedUnits[0].ownershipPct}% en Unidad {client.ownedUnits[0].unit})
+                                </span>
+                              ) : client.ownedUnits[0] ? (
+                                <span style={{ fontSize: "0.7rem", color: "#64748B" }}>
+                                  Unidad {client.ownedUnits[0].unit}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
                         </td>

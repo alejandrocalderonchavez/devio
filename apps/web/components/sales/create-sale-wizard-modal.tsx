@@ -1238,18 +1238,43 @@ export default function CreateSaleWizardModal({
         };
       });
 
+      // Helper to reliably find co-owner payment setting regardless of id or email changes
+      const resolveOwnerConfig = (owner: any): CoOwnerPaymentConfig => {
+        const normEmail = owner.email ? owner.email.toLowerCase().trim() : "";
+        const normName = owner.name ? owner.name.toLowerCase().trim() : "";
+        
+        for (const [key, val] of Object.entries(coOwnerPaymentSettings)) {
+          if (owner.id && key === owner.id) return val;
+          if (val.id && val.id === owner.id) return val;
+          if (normEmail && (key.toLowerCase() === normEmail || val.email?.toLowerCase().trim() === normEmail)) return val;
+          if (normName && (key.toLowerCase() === normName || val.name?.toLowerCase().trim() === normName)) return val;
+        }
+
+        const expectedDown = Math.round(totalDown * (Number(owner.ownershipPct || 0) / 100));
+        return {
+          id: owner.id,
+          name: owner.name,
+          email: owner.email,
+          phone: owner.phone,
+          rfc: owner.rfc,
+          ownershipPct: owner.ownershipPct,
+          paymentOption: "FULL",
+          paymentAmount: expectedDown,
+          paymentMethod: "transferencia",
+          paymentReference: "",
+          sendCredentials: true,
+          sendSaleConfirmationEmail: true,
+          sendReceiptEmail: true,
+        };
+      };
+
       // Build co-owner payment records
       const totalDown = paymentSchedule[0]?.amount || Math.round(netTotalSaleAmount * (downPaymentPct / 100));
       const coOwnerPayments = isCoOwnership
         ? finalCoOwners.map((owner) => {
-            const ownerKey = owner.id || owner.email || owner.name;
-            const cfg = coOwnerPaymentSettings[ownerKey] || coOwnerPaymentSettings[owner.id] || {
-              paymentOption: "FULL",
-              paymentAmount: Math.round(totalDown * (Number(owner.ownershipPct || 0) / 100)),
-              paymentMethod: "transferencia",
-              paymentReference: "",
-              sendReceiptEmail: true,
-            };
+            const cfg = resolveOwnerConfig(owner);
+            const isNone = cfg.paymentOption === "NONE";
+            const payAmt = isNone ? 0 : (Number(cfg.paymentAmount) || 0);
             return {
               clientId: owner.id,
               name: owner.name,
@@ -1257,11 +1282,11 @@ export default function CreateSaleWizardModal({
               phone: owner.phone,
               rfc: owner.rfc,
               ownershipPct: owner.ownershipPct,
-              amount: cfg.paymentOption === "NONE" ? 0 : (Number(cfg.paymentAmount) || 0),
+              amount: payAmt,
               method: cfg.paymentMethod || "transferencia",
               reference: cfg.paymentReference || "",
               paymentMode: cfg.paymentOption,
-              sendReceiptEmail: cfg.paymentOption !== "NONE" && Boolean(cfg.sendReceiptEmail),
+              sendReceiptEmail: !isNone && payAmt > 0 && Boolean(cfg.sendReceiptEmail),
             };
           })
         : [];
@@ -1419,10 +1444,7 @@ export default function CreateSaleWizardModal({
       // ----------------------------------------------------------------------
       allOwnersCombined.forEach(async (owner, idx) => {
         if (!owner.email) return;
-        const ownerKey = owner.id || owner.email || owner.name;
-        const cfg = isCoOwnership
-          ? (coOwnerPaymentSettings[ownerKey] || coOwnerPaymentSettings[owner.id])
-          : null;
+        const cfg = isCoOwnership ? resolveOwnerConfig(owner) : null;
 
         const isExistingUser =
           (owner.isPrimary && isPrimaryFound) ||
@@ -1447,17 +1469,21 @@ export default function CreateSaleWizardModal({
           ? (cfg?.sendSaleConfirmationEmail !== false)
           : sendSaleConfirmationEmail;
 
+        const isNonePayment = isCoOwnership
+          ? cfg?.paymentOption === "NONE"
+          : initialPaymentOption === "NONE";
+
         const ownerPaymentAmount = isCoOwnership
-          ? (cfg?.paymentOption === "NONE" ? 0 : (Number(cfg?.paymentAmount) || 0))
-          : (initialPaymentOption === "NONE" ? 0 : initialPaymentAmount);
+          ? (isNonePayment ? 0 : (Number(cfg?.paymentAmount) || 0))
+          : (isNonePayment ? 0 : initialPaymentAmount);
 
         const ownerPaymentMethod = isCoOwnership
           ? (cfg?.paymentMethod || "transferencia")
           : paymentMethod;
 
         const shouldSendReceipt = isCoOwnership
-          ? (cfg?.paymentOption !== "NONE" && cfg?.sendReceiptEmail !== false && ownerPaymentAmount > 0)
-          : (initialPaymentOption !== "NONE" && sendReceiptEmail && ownerPaymentAmount > 0);
+          ? (!isNonePayment && cfg?.sendReceiptEmail !== false && ownerPaymentAmount > 0)
+          : (!isNonePayment && sendReceiptEmail && ownerPaymentAmount > 0);
 
         // 1. Envío obligatorio de credenciales de acceso
         if (shouldSendCredentials) {
