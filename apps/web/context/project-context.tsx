@@ -244,7 +244,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     if (!dbProj) return {} as ProjectItem;
 
     const rawAdditionals = Array.isArray(dbProj.additionals) ? dbProj.additionals : [];
-    const additionals: ProjectAdditional[] = rawAdditionals.map((a: any, idx: number) => {
+    const seenAvailableKeys = new Set<string>();
+    const additionals: ProjectAdditional[] = [];
+
+    rawAdditionals.forEach((a: any, idx: number) => {
       const rawType = (a.type || a.category || "PARKING").toUpperCase();
       const category: "estacionamiento" | "bodega" | "acabados" | "terraza" | "otro" =
         rawType === "PARKING" || rawType === "ESTACIONAMIENTO"
@@ -260,21 +263,31 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const assignedUnitNum = a.unit?.unitNumber || a.assignedToUnit || undefined;
       const rawStatus = (a.status || "AVAILABLE").toUpperCase();
       const status: "DISPONIBLE" | "ASIGNADO" | "VENDIDO" =
-        rawStatus === "SOLD" || rawStatus === "VENDIDO"
+        rawStatus === "SOLD" || rawStatus === "VENDIDO" || rawStatus === "ASSIGNED" || rawStatus === "ASIGNADO" || Boolean(assignedUnitNum)
           ? "VENDIDO"
-          : rawStatus === "RESERVED" || rawStatus === "ASSIGNED" || rawStatus === "ASIGNADO" || Boolean(assignedUnitNum)
-          ? "ASIGNADO"
           : "DISPONIBLE";
 
-      return {
+      const nameClean = String(a.name || `Adicional ${idx + 1}`).trim();
+      const priceNum = Number(a.price) || 0;
+
+      // If available and unassigned, deduplicate identical slots
+      if (status === "DISPONIBLE" && !assignedUnitNum) {
+        const dedupKey = `${nameClean.toLowerCase()}-${category}-${priceNum}`;
+        if (seenAvailableKeys.has(dedupKey)) {
+          return;
+        }
+        seenAvailableKeys.add(dedupKey);
+      }
+
+      additionals.push({
         id: a.id || `add-${idx + 1}`,
-        name: a.name || `Adicional ${idx + 1}`,
+        name: nameClean,
         category,
-        price: Number(a.price) || 0,
+        price: priceNum,
         status,
         assignedToUnit: assignedUnitNum,
         notes: a.notes || "",
-      };
+      });
     });
 
     const rawSales = Array.isArray(dbProj.sales) ? dbProj.sales : [];
@@ -2555,7 +2568,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
       const sale = currentSales[saleIndex]!;
       const existingAdditionalsPrice = (sale.additionals || []).reduce((sum, a) => sum + (Number(a.price) || 0), 0);
-      const baseUnitPrice = Math.max(0, (unitObj.price || 0) - existingAdditionalsPrice);
+      const baseUnitPrice = Math.max(0, (unitObj.price || sale.totalPrice) - existingAdditionalsPrice);
       const newAdditionalsPrice = payload.additionals.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
       const newTotalPrice = Math.max(baseUnitPrice, baseUnitPrice + newAdditionalsPrice);
       const priceDifference = newTotalPrice - sale.totalPrice;
@@ -2567,22 +2580,39 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       if (adjustMode === "liquidation" && newSchedule.length > 0) {
         const lastIdx = newSchedule.length - 1;
         const lastInst = newSchedule[lastIdx]!;
-        const updatedLastAmount = Math.max(0, lastInst.scheduledAmount + priceDifference);
+        const currentAmt = Number(lastInst.scheduledAmount ?? lastInst.amount ?? lastInst.originalAmount ?? (lastInst as any).montoProgramado) || 0;
+        const updatedLastAmount = Math.max(0, Math.round((currentAmt + priceDifference) * 100) / 100);
         newSchedule[lastIdx] = {
           ...lastInst,
           scheduledAmount: updatedLastAmount,
+          amount: updatedLastAmount,
+          originalAmount: updatedLastAmount,
+          montoProgramado: updatedLastAmount,
         };
       } else if (newSchedule.length > 0) {
         const pendingInsts = newSchedule.filter((inst) => inst.status !== "Pagado");
-        const totalPendingScheduled = pendingInsts.reduce((sum, inst) => sum + inst.scheduledAmount, 0);
+        const totalPendingScheduled = pendingInsts.reduce((sum, inst) => sum + (Number(inst.scheduledAmount ?? inst.amount ?? inst.originalAmount ?? (inst as any).montoProgramado) || 0), 0);
         if (totalPendingScheduled > 0 && pendingInsts.length > 0) {
+          let accumulatedDelta = 0;
+          let countProcessed = 0;
           newSchedule = newSchedule.map((inst) => {
             if (inst.status === "Pagado") return inst;
-            const proportion = inst.scheduledAmount / totalPendingScheduled;
-            const newAmount = Math.max(0, Math.round(inst.scheduledAmount + priceDifference * proportion));
+            countProcessed++;
+            const currentAmt = Number(inst.scheduledAmount ?? inst.amount ?? inst.originalAmount ?? (inst as any).montoProgramado) || 0;
+            const proportion = currentAmt / totalPendingScheduled;
+            let delta = Math.round(priceDifference * proportion * 100) / 100;
+            if (countProcessed === pendingInsts.length) {
+              delta = Math.round((priceDifference - accumulatedDelta) * 100) / 100;
+            } else {
+              accumulatedDelta = Math.round((accumulatedDelta + delta) * 100) / 100;
+            }
+            const newAmount = Math.max(0, Math.round((currentAmt + delta) * 100) / 100);
             return {
               ...inst,
               scheduledAmount: newAmount,
+              amount: newAmount,
+              originalAmount: newAmount,
+              montoProgramado: newAmount,
             };
           });
         }
@@ -2596,18 +2626,23 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
       let remPaid = totalPaid;
       newSchedule = newSchedule.map((inst) => {
-        const scheduled = Number(inst.scheduledAmount) || 0;
+        const scheduled = Number(inst.scheduledAmount ?? inst.amount ?? inst.originalAmount ?? (inst as any).montoProgramado) || 0;
         let alloc = 0;
-        if (remPaid > 0) {
+        if (remPaid > 0 && scheduled > 0) {
           alloc = Math.min(remPaid, scheduled);
           remPaid -= alloc;
         }
         const pending = Math.max(0, scheduled - alloc);
+        const isPaid = pending === 0 && scheduled > 0;
         return {
           ...inst,
+          scheduledAmount: scheduled,
+          amount: scheduled,
+          originalAmount: scheduled,
+          montoProgramado: scheduled,
           paidAmount: alloc,
           pendingAmount: pending,
-          status: (pending === 0 ? "Pagado" : alloc > 0 ? "Parcial" : "Pendiente") as "Pagado" | "Parcial" | "Pendiente",
+          status: (isPaid ? "Pagado" : alloc > 0 ? "Parcial" : "Pendiente") as "Pagado" | "Parcial" | "Pendiente",
         };
       });
 
@@ -2617,7 +2652,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         ...sale,
         totalPrice: newTotalPrice,
         pendingAmount: newSalePending,
-        additionals: payload.additionals,
+        additionals: payload.additionals.map((a) => ({ ...a, status: "VENDIDO" as const, assignedToUnit: unitNumber })),
         schedule: newSchedule,
         status: newSalePending === 0 ? "PAGADA" : "ACTIVA",
       };
@@ -2627,7 +2662,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       salePayloadToSync = {
         projectId: targetProject.id,
         unitNumber,
-        additionals: payload.additionals,
+        additionals: payload.additionals.map((a) => ({ ...a, status: "VENDIDO" as const, assignedToUnit: unitNumber })),
         totalPrice: newTotalPrice,
         finalPrice: newTotalPrice,
         agreedPrice: newTotalPrice,
@@ -2637,16 +2672,43 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         notes: payload.notes,
       };
 
-      // Update project additionals inventory statuses
-      const updatedProjectAdditionals = (p.additionals || []).map((add) => {
-        const isAssignedToThisUnit = payload.additionals.some((a) => a.id === add.id);
-        if (isAssignedToThisUnit) {
-          return { ...add, status: "ASIGNADO" as const, assignedToUnit: unitNumber };
+      // Update project additionals inventory statuses (assigned become VENDIDO, removed become DISPONIBLE)
+      const existingAdditionals = p.additionals || [];
+      const updatedProjectAdditionals: ProjectAdditional[] = [];
+
+      existingAdditionals.forEach((add) => {
+        const isAssigned = payload.additionals.some(
+          (a) => a.id === add.id || (a.name.toLowerCase().trim() === add.name.toLowerCase().trim() && a.price === add.price)
+        );
+        if (isAssigned) {
+          updatedProjectAdditionals.push({
+            ...add,
+            status: "VENDIDO" as const,
+            assignedToUnit: unitNumber,
+          });
+        } else if (add.assignedToUnit === unitNumber) {
+          updatedProjectAdditionals.push({
+            ...add,
+            status: "DISPONIBLE" as const,
+            assignedToUnit: undefined,
+          });
+        } else {
+          updatedProjectAdditionals.push(add);
         }
-        if (add.assignedToUnit === unitNumber) {
-          return { ...add, status: "DISPONIBLE" as const, assignedToUnit: undefined };
+      });
+
+      // Include any newly created custom additionals in project inventory
+      payload.additionals.forEach((addon) => {
+        const alreadyIncluded = updatedProjectAdditionals.some(
+          (a) => a.id === addon.id || (a.name.toLowerCase().trim() === addon.name.toLowerCase().trim() && a.price === addon.price)
+        );
+        if (!alreadyIncluded) {
+          updatedProjectAdditionals.push({
+            ...addon,
+            status: "VENDIDO" as const,
+            assignedToUnit: unitNumber,
+          });
         }
-        return add;
       });
 
       // Update unit inventory
@@ -2655,6 +2717,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         price: newTotalPrice,
         salePendingAmount: newSalePending,
       };
+
+      // Update clients ownedUnits if any
+      const updatedClients = (p.clients || []).map((cli) => {
+        const hasUnit = (cli.ownedUnits || []).some((u) => u.unit === unitNumber);
+        if (!hasUnit) return cli;
+        return {
+          ...cli,
+          ownedUnits: (cli.ownedUnits || []).map((u) => (u.unit === unitNumber ? { ...u, price: newTotalPrice } : u)),
+        };
+      });
 
       const activeSales = currentSales.filter((s) => s.status !== "CANCELADA");
       const totalCobrado = activeSales.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
@@ -2668,6 +2740,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         unitsInventory: currentInventory,
         additionals: updatedProjectAdditionals,
         sales: currentSales,
+        clients: updatedClients,
         metrics: {
           ...p.metrics,
           valorComercialVendido,
@@ -2689,11 +2762,15 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       }).catch((err) => console.warn("Could not sync sale update to API:", err));
     }
 
-    // Persist additionals changes to Supabase
+    // Persist additionals changes to backend API / Supabase without clobbering state
     if (targetProject) {
       const updatedProj = updated.find((p) => p.id === targetProject.id);
       if (updatedProj && updatedProj.additionals) {
-        updateProjectAdditionals(targetProject.id, updatedProj.additionals);
+        fetch("/api/additionals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: targetProject.id, additionals: updatedProj.additionals }),
+        }).catch((err) => console.warn("Could not sync additionals with backend:", err));
       }
     }
     showToast("Venta y Adicionales Actualizados", `Se actualizaron los adicionales y el precio de la unidad ${unitNumber}.`, "success");

@@ -72,22 +72,34 @@ export function EditSaleModal({
   const priceDifference = newTotalPrice - sale.totalPrice;
   const newPendingAmount = Math.max(0, newTotalPrice - sale.paidAmount);
 
-  // Available additionals from project catalog not yet assigned to any unit
+  // Available additionals from project catalog not yet assigned to any unit (strictly DISPONIBLE and deduplicated)
   const availableAdditionals = useMemo(() => {
-    return (project.additionals || []).filter(
-      (a) =>
-        (a.status === "DISPONIBLE" || !a.status || !a.assignedToUnit) &&
-        a.status !== "VENDIDO" &&
-        a.assignedToUnit !== sale.unit &&
-        !assignedAdditionals.some((curr) => curr.id === a.id)
-    );
+    const seen = new Set<string>();
+    return (project.additionals || []).filter((a) => {
+      const rawStatus = (a.status || "DISPONIBLE").toUpperCase();
+      if (rawStatus === "VENDIDO" || rawStatus === "SOLD" || rawStatus === "ASIGNADO" || rawStatus === "ASSIGNED") {
+        return false;
+      }
+      if (a.assignedToUnit && String(a.assignedToUnit).trim() !== "") {
+        return false;
+      }
+      if (assignedAdditionals.some((curr) => curr.id === a.id || (curr.name.toLowerCase().trim() === a.name.toLowerCase().trim() && curr.price === a.price))) {
+        return false;
+      }
+      const dedupKey = `${(a.name || "").toLowerCase().trim()}-${a.category}-${a.price}`;
+      if (seen.has(dedupKey)) {
+        return false;
+      }
+      seen.add(dedupKey);
+      return true;
+    });
   }, [project.additionals, assignedAdditionals, sale.unit]);
 
   // Add an existing unassigned project additional
   const handleAddCatalogAdditional = (additionalId: string) => {
     const found = (project.additionals || []).find((a) => a.id === additionalId);
     if (!found) return;
-    setAssignedAdditionals([...assignedAdditionals, { ...found, assignedToUnit: sale.unit, status: "ASIGNADO" }]);
+    setAssignedAdditionals([...assignedAdditionals, { ...found, assignedToUnit: sale.unit, status: "VENDIDO" }]);
   };
 
   // Remove an additional from the sale
@@ -106,7 +118,7 @@ export function EditSaleModal({
       category: customForm.category,
       price: Number(customForm.price),
       notes: customForm.notes.trim() || undefined,
-      status: "ASIGNADO",
+      status: "VENDIDO",
       assignedToUnit: sale.unit,
     };
 

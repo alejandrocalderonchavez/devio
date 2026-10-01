@@ -499,16 +499,27 @@ export default function ClientDetailPage() {
 
   // Current Unit Object & Co-ownership Info
   const currentUnitObj: ClientOwnedUnit = useMemo(() => {
-    return (
-      rawClient.ownedUnits.find((u) => u.unit.toLowerCase().trim() === selectedUnit.toLowerCase().trim()) ||
-      rawClient.ownedUnits[0] || {
-        unit: selectedUnit || "1A",
-        type: "Departamento",
-        price: currentSale?.totalPrice || 0,
-        ownershipPct: 100,
-        isPrimary: true,
-      }
-    );
+    const match = rawClient.ownedUnits.find((u) => u.unit.toLowerCase().trim() === selectedUnit.toLowerCase().trim());
+    if (match) {
+      return {
+        ...match,
+        price: currentSale?.totalPrice ?? match.price,
+      };
+    }
+    const first = rawClient.ownedUnits[0];
+    if (first) {
+      return {
+        ...first,
+        price: currentSale?.totalPrice ?? first.price,
+      };
+    }
+    return {
+      unit: selectedUnit || "1A",
+      type: "Departamento",
+      price: currentSale?.totalPrice || 0,
+      ownershipPct: 100,
+      isPrimary: true,
+    };
   }, [rawClient, selectedUnit, currentSale]);
 
   const formatPaymentMethodFriendly = (method?: string): string => {

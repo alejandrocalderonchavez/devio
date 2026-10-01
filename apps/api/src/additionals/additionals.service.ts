@@ -33,6 +33,12 @@ export class AdditionalsService {
     }
 
     if (Array.isArray(additionals) && additionals.length > 0) {
+      const existingInDb = await this.prisma.unitAdditional.findMany({
+        where: { projectId },
+      });
+
+      const processedIds = new Set<string>();
+
       for (const item of additionals) {
         const itemType = String(item.type || item.category || "PARKING").toUpperCase();
         const validItemType: "PARKING" | "STORAGE" | "OTHER" =
@@ -43,41 +49,45 @@ export class AdditionalsService {
             : "OTHER";
 
         const itemStatus: "AVAILABLE" | "ASSIGNED" | "SOLD" =
-          item.status === "VENDIDO" || item.status === "SOLD"
+          item.status === "VENDIDO" || item.status === "SOLD" || item.status === "ASIGNADO" || item.status === "ASSIGNED"
             ? "SOLD"
-            : item.status === "ASIGNADO" || item.status === "ASSIGNED"
-            ? "ASSIGNED"
             : "AVAILABLE";
 
-        if (item.id && !item.id.startsWith("add-") && item.id.length > 10) {
-          await this.prisma.unitAdditional.upsert({
-            where: { id: item.id },
-            create: {
-              id: item.id,
-              projectId,
-              name: item.name || "Adicional",
-              type: validItemType,
-              status: itemStatus,
-              price: Number(item.price || 0),
-            },
-            update: {
-              name: item.name || "Adicional",
+        const cleanName = String(item.name || "Adicional").trim();
+
+        // 1. Try finding by ID
+        let matched = existingInDb.find((e) => e.id === item.id);
+        // 2. If not found by ID, try matching by clean name + type
+        if (!matched) {
+          matched = existingInDb.find(
+            (e) => !processedIds.has(e.id) && e.name.trim().toLowerCase() === cleanName.toLowerCase() && e.type === validItemType
+          );
+        }
+
+        if (matched) {
+          processedIds.add(matched.id);
+          await this.prisma.unitAdditional.update({
+            where: { id: matched.id },
+            data: {
+              name: cleanName,
               type: validItemType,
               status: itemStatus,
               price: Number(item.price || 0),
             },
           }).catch(() => {});
         } else {
-          await this.prisma.unitAdditional.create({
+          const newId = (item.id && item.id.length === 36 && !item.id.startsWith("add-")) ? item.id : randomUUID();
+          const created = await this.prisma.unitAdditional.create({
             data: {
-              id: randomUUID(),
+              id: newId,
               projectId,
-              name: item.name || "Adicional",
+              name: cleanName,
               type: validItemType,
               status: itemStatus,
               price: Number(item.price || 0),
             },
-          }).catch(() => {});
+          }).catch(() => null);
+          if (created) processedIds.add(created.id);
         }
       }
 

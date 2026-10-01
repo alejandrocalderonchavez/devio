@@ -150,6 +150,7 @@ export interface ProjectItem {
   unitsInventory: UnitItem[];
   additionals?: ProjectAdditional[];
   sales?: SaleRecord[];
+  clients?: ClientProfile[];
   quotes?: QuoteRecord[];
   floorPlans?: ProjectFloorPlan[];
   documents?: ProjectDocument[];
@@ -241,6 +242,12 @@ export interface SaleScheduleInstallment {
   status: "Atrasado" | "Pendiente" | "Pagado" | "Parcial";
   moratoryInterest?: number;
   planName?: string;
+  amount?: number;
+  originalAmount?: number;
+  montoProgramado?: number;
+  title?: string;
+  date?: string;
+  dueDate?: string;
 }
 
 export interface SalePaymentReceipt {
