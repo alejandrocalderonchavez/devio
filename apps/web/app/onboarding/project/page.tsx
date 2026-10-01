@@ -14,6 +14,8 @@ import {
   UnmappedColumnInfo,
 } from "@/lib/excel-utils";
 import { safeSaveProjectsState } from "@/lib/storage-utils";
+import { compressImageFile } from "@/lib/image-compression";
+import { useProject } from "@/context/project-context";
 import {
   Building2,
   Home,
@@ -126,6 +128,7 @@ const STORAGE_KEY_GLOBAL_PLANS = "devio_payment_plans_library";
 
 export default function ProjectOnboardingPage() {
   const router = useRouter();
+  const { addProject } = useProject();
   const [step, setStep] = useState<number>(1);
   const [isNavigating, setIsNavigating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
@@ -277,25 +280,23 @@ export default function ProjectOnboardingPage() {
   };
 
   // Media Handlers
-  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setErrorMsg("");
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.includes("png")) {
-      setErrorMsg("El logo del proyecto debe ser en formato PNG.");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMsg("El archivo excede el tamaño máximo permitido de 5MB.");
+    if (!file.type.includes("png") && !file.type.startsWith("image/")) {
+      setErrorMsg("El logo del proyecto debe ser una imagen válida (PNG o JPG).");
       return;
     }
     setProjectLogoName(file.name);
     setProjectLogoSize((file.size / (1024 * 1024)).toFixed(2) + " MB");
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setProjectLogoPreview(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    const compressed = await compressImageFile(file, {
+      maxWidth: 500,
+      maxHeight: 500,
+      quality: 0.85,
+      mimeType: "image/png",
+    });
+    setProjectLogoPreview(compressed);
   };
 
   const handleRemoveLogo = (e: React.MouseEvent) => {
@@ -306,7 +307,7 @@ export default function ProjectOnboardingPage() {
     if (logoInputRef.current) logoInputRef.current.value = "";
   };
 
-  const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setErrorMsg("");
     const file = e.target.files?.[0];
     if (!file) return;
@@ -316,11 +317,13 @@ export default function ProjectOnboardingPage() {
     }
     setProjectCoverName(file.name);
     setProjectCoverSize((file.size / (1024 * 1024)).toFixed(2) + " MB");
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setProjectCoverPreview(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    const compressed = await compressImageFile(file, {
+      maxWidth: 1280,
+      maxHeight: 1280,
+      quality: 0.75,
+      mimeType: "image/jpeg",
+    });
+    setProjectCoverPreview(compressed);
   };
 
   const handleRemoveCover = (e: React.MouseEvent) => {
@@ -331,26 +334,28 @@ export default function ProjectOnboardingPage() {
     if (coverInputRef.current) coverInputRef.current.value = "";
   };
 
-  const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleGallerySelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setErrorMsg("");
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    Array.from(files).forEach((file) => {
-      if (!file.type.startsWith("image/")) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setGalleryPreviews((prev) => [
-          ...prev,
-          {
-            id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-            url: event.target?.result as string,
-            name: file.name,
-            size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
-          },
-        ]);
-      };
-      reader.readAsDataURL(file);
-    });
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith("image/")) continue;
+      const compressed = await compressImageFile(file, {
+        maxWidth: 1100,
+        maxHeight: 1100,
+        quality: 0.72,
+        mimeType: "image/jpeg",
+      });
+      setGalleryPreviews((prev) => [
+        ...prev,
+        {
+          id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          url: compressed,
+          name: file.name,
+          size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
+        },
+      ]);
+    }
   };
 
   const handleRemoveGalleryItem = (id: string) => {
@@ -1217,6 +1222,23 @@ export default function ProjectOnboardingPage() {
       } catch (_) {}
 
       try {
+        // Prepare clean documents list without heavy raw base64 data to avoid Vercel 4.5MB 413 limit
+        const cleanDocsForApi = documents.map((d) => ({
+          id: d.id,
+          title: d.title,
+          category: d.category,
+          fileName: d.fileName,
+          fileSize: d.fileSize,
+          internalNotes: d.internalNotes,
+          fileType: (d as any).fileType || "PDF",
+        }));
+
+        const cleanFloorPlansForApi = onboardingFloorPlans.map((fp) => ({
+          id: fp.id,
+          name: fp.name,
+          imageUrl: fp.imageUrl,
+        }));
+
         const res = await fetch("/api/projects", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1238,8 +1260,8 @@ export default function ProjectOnboardingPage() {
             logoUrl: projectLogoPreview || undefined,
             units: mappedUnits,
             additionals: mappedAdditionals,
-            documents: documents,
-            floorPlans: onboardingFloorPlans,
+            documents: cleanDocsForApi,
+            floorPlans: cleanFloorPlansForApi,
             paymentPlans: newProject.paymentPlans,
             developerId: activeDevId,
             developerName: activeDevName,
@@ -1266,6 +1288,12 @@ export default function ProjectOnboardingPage() {
       }
       const updatedList = [newProject, ...currentProjects.filter((p) => p.id !== newProject.id)];
       safeSaveProjectsState(updatedList);
+
+      // Also update React Context directly
+      try {
+        addProject(newProject);
+      } catch (_) {}
+
       try {
         localStorage.removeItem("devio_is_new_user");
         sessionStorage.removeItem("devio_is_new_user");
@@ -3881,19 +3909,19 @@ export default function ProjectOnboardingPage() {
                   type="file"
                   ref={floorPlanImageInputRef}
                   accept="image/*,.pdf"
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        if (ev.target?.result) {
-                          setEditingFloorPlanForm((prev) => ({
-                            ...prev,
-                            imageUrl: ev.target!.result as string,
-                          }));
-                        }
-                      };
-                      reader.readAsDataURL(file);
+                      const compressed = await compressImageFile(file, {
+                        maxWidth: 1280,
+                        maxHeight: 1280,
+                        quality: 0.75,
+                        mimeType: "image/jpeg",
+                      });
+                      setEditingFloorPlanForm((prev) => ({
+                        ...prev,
+                        imageUrl: compressed,
+                      }));
                     }
                   }}
                   style={{ display: "none" }}

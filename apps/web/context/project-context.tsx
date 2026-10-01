@@ -1169,7 +1169,22 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   };
 
   const getProject = (id: string): ProjectItem | undefined => {
-    return projects.find((p) => p.id === id) || projects[0];
+    if (!id) return projects[0];
+    const inState = projects.find((p) => p.id === id);
+    if (inState) return inState;
+
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("devio_projects_state") || sessionStorage.getItem("devio_projects_state");
+        if (stored) {
+          const parsed: ProjectItem[] = JSON.parse(stored);
+          const inStorage = parsed.find((p) => p.id === id);
+          if (inStorage) return mapDbProjectToProjectItem(inStorage);
+        }
+      } catch (_) {}
+    }
+
+    return projects[0];
   };
 
   const updateUnit = (projectId: string, unitNumber: string, updatedFields: Partial<UnitItem>) => {
