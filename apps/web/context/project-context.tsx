@@ -30,6 +30,7 @@ import {
   checkPermission,
   getRolePermissionsMap,
 } from "../lib/permissions";
+import { safeSaveProjectsState } from "../lib/storage-utils";
 
 export type Currency = "MXN" | "USD";
 
@@ -969,8 +970,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         if (candidateProjects.length > 0) {
           const mapped = candidateProjects.map(mapDbProjectToProjectItem);
           setProjects(mapped);
-          localStorage.setItem("devio_projects_state", JSON.stringify(mapped));
-          sessionStorage.setItem("devio_projects_state", JSON.stringify(mapped));
+          safeSaveProjectsState(mapped);
         }
       })
       .catch((err) => console.warn("Could not sync projects from API:", err));
@@ -997,9 +997,11 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const savePaymentPlans = (newPlans: DeveloperPaymentPlan[]) => {
     setPaymentPlans(newPlans);
     if (typeof window !== "undefined") {
-      localStorage.setItem("devio_developer_payment_plans", JSON.stringify(newPlans));
-      sessionStorage.setItem("devio_developer_payment_plans", JSON.stringify(newPlans));
-      window.dispatchEvent(new Event("devio_payment_plans_updated"));
+      try {
+        localStorage.setItem("devio_developer_payment_plans", JSON.stringify(newPlans));
+        sessionStorage.setItem("devio_developer_payment_plans", JSON.stringify(newPlans));
+        window.dispatchEvent(new Event("devio_payment_plans_updated"));
+      } catch (_) {}
     }
   };
 
@@ -1033,10 +1035,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const mappedNew = mapDbProjectToProjectItem(newProject);
     setProjects((prev) => {
       const updated = [mappedNew, ...prev.filter((p) => p.id !== mappedNew.id)];
-      if (typeof window !== "undefined") {
-        localStorage.setItem("devio_projects_state", JSON.stringify(updated));
-        sessionStorage.setItem("devio_projects_state", JSON.stringify(updated));
-      }
+      safeSaveProjectsState(updated);
       return updated;
     });
 
@@ -1078,10 +1077,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     setPaymentPlans([]);
     setDeveloperName("Mi Desarrolladora");
     if (typeof window !== "undefined") {
-      localStorage.removeItem("devio_projects_state");
-      sessionStorage.removeItem("devio_projects_state");
-      localStorage.removeItem("devio_developer_payment_plans");
-      sessionStorage.removeItem("devio_developer_payment_plans");
+      try {
+        localStorage.removeItem("devio_projects_state");
+        sessionStorage.removeItem("devio_projects_state");
+        localStorage.removeItem("devio_developer_payment_plans");
+        sessionStorage.removeItem("devio_developer_payment_plans");
+      } catch (_) {}
     }
     showToast("Cuenta Limpia", "Se restableció el estado a limpio.", "info");
   };
@@ -1093,9 +1094,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   const saveProjects = (newProjects: ProjectItem[]) => {
     setProjects(newProjects);
+    safeSaveProjectsState(newProjects);
     if (typeof window !== "undefined") {
-      localStorage.setItem("devio_projects_state", JSON.stringify(newProjects));
-      sessionStorage.setItem("devio_projects_state", JSON.stringify(newProjects));
       window.dispatchEvent(new Event("devio_projects_updated"));
     }
   };

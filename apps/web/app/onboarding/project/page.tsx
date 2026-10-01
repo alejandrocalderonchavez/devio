@@ -12,6 +12,7 @@ import {
   normalizeHeader,
   UnmappedColumnInfo,
 } from "@/lib/excel-utils";
+import { safeSaveProjectsState } from "@/lib/storage-utils";
 import {
   Building2,
   Home,
@@ -1245,19 +1246,24 @@ export default function ProjectOnboardingPage() {
         } catch (e) {}
       }
       const updatedList = [newProject, ...currentProjects.filter((p) => p.id !== newProject.id)];
-      localStorage.setItem("devio_projects_state", JSON.stringify(updatedList));
-      sessionStorage.setItem("devio_projects_state", JSON.stringify(updatedList));
-      localStorage.removeItem("devio_is_new_user");
-      sessionStorage.removeItem("devio_is_new_user");
+      safeSaveProjectsState(updatedList);
+      try {
+        localStorage.removeItem("devio_is_new_user");
+        sessionStorage.removeItem("devio_is_new_user");
+      } catch (_) {}
 
       // Synchronize created payment plans
       if (newProject.paymentPlans && newProject.paymentPlans.length > 0) {
-        localStorage.setItem("devio_developer_payment_plans", JSON.stringify(newProject.paymentPlans));
-        sessionStorage.setItem("devio_developer_payment_plans", JSON.stringify(newProject.paymentPlans));
-        window.dispatchEvent(new Event("devio_payment_plans_updated"));
+        try {
+          localStorage.setItem("devio_developer_payment_plans", JSON.stringify(newProject.paymentPlans));
+          sessionStorage.setItem("devio_developer_payment_plans", JSON.stringify(newProject.paymentPlans));
+          window.dispatchEvent(new Event("devio_payment_plans_updated"));
+        } catch (_) {}
       }
 
-      window.dispatchEvent(new Event("devio_projects_updated"));
+      try {
+        window.dispatchEvent(new Event("devio_projects_updated"));
+      } catch (_) {}
     }
 
     setCreatedProjectId(newProjectId);

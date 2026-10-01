@@ -86,6 +86,7 @@ import {
 import { useProject } from "../../context/project-context";
 import { PERMISSIONS_CATALOG, getRolePermissionsMap, PermissionKey, UserRole } from "../../lib/permissions";
 import { DevioDatePicker } from "../../components/ui/devio-date-picker";
+import { safeSaveProjectsState } from "../../lib/storage-utils";
 import {
   getNotificationChannelsConfig,
   saveNotificationChannelsConfig,
@@ -784,7 +785,7 @@ function SuperAdminContent() {
         })
       );
       if (Array.isArray(dev.projects) && dev.projects.length > 0) {
-        localStorage.setItem("devio_projects_state", JSON.stringify(dev.projects));
+        safeSaveProjectsState(dev.projects as any);
       }
       // Set auth cookie so middleware immediately grants access in new tab
       document.cookie = `devio_auth_token=devio_token_imp_${dev.id}_${Date.now()}; path=/; max-age=86400; SameSite=Lax`;
