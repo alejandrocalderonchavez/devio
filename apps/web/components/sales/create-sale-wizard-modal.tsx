@@ -1232,25 +1232,29 @@ export default function CreateSaleWizardModal({
         ? `cli-${primaryClient.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}`
         : `client-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
-      const finalCoOwners = allOwnersCombined.map((owner, idx) => {
-        const isPrim = Boolean(owner.isPrimary || idx === 0);
-        let resolvedOwnerId = "";
-        if (isPrim) {
-          resolvedOwnerId = clientTargetId;
-        } else if (owner.id && owner.id !== "primary-1" && !owner.id.startsWith("primary-")) {
-          resolvedOwnerId = owner.id;
-        } else if (owner.email) {
-          resolvedOwnerId = `cli-${owner.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
-        } else {
-          resolvedOwnerId = `co-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`;
-        }
+      const isCoOwnershipSale = Boolean(isCoOwnership && coOwnersList.length > 0);
 
-        return {
-          ...owner,
-          id: resolvedOwnerId,
-          isPrimary: isPrim,
-        };
-      });
+      const finalCoOwners = isCoOwnershipSale
+        ? allOwnersCombined.map((owner, idx) => {
+            const isPrim = Boolean(owner.isPrimary || idx === 0);
+            let resolvedOwnerId = "";
+            if (isPrim) {
+              resolvedOwnerId = clientTargetId;
+            } else if (owner.id && owner.id !== "primary-1" && !owner.id.startsWith("primary-")) {
+              resolvedOwnerId = owner.id;
+            } else if (owner.email) {
+              resolvedOwnerId = `cli-${owner.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+            } else {
+              resolvedOwnerId = `co-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`;
+            }
+
+            return {
+              ...owner,
+              id: resolvedOwnerId,
+              isPrimary: isPrim,
+            };
+          })
+        : [];
 
       // Helper to reliably find co-owner payment setting regardless of id or email changes
       const resolveOwnerConfig = (owner: any): CoOwnerPaymentConfig => {
@@ -1284,7 +1288,7 @@ export default function CreateSaleWizardModal({
 
       // Build co-owner payment records
       const totalDown = paymentSchedule[0]?.amount || Math.round(netTotalSaleAmount * (downPaymentPct / 100));
-      const coOwnerPayments = isCoOwnership
+      const coOwnerPayments = isCoOwnershipSale
         ? finalCoOwners.map((owner) => {
             const cfg = resolveOwnerConfig(owner);
             const isNone = cfg.paymentOption === "NONE";
@@ -1306,7 +1310,7 @@ export default function CreateSaleWizardModal({
         : [];
 
       const totalCoOwnerPaid = coOwnerPayments.reduce((acc, cp) => acc + (cp.amount || 0), 0);
-      const effectiveInitialPaid = isCoOwnership
+      const effectiveInitialPaid = isCoOwnershipSale
         ? totalCoOwnerPaid
         : (initialPaymentOption === "NONE" ? 0 : initialPaymentAmount);
 
@@ -1320,7 +1324,11 @@ export default function CreateSaleWizardModal({
             clientPortalUsers = JSON.parse(storedClients);
           }
 
-          finalCoOwners.forEach((owner) => {
+          const allPortalClientsToSave = isCoOwnershipSale
+            ? finalCoOwners
+            : [{ id: clientTargetId, name: primaryClient.name, email: primaryClient.email, phone: primaryClient.phone, rfc: primaryClient.rfc }];
+
+          allPortalClientsToSave.forEach((owner) => {
             if (!owner.email) return;
             const existingIdx = clientPortalUsers.findIndex((u) => u.email?.toLowerCase() === owner.email.toLowerCase());
             if (existingIdx === -1) {
@@ -1379,13 +1387,15 @@ export default function CreateSaleWizardModal({
           phone: primaryClient.phone,
           rfc: primaryClient.rfc,
         },
-        isCoOwnership,
-        coOwners: finalCoOwners.map((co) => ({
-          ...co,
-          percentage: Number(co.ownershipPct),
-          ownershipPercentage: Number(co.ownershipPct),
-        })),
-        coOwnerPayments,
+        isCoOwnership: isCoOwnershipSale,
+        coOwners: isCoOwnershipSale
+          ? finalCoOwners.map((co) => ({
+              ...co,
+              percentage: Number(co.ownershipPct),
+              ownershipPercentage: Number(co.ownershipPct),
+            }))
+          : [],
+        coOwnerPayments: isCoOwnershipSale ? coOwnerPayments : [],
         project: {
           id: targetProjId,
           name: currentProject?.name || "Proyecto",

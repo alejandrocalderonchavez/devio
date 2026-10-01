@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   X,
   Clock,
@@ -26,6 +26,7 @@ import {
   Check,
   UploadCloud,
   ChevronRight,
+  UserCheck,
 } from "lucide-react";
 import {
   PostventaIncident,
@@ -36,6 +37,7 @@ import {
   PostventaEvidence,
   POSTVENTA_SUPPLIERS,
 } from "../../data/postventa-data";
+import { useProject } from "../../context/project-context";
 import { DevioDatePicker } from "../ui/devio-date-picker";
 import { DevioFileUploader, DevioUploadedFile } from "../ui/devio-file-uploader";
 
@@ -53,6 +55,36 @@ export function IncidentDetailDrawer({
   onUpdateIncident,
 }: IncidentDetailDrawerProps) {
   if (!isOpen || !incident) return null;
+
+  const { userName, userRole, projects } = useProject();
+  const currentProject = useMemo(() => {
+    return projects.find((p) => p.id === incident.projectId);
+  }, [projects, incident.projectId]);
+
+  const systemAssignees = useMemo(() => {
+    const list: Array<{ id: string; name: string; role: string }> = [];
+    if (currentProject?.team && Array.isArray(currentProject.team)) {
+      currentProject.team.forEach((m: any) => {
+        const name = m.name || m.fullName || m.email || "Miembro de Equipo";
+        const role = m.role || "Equipo";
+        const id = m.id || m.email || name;
+        list.push({ id, name, role });
+      });
+    }
+    if (!list.some((a) => a.name.toLowerCase().includes("alejandro"))) {
+      list.push({ id: "usr-alex", name: "Alejandro Calderón", role: "Coordinador de Postventa" });
+    }
+    if (!list.some((a) => a.name.toLowerCase().includes("carlos"))) {
+      list.push({ id: "usr-carlos", name: "Arq. Carlos Morales", role: "Superintendente de Obra" });
+    }
+    if (!list.some((a) => a.name.toLowerCase().includes("sofia"))) {
+      list.push({ id: "usr-sofia", name: "Ing. Sofía Lozano", role: "Especialista de Garantías" });
+    }
+    if (userName && !list.some((a) => a.name.toLowerCase() === userName.toLowerCase())) {
+      list.push({ id: "usr-curr", name: userName, role: userRole || "Administrador" });
+    }
+    return list;
+  }, [currentProject, userName, userRole]);
 
   const [activeTab, setActiveTab] = useState<
     "bitacora" | "comentarios" | "visitas" | "evidencias" | "csat"
@@ -133,8 +165,8 @@ export function IncidentDetailDrawer({
     const newLog: PostventaLogItem = {
       id: `log-${Date.now()}`,
       timestamp: formattedDate,
-      authorName: "Alejandro Calderón",
-      authorRole: "Postventa",
+      authorName: userName || "Administrador",
+      authorRole: userRole || "Postventa",
       action: "Cambio de Estado",
       previousState: incident.status,
       newState: newStatus,
@@ -144,6 +176,32 @@ export function IncidentDetailDrawer({
     const updated: PostventaIncident = {
       ...incident,
       status: newStatus,
+      updatedAt: formattedDate,
+      logs: [newLog, ...incident.logs],
+    };
+
+    onUpdateIncident(updated);
+  };
+
+  // Assignee change handler
+  const handleAssigneeChange = (assigneeId: string) => {
+    const chosen = systemAssignees.find((a) => a.id === assigneeId || a.name === assigneeId);
+    if (!chosen) return;
+    const now = new Date();
+    const formattedDate = `${now.getDate()} ${now.toLocaleString("es-MX", { month: "short" })} ${now.getFullYear()} ${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+
+    const newLog: PostventaLogItem = {
+      id: `log-${Date.now()}`,
+      timestamp: formattedDate,
+      authorName: userName || "Administrador",
+      authorRole: userRole || "Postventa",
+      action: "Reasignación de Responsable",
+      notes: `Caso reasignado a ${chosen.name} (${chosen.role})`,
+    };
+
+    const updated: PostventaIncident = {
+      ...incident,
+      assignedTo: chosen,
       updatedAt: formattedDate,
       logs: [newLog, ...incident.logs],
     };
@@ -162,8 +220,8 @@ export function IncidentDetailDrawer({
     const comment: PostventaComment = {
       id: `comm-${Date.now()}`,
       timestamp: formattedDate,
-      authorName: "Alejandro Calderón",
-      authorRole: "Postventa",
+      authorName: userName || "Administrador",
+      authorRole: userRole || "Postventa",
       isInternalOnly: isInternalComment,
       message: newCommentText.trim(),
     };
@@ -171,8 +229,8 @@ export function IncidentDetailDrawer({
     const newLog: PostventaLogItem = {
       id: `log-${Date.now()}`,
       timestamp: formattedDate,
-      authorName: "Alejandro Calderón",
-      authorRole: "Postventa",
+      authorName: userName || "Administrador",
+      authorRole: userRole || "Postventa",
       action: isInternalComment ? "Nota Interna Agregada" : "Mensaje al Cliente Enviado",
       notes: newCommentText.slice(0, 60) + (newCommentText.length > 60 ? "..." : ""),
     };
@@ -538,10 +596,34 @@ export function IncidentDetailDrawer({
             <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1E293B", marginTop: "0.2rem" }}>
               {incident.supplier?.name || "Sin proveedor asignado"}
             </div>
-            <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "0.15rem" }}>
-              Resp. Interno: <strong>{incident.assignedTo.name}</strong>
+            <div style={{ marginTop: "0.35rem", display: "flex", flexDirection: "column", gap: "2px" }}>
+              <span style={{ fontSize: "0.68rem", color: "#64748B", fontWeight: 700, textTransform: "uppercase" }}>
+                Responsable Asignado:
+              </span>
+              <select
+                value={incident.assignedTo.id || incident.assignedTo.name}
+                onChange={(e) => handleAssigneeChange(e.target.value)}
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  color: "#1F3652",
+                  backgroundColor: "#F1F5F9",
+                  border: "1px solid #CBD5E1",
+                  borderRadius: "0.35rem",
+                  padding: "0.2rem 0.4rem",
+                  outline: "none",
+                  cursor: "pointer",
+                  maxWidth: "100%",
+                }}
+              >
+                {systemAssignees.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    👤 {a.name} ({a.role})
+                  </option>
+                ))}
+              </select>
             </div>
-            <div style={{ fontSize: "0.75rem", color: "#2F80ED", fontWeight: 600, marginTop: "0.15rem" }}>
+            <div style={{ fontSize: "0.72rem", color: "#2F80ED", fontWeight: 600, marginTop: "0.25rem" }}>
               Categoría: {incident.category}
             </div>
           </div>

@@ -40,9 +40,20 @@ import {
   Globe,
   HelpCircle,
   ChevronRight,
+  Wrench,
+  MessageSquare,
+  Send,
+  Plus,
 } from "lucide-react";
 import { openReceiptInNewTab, openStatementInNewTab } from "../../lib/pdf-generator";
 import { CLIENT_TRANSLATIONS, ClientLanguage, ClientCurrency } from "../../lib/client-i18n";
+import { useProject } from "../../context/project-context";
+import {
+  PostventaIncident,
+  PostventaCategory,
+  PostventaPriority,
+} from "../../data/postventa-data";
+import { DevioFileUploader, DevioUploadedFile } from "../../components/ui/devio-file-uploader";
 
 const round2 = (num: number) => Math.round((Number(num || 0) + Number.EPSILON) * 100) / 100;
 
@@ -145,6 +156,11 @@ interface ClientProperty {
   constructionPct: number;
   lastProgressUpdateDate: string;
   estimatedDeliveryDate: string;
+  projectId?: string;
+  isDelivered?: boolean;
+  deliveredAt?: string;
+  warrantyExpiresAt?: string;
+  deliveryActUrl?: string;
   areaM2: number;
   bedrooms: number;
   bathrooms: number;
@@ -239,13 +255,25 @@ export default function ClientPortalWeb() {
   }, []);
   // Navigation State
   const [activeTab, setActiveTab] = useState<"properties" | "profile">("properties");
-  const [screen, setScreen] = useState<"main" | "detail" | "construction" | "documents" | "statement">("main");
+  const [screen, setScreen] = useState<"main" | "detail" | "construction" | "documents" | "statement" | "postventa">("main");
   const [properties, setProperties] = useState<ClientProperty[]>([]);
   const [selectedPropId, setSelectedPropId] = useState<string>("");
   const [selectedImageIdx, setSelectedImageIdx] = useState(0);
   const [unitInfoExpanded, setUnitInfoExpanded] = useState(true);
   const [docSearch, setDocSearch] = useState("");
   const [statementSubTab, setStatementSubTab] = useState<"statement" | "payments">("statement");
+
+  // Project Context for Postventa & Real-time Incidents
+  const { projects, postventaIncidents, addPostventaIncident, addIncidentComment } = useProject();
+
+  // Client Postventa & Chat States
+  const [selectedIncidentForChat, setSelectedIncidentForChat] = useState<PostventaIncident | null>(null);
+  const [showNewClientIncidentModal, setShowNewClientIncidentModal] = useState(false);
+  const [reportCategory, setReportCategory] = useState<PostventaCategory>("Plomería / Hidráulico");
+  const [reportTitle, setReportTitle] = useState("");
+  const [reportDescription, setReportDescription] = useState("");
+  const [reportUploadedFiles, setReportUploadedFiles] = useState<DevioUploadedFile[]>([]);
+  const [clientNewMessage, setClientNewMessage] = useState("");
 
   // Modals & Viewers
   const [showNotifications, setShowNotifications] = useState(false);
@@ -411,10 +439,153 @@ export default function ClientPortalWeb() {
     }
   };
 
+  const enrichedProperties: ClientProperty[] = useMemo(() => {
+    return properties.map((prop) => {
+      let isDelivered = Boolean(prop.isDelivered);
+      let deliveredAt = prop.deliveredAt;
+      let warrantyExpiresAt = prop.warrantyExpiresAt;
+      let deliveryActUrl = prop.deliveryActUrl;
+      let projectId = prop.projectId;
+
+      for (const p of projects) {
+        if (
+          p.name.toLowerCase().trim() === prop.projectName.toLowerCase().trim() ||
+          (prop.projectId && p.id === prop.projectId)
+        ) {
+          projectId = p.id;
+          const matchedUnit = (p.unitsInventory || []).find(
+            (u: any) => u.unit.toLowerCase().trim() === prop.unitNumber.toLowerCase().trim()
+          );
+          if (matchedUnit) {
+            if (matchedUnit.isDelivered !== undefined) {
+              isDelivered = Boolean(matchedUnit.isDelivered);
+            }
+            if (matchedUnit.deliveredAt) deliveredAt = matchedUnit.deliveredAt;
+            if (matchedUnit.warrantyExpiresAt) warrantyExpiresAt = matchedUnit.warrantyExpiresAt;
+            if (matchedUnit.deliveryActUrl) deliveryActUrl = matchedUnit.deliveryActUrl;
+          }
+          break;
+        }
+      }
+
+      return {
+        ...prop,
+        projectId,
+        isDelivered,
+        deliveredAt,
+        warrantyExpiresAt,
+        deliveryActUrl,
+      };
+    });
+  }, [properties, projects]);
+
   const selectedProp: ClientProperty | null = useMemo(() => {
-    if (properties.length === 0) return null;
-    return properties.find((p) => p.id === selectedPropId) || properties[0] || null;
-  }, [properties, selectedPropId]);
+    if (enrichedProperties.length === 0) return null;
+    return enrichedProperties.find((p) => p.id === selectedPropId) || enrichedProperties[0] || null;
+  }, [enrichedProperties, selectedPropId]);
+
+  const clientIncidents = useMemo(() => {
+    if (!selectedProp) return [];
+    return postventaIncidents.filter((inc) => {
+      const matchUnit = inc.unit.toLowerCase().trim() === selectedProp.unitNumber.toLowerCase().trim();
+      const matchProj =
+        inc.projectName.toLowerCase().trim() === selectedProp.projectName.toLowerCase().trim() ||
+        (selectedProp.projectId && inc.projectId === selectedProp.projectId);
+      const matchEmail = Boolean(userEmail && inc.clientEmail.toLowerCase().trim() === userEmail.toLowerCase().trim());
+      return (matchUnit && matchProj) || matchEmail;
+    });
+  }, [postventaIncidents, selectedProp, userEmail]);
+
+  const activeChatIncident = useMemo(() => {
+    if (!selectedIncidentForChat) return null;
+    return postventaIncidents.find((i) => i.id === selectedIncidentForChat.id) || selectedIncidentForChat;
+  }, [postventaIncidents, selectedIncidentForChat]);
+
+  const handleSendClientMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientNewMessage.trim() || !activeChatIncident) return;
+
+    addIncidentComment(activeChatIncident.id, {
+      authorName: userName || "Cliente Propietario",
+      authorRole: "Propietario",
+      isInternalOnly: false,
+      message: clientNewMessage.trim(),
+    });
+
+    setClientNewMessage("");
+  };
+
+  const handleCreateClientIncident = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportTitle.trim() || !reportDescription.trim() || !selectedProp) return;
+
+    const now = new Date();
+    const formattedDate = `${now.getDate()} ${now.toLocaleString("es-MX", { month: "short" })} ${now.getFullYear()} ${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+    const randomNum = Math.floor(Math.random() * 900) + 100;
+    const folio = `INC-2026-${randomNum}`;
+
+    const newInc: PostventaIncident = {
+      id: `inc-${Date.now()}`,
+      folio,
+      projectId: selectedProp.projectId || "p-1",
+      projectName: selectedProp.projectName,
+      unit: selectedProp.unitNumber,
+      clientName: userName || "Cliente Propietario",
+      clientEmail: userEmail || "cliente@devio.mx",
+      clientPhone: userPhone || "3300000000",
+      category: reportCategory,
+      priority: "Media",
+      status: "Reportada",
+      title: reportTitle.trim(),
+      description: reportDescription.trim(),
+      createdAt: formattedDate,
+      updatedAt: formattedDate,
+      slaHours: 48,
+      slaDeadline: "48 hrs a partir de reporte",
+      slaExpired: false,
+      assignedTo: {
+        id: "usr-alex",
+        name: "Alejandro Calderón",
+        role: "Coordinador de Postventa",
+      },
+      appointments: [],
+      evidences: reportUploadedFiles.map((f, idx) => ({
+        id: `ev-${Date.now()}-${idx}`,
+        type: "INITIAL_DEFECT",
+        url: f.url,
+        title: f.name,
+        uploadDate: formattedDate,
+        uploadedBy: `${userName || "Cliente"} (Propietario)`,
+      })),
+      comments: [
+        {
+          id: `comm-${Date.now()}`,
+          timestamp: formattedDate,
+          authorName: userName || "Cliente",
+          authorRole: "Propietario",
+          isInternalOnly: false,
+          message: reportDescription.trim(),
+        },
+      ],
+      logs: [
+        {
+          id: `log-${Date.now()}`,
+          timestamp: formattedDate,
+          authorName: userName || "Cliente",
+          authorRole: "Propietario",
+          action: "Incidencia Reportada desde Portal de Cliente",
+          newState: "Reportada",
+        },
+      ],
+    };
+
+    addPostventaIncident(newInc);
+    setShowNewClientIncidentModal(false);
+    setReportTitle("");
+    setReportDescription("");
+    setReportUploadedFiles([]);
+    setSelectedIncidentForChat(newInc);
+  };
 
   const formatMoney = (val: number) => {
     const num = Number(val) || 0;
@@ -686,7 +857,7 @@ export default function ClientPortalWeb() {
 
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.8)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  {screen === "detail" ? "Detalle de Propiedad" : (screen === "construction" ? "Avance de Obra" : (screen === "documents" ? "Documentación Oficial" : "Estado de Cuenta y Pagos"))}
+                  {screen === "detail" ? "Detalle de Propiedad" : (screen === "construction" ? "Avance de Obra" : (screen === "documents" ? "Documentación Oficial" : (screen === "postventa" ? "Garantías & Postventa" : "Estado de Cuenta y Pagos")))}
                 </div>
                 <div style={{ fontSize: "1.05rem", fontWeight: 800 }}>{selectedProp?.projectName} · Unidad {selectedProp?.unitNumber}</div>
               </div>
@@ -927,6 +1098,41 @@ export default function ClientPortalWeb() {
                                   <div style={{ width: `${prop.constructionPct}%`, height: "100%", backgroundColor: "#00C48C", borderRadius: "99px" }} />
                                 </div>
                               </div>
+
+                              {/* Delivery & Warranty Badge */}
+                              {prop.isDelivered ? (
+                                <div style={{ marginTop: "0.85rem", display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#ECFDF5", padding: "0.45rem 0.75rem", borderRadius: "0.55rem", border: "1px solid #A7F3D0" }}>
+                                  <span style={{ fontSize: "0.72rem", color: "#065F46", fontWeight: 700, display: "flex", alignItems: "center", gap: "4px" }}>
+                                    <CheckCircle2 size={13} /> Unidad Entregada • Garantía Activa
+                                  </span>
+                                  <span
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedPropId(prop.id);
+                                      setScreen("postventa");
+                                    }}
+                                    style={{ fontSize: "0.72rem", color: "#047857", fontWeight: 800, textDecoration: "underline", cursor: "pointer" }}
+                                  >
+                                    Incidencias →
+                                  </span>
+                                </div>
+                              ) : (
+                                <div style={{ marginTop: "0.85rem", display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#FFFBEB", padding: "0.45rem 0.75rem", borderRadius: "0.55rem", border: "1px solid #FDE68A" }}>
+                                  <span style={{ fontSize: "0.72rem", color: "#92400E", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
+                                    <Clock size={13} /> En Obra • Próxima Entrega
+                                  </span>
+                                  <span
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedPropId(prop.id);
+                                      setScreen("postventa");
+                                    }}
+                                    style={{ fontSize: "0.72rem", color: "#B45309", fontWeight: 700, textDecoration: "underline", cursor: "pointer" }}
+                                  >
+                                    Garantías →
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1178,12 +1384,11 @@ export default function ClientPortalWeb() {
                       )}
 
                       {/* Acciones Rápidas */}
-                      <div style={{ display: "flex", gap: "0.75rem" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: "0.65rem" }}>
                         <button
                           onClick={() => setScreen("documents")}
                           style={{
-                            flex: 1,
-                            padding: "0.85rem 0.6rem",
+                            padding: "0.85rem 0.5rem",
                             backgroundColor: "#FFFFFF",
                             border: "1px solid #E2E8F0",
                             borderRadius: "0.85rem",
@@ -1201,8 +1406,7 @@ export default function ClientPortalWeb() {
                         <button
                           onClick={() => { setScreen("statement"); setStatementSubTab("statement"); }}
                           style={{
-                            flex: 1,
-                            padding: "0.85rem 0.6rem",
+                            padding: "0.85rem 0.5rem",
                             backgroundColor: "#FFFFFF",
                             border: "1px solid #E2E8F0",
                             borderRadius: "0.85rem",
@@ -1214,14 +1418,33 @@ export default function ClientPortalWeb() {
                           }}
                         >
                           <CreditCard size={20} color="#1F3652" />
-                          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1F3652" }}>Estado de Cuenta</span>
+                          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1F3652" }}>Estado Cuenta</span>
+                        </button>
+
+                        <button
+                          onClick={() => setScreen("postventa")}
+                          style={{
+                            padding: "0.85rem 0.5rem",
+                            backgroundColor: selectedProp.isDelivered ? "#ECFDF5" : "#FFFFFF",
+                            border: selectedProp.isDelivered ? "1px solid #A7F3D0" : "1px solid #E2E8F0",
+                            borderRadius: "0.85rem",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <Wrench size={20} color={selectedProp.isDelivered ? "#059669" : "#1F3652"} />
+                          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: selectedProp.isDelivered ? "#065F46" : "#1F3652" }}>
+                            Postventa
+                          </span>
                         </button>
 
                         <Link
                           href="/marketplace"
                           style={{
-                            flex: 1,
-                            padding: "0.85rem 0.6rem",
+                            padding: "0.85rem 0.5rem",
                             backgroundColor: "#FFFFFF",
                             border: "1px solid #E2E8F0",
                             borderRadius: "0.85rem",
@@ -1816,6 +2039,332 @@ export default function ClientPortalWeb() {
                               </table>
                             </div>
                           </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* PANTALLA 6: POSTVENTA, ENTREGAS & GARANTÍAS */}
+                  {screen === "postventa" && selectedProp && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                      
+                      {/* 1. Header Card: Delivery Status & Warranty Information */}
+                      {selectedProp.isDelivered ? (
+                        <div
+                          style={{
+                            backgroundColor: "#FFFFFF",
+                            borderRadius: "1.25rem",
+                            padding: "1.25rem 1.4rem",
+                            border: "1px solid #A7F3D0",
+                            boxShadow: "0 2px 10px rgba(6, 95, 70, 0.05)",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.85rem",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                              <div
+                                style={{
+                                  width: "40px",
+                                  height: "40px",
+                                  borderRadius: "10px",
+                                  backgroundColor: "#D1FAE5",
+                                  color: "#065F46",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <ShieldCheck size={22} />
+                              </div>
+                              <div>
+                                <div style={{ fontSize: "0.72rem", color: "#065F46", fontWeight: 800, textTransform: "uppercase" }}>
+                                  ✓ Unidad Formalmente Entregada
+                                </div>
+                                <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#1F3652" }}>
+                                  Póliza de Garantía Activa
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setShowNewClientIncidentModal(true)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.4rem",
+                                backgroundColor: "#1F3652",
+                                color: "#FFFFFF",
+                                border: "none",
+                                padding: "0.55rem 1.15rem",
+                                borderRadius: "0.6rem",
+                                fontSize: "0.8rem",
+                                fontWeight: 800,
+                                cursor: "pointer",
+                                boxShadow: "0 2px 6px rgba(31, 54, 82, 0.2)",
+                              }}
+                            >
+                              <Plus size={15} /> + Reportar Nueva Incidencia
+                            </button>
+                          </div>
+
+                          <div
+                            style={{
+                              backgroundColor: "#F0FDF4",
+                              borderRadius: "0.75rem",
+                              padding: "0.75rem 1rem",
+                              display: "grid",
+                              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                              gap: "0.75rem",
+                              fontSize: "0.78rem",
+                              color: "#065F46",
+                            }}
+                          >
+                            <div>
+                              <span style={{ color: "#047857", fontWeight: 600 }}>Fecha de Entrega de Llaves:</span>
+                              <div style={{ fontWeight: 800, color: "#065F46", marginTop: "2px" }}>
+                                {formatDateDisplay(selectedProp.deliveredAt || "Reciente")}
+                              </div>
+                            </div>
+                            <div>
+                              <span style={{ color: "#047857", fontWeight: 600 }}>Vigencia de Cobertura:</span>
+                              <div style={{ fontWeight: 800, color: "#065F46", marginTop: "2px" }}>
+                                {selectedProp.warrantyExpiresAt ? formatDateDisplay(selectedProp.warrantyExpiresAt) : "12 Meses desde entrega"}
+                              </div>
+                            </div>
+                            <div>
+                              <span style={{ color: "#047857", fontWeight: 600 }}>SLA de Respuesta:</span>
+                              <div style={{ fontWeight: 800, color: "#065F46", marginTop: "2px" }}>
+                                Máximo 24 - 48 hrs hábiles
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            backgroundColor: "#FFFFFF",
+                            borderRadius: "1.25rem",
+                            padding: "1.5rem",
+                            border: "1px solid #FDE68A",
+                            boxShadow: "0 2px 10px rgba(180, 83, 9, 0.05)",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.85rem",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                            <div
+                              style={{
+                                width: "42px",
+                                height: "42px",
+                                borderRadius: "10px",
+                                backgroundColor: "#FEF3C7",
+                                color: "#92400E",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <Clock size={22} />
+                            </div>
+                            <div>
+                              <span style={{ fontSize: "0.72rem", color: "#B45309", fontWeight: 800, textTransform: "uppercase" }}>
+                                En Proceso de Construcción
+                              </span>
+                              <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#1F3652", margin: "2px 0 0 0" }}>
+                                Unidad Pendiente de Entrega Formal
+                              </h3>
+                            </div>
+                          </div>
+
+                          <p style={{ fontSize: "0.82rem", color: "#475569", lineHeight: 1.5, margin: 0 }}>
+                            Tu unidad <strong>{selectedProp.unitNumber}</strong> en <strong>{selectedProp.projectName}</strong> se encuentra en fase de obra ({selectedProp.constructionPct}% de avance). El módulo de postventa y levantamiento de reportes por garantía se habilitará automáticamente en cuanto se realice la firma del acta de recepción y entrega de llaves.
+                          </p>
+
+                          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", backgroundColor: "#FFFBEB", padding: "0.75rem 1rem", borderRadius: "0.65rem", fontSize: "0.78rem" }}>
+                            <div>
+                              <span style={{ color: "#92400E" }}>Entrega Estimada:</span>{" "}
+                              <strong style={{ color: "#92400E" }}>{formatDateDisplay(selectedProp.estimatedDeliveryDate) || "Según contrato"}</strong>
+                            </div>
+                            <div>
+                              <span style={{ color: "#92400E" }}>Avance de Obra:</span>{" "}
+                              <strong style={{ color: "#92400E" }}>{selectedProp.constructionPct}%</strong>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 2. Incidents List & Tickets Header */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.25rem" }}>
+                        <div>
+                          <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                            Historial de Reportes & Garantías
+                          </h4>
+                          <span style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                            {clientIncidents.length} reporte{clientIncidents.length !== 1 ? "s" : ""} registrado{clientIncidents.length !== 1 ? "s" : ""} para esta propiedad
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Tickets List */}
+                      {clientIncidents.length === 0 ? (
+                        <div
+                          style={{
+                            backgroundColor: "#FFFFFF",
+                            borderRadius: "1.25rem",
+                            padding: "3rem 1.5rem",
+                            textAlign: "center",
+                            border: "1px solid #E2E8F0",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "48px",
+                              height: "48px",
+                              borderRadius: "50%",
+                              backgroundColor: "#F1F5F9",
+                              color: "#64748B",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              margin: "0 auto 1rem auto",
+                            }}
+                          >
+                            <Wrench size={24} />
+                          </div>
+                          <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.4rem" }}>
+                            Sin Incidencias Reportadas
+                          </h4>
+                          <p style={{ fontSize: "0.82rem", color: "#64748B", maxWidth: "380px", margin: "0 auto 1rem auto", lineHeight: 1.4 }}>
+                            {selectedProp.isDelivered
+                              ? "No tienes ningún ticket de garantía abierto. Si notas algún desperfecto o vicio oculto en tu unidad, repórtalo para recibir atención técnica."
+                              : "Tu unidad aún está en construcción. Las garantías se activarán cuando recibas tus llaves."}
+                          </p>
+                          {selectedProp.isDelivered && (
+                            <button
+                              type="button"
+                              onClick={() => setShowNewClientIncidentModal(true)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.4rem",
+                                backgroundColor: "#1F3652",
+                                color: "#FFFFFF",
+                                border: "none",
+                                padding: "0.6rem 1.25rem",
+                                borderRadius: "0.6rem",
+                                fontSize: "0.82rem",
+                                fontWeight: 800,
+                                cursor: "pointer",
+                              }}
+                            >
+                              <Plus size={15} /> Levantar Primer Reporte
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                          {clientIncidents.map((inc) => {
+                            const publicComments = (inc.comments || []).filter((c) => !c.isInternalOnly);
+                            const isClosed = inc.status === "Cerrada" || inc.status === "Resuelta";
+
+                            return (
+                              <div
+                                key={inc.id}
+                                style={{
+                                  backgroundColor: "#FFFFFF",
+                                  borderRadius: "1rem",
+                                  padding: "1.1rem 1.25rem",
+                                  border: "1px solid #E2E8F0",
+                                  boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "0.75rem",
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+                                  <div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                      <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#1F3652" }}>
+                                        {inc.folio}
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: "0.7rem",
+                                          fontWeight: 700,
+                                          backgroundColor: "#EFF6FF",
+                                          color: "#2563EB",
+                                          padding: "0.15rem 0.5rem",
+                                          borderRadius: "999px",
+                                        }}
+                                      >
+                                        {inc.category}
+                                      </span>
+                                    </div>
+                                    <h5 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1E293B", margin: "0.35rem 0 0 0" }}>
+                                      {inc.title}
+                                    </h5>
+                                  </div>
+
+                                  <span
+                                    style={{
+                                      fontSize: "0.72rem",
+                                      fontWeight: 800,
+                                      padding: "0.25rem 0.65rem",
+                                      borderRadius: "999px",
+                                      backgroundColor: isClosed ? "#ECFDF5" : (inc.status === "En reparación" ? "#FFF7ED" : "#FEF3C7"),
+                                      color: isClosed ? "#065F46" : (inc.status === "En reparación" ? "#EA580C" : "#D97706"),
+                                      border: `1px solid ${isClosed ? "#A7F3D0" : (inc.status === "En reparación" ? "#FFEDD5" : "#FDE68A")}`,
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {inc.status}
+                                  </span>
+                                </div>
+
+                                <p style={{ fontSize: "0.8rem", color: "#475569", margin: 0, lineHeight: 1.4 }}>
+                                  {inc.description}
+                                </p>
+
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #F1F5F9", paddingTop: "0.65rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                                  <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                                    <span>Atendido por: </span>
+                                    <strong style={{ color: "#1E293B" }}>{inc.assignedTo?.name || "Equipo Devio"}</strong>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedIncidentForChat(inc)}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.4rem",
+                                      backgroundColor: "#1B3047",
+                                      color: "#FFFFFF",
+                                      border: "none",
+                                      padding: "0.45rem 0.95rem",
+                                      borderRadius: "0.5rem",
+                                      fontSize: "0.78rem",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    <MessageSquare size={14} />
+                                    <span>Chat & Seguimiento</span>
+                                    {publicComments.length > 0 && (
+                                      <span style={{ backgroundColor: "rgba(255,255,255,0.25)", padding: "1px 6px", borderRadius: "99px", fontSize: "0.68rem" }}>
+                                        {publicComments.length}
+                                      </span>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -2502,6 +3051,443 @@ export default function ClientPortalWeb() {
                   Cerrar
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL CHAT EN VIVO DE INCIDENCIA (CLIENTE ↔ EQUIPO POSTVENTA) */}
+        {activeChatIncident && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              backgroundColor: "rgba(15,23,42,0.65)",
+              backdropFilter: "blur(4px)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "flex-end",
+              zIndex: 9999,
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "600px",
+                height: "90vh",
+                backgroundColor: "#F8FAFC",
+                borderTopLeftRadius: "1.5rem",
+                borderTopRightRadius: "1.5rem",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                boxShadow: "0 -10px 25px rgba(0,0,0,0.15)",
+              }}
+            >
+              {/* Chat Header */}
+              <div
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  padding: "1rem 1.25rem",
+                  borderBottom: "1px solid #E2E8F0",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#1F3652" }}>
+                      {activeChatIncident.folio}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                        backgroundColor: "#EFF6FF",
+                        color: "#2563EB",
+                        padding: "0.1rem 0.45rem",
+                        borderRadius: "999px",
+                      }}
+                    >
+                      {activeChatIncident.category}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                        backgroundColor: activeChatIncident.status === "Cerrada" || activeChatIncident.status === "Resuelta" ? "#ECFDF5" : "#FEF3C7",
+                        color: activeChatIncident.status === "Cerrada" || activeChatIncident.status === "Resuelta" ? "#065F46" : "#92400E",
+                        padding: "0.1rem 0.45rem",
+                        borderRadius: "999px",
+                      }}
+                    >
+                      {activeChatIncident.status}
+                    </span>
+                  </div>
+                  <h4 style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1E293B", margin: "0.2rem 0 0 0" }}>
+                    {activeChatIncident.title}
+                  </h4>
+                  <div style={{ fontSize: "0.72rem", color: "#64748B", marginTop: "2px" }}>
+                    Asesor asignado: <strong style={{ color: "#1F3652" }}>{activeChatIncident.assignedTo?.name || "Equipo Postventa"}</strong> ({activeChatIncident.assignedTo?.role || "Especialista"})
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedIncidentForChat(null)}
+                  style={{
+                    border: "none",
+                    backgroundColor: "#F1F5F9",
+                    color: "#64748B",
+                    borderRadius: "50%",
+                    width: "36px",
+                    height: "36px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Chat Messages Stream */}
+              <div
+                style={{
+                  flex: 1,
+                  overflowY: "auto",
+                  padding: "1rem 1.25rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.85rem",
+                }}
+              >
+                {/* Initial Defect Card */}
+                <div
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "0.85rem",
+                    padding: "0.9rem 1.1rem",
+                    border: "1px solid #E2E8F0",
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  <div style={{ fontSize: "0.7rem", color: "#64748B", fontWeight: 700, textTransform: "uppercase", marginBottom: "4px" }}>
+                    Descripción del Reporte Inicial • {activeChatIncident.createdAt}
+                  </div>
+                  <p style={{ color: "#334155", margin: 0, lineHeight: 1.4 }}>
+                    {activeChatIncident.description}
+                  </p>
+
+                  {/* Evidences / Photos */}
+                  {activeChatIncident.evidences && activeChatIncident.evidences.length > 0 && (
+                    <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      {activeChatIncident.evidences.map((ev, idx) => (
+                        <a
+                          key={ev.id || idx}
+                          href={ev.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            fontSize: "0.72rem",
+                            backgroundColor: "#F1F5F9",
+                            color: "#2563EB",
+                            padding: "0.3rem 0.6rem",
+                            borderRadius: "0.4rem",
+                            textDecoration: "none",
+                            fontWeight: 600,
+                          }}
+                        >
+                          📷 {ev.title || `Evidencia ${idx + 1}`}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Message Bubbles */}
+                {(activeChatIncident.comments || [])
+                  .filter((c) => !c.isInternalOnly)
+                  .map((c) => {
+                    const isClient =
+                      c.authorRole === "Cliente" ||
+                      c.authorRole === "Propietario" ||
+                      (userName && c.authorName.toLowerCase() === userName.toLowerCase());
+
+                    return (
+                      <div
+                        key={c.id}
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: isClient ? "flex-end" : "flex-start",
+                          maxWidth: "85%",
+                          alignSelf: isClient ? "flex-end" : "flex-start",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "3px", fontSize: "0.7rem", color: "#64748B" }}>
+                          <span style={{ fontWeight: 700, color: isClient ? "#1F3652" : "#2563EB" }}>
+                            {isClient ? "Tú" : c.authorName}
+                          </span>
+                          {!isClient && (
+                            <span style={{ fontSize: "0.65rem", backgroundColor: "#EFF6FF", color: "#2563EB", padding: "1px 5px", borderRadius: "99px", fontWeight: 600 }}>
+                              {c.authorRole}
+                            </span>
+                          )}
+                          <span>• {c.timestamp}</span>
+                        </div>
+
+                        <div
+                          style={{
+                            backgroundColor: isClient ? "#1F3652" : "#FFFFFF",
+                            color: isClient ? "#FFFFFF" : "#1E293B",
+                            padding: "0.75rem 1rem",
+                            borderRadius: isClient ? "1rem 1rem 0.2rem 1rem" : "1rem 1rem 1rem 0.2rem",
+                            border: isClient ? "none" : "1px solid #E2E8F0",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                            fontSize: "0.82rem",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {c.message}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {/* Chat Input Bar */}
+              <form
+                onSubmit={handleSendClientMessage}
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  padding: "0.85rem 1rem",
+                  borderTop: "1px solid #E2E8F0",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.6rem",
+                }}
+              >
+                <input
+                  type="text"
+                  value={clientNewMessage}
+                  onChange={(e) => setClientNewMessage(e.target.value)}
+                  placeholder="Escribe tu respuesta o consulta aquí..."
+                  style={{
+                    flex: 1,
+                    padding: "0.65rem 0.95rem",
+                    borderRadius: "999px",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.82rem",
+                    outline: "none",
+                    backgroundColor: "#F8FAFC",
+                    color: "#1E293B",
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={!clientNewMessage.trim()}
+                  style={{
+                    backgroundColor: clientNewMessage.trim() ? "#1F3652" : "#94A3B8",
+                    color: "#FFFFFF",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "40px",
+                    height: "40px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: clientNewMessage.trim() ? "pointer" : "default",
+                    boxShadow: clientNewMessage.trim() ? "0 2px 6px rgba(31, 54, 82, 0.25)" : "none",
+                  }}
+                >
+                  <Send size={16} />
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL CREAR NUEVA INCIDENCIA (CLIENTE) */}
+        {showNewClientIncidentModal && selectedProp && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              backgroundColor: "rgba(15,23,42,0.65)",
+              backdropFilter: "blur(4px)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 9999,
+              padding: "1rem",
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "540px",
+                maxHeight: "90vh",
+                overflowY: "auto",
+                backgroundColor: "#FFFFFF",
+                borderRadius: "1.25rem",
+                padding: "1.5rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: "1rem",
+                boxShadow: "0 20px 25px -5px rgba(0,0,0,0.2)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #F1F5F9", paddingBottom: "0.75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#EFF6FF", color: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Wrench size={18} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+                      Reportar Incidencia / Garantía
+                    </h3>
+                    <span style={{ fontSize: "0.72rem", color: "#64748B" }}>
+                      {selectedProp.projectName} • Unidad {selectedProp.unitNumber}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowNewClientIncidentModal(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#94A3B8" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateClientIncident} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <div>
+                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#334155", display: "block", marginBottom: "0.3rem" }}>
+                    Especialidad / Categoría del Detalle *
+                  </label>
+                  <select
+                    value={reportCategory}
+                    onChange={(e) => setReportCategory(e.target.value as PostventaCategory)}
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem 0.75rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.82rem",
+                      color: "#1E293B",
+                      backgroundColor: "#FFFFFF",
+                      outline: "none",
+                    }}
+                  >
+                    <option value="Plomería / Hidráulico">Plomería / Hidráulico</option>
+                    <option value="Eléctrico">Eléctrico</option>
+                    <option value="Acabados / Pintura">Acabados / Pintura</option>
+                    <option value="Carpintería">Carpintería</option>
+                    <option value="Cancelaría / Vidrio">Cancelaría / Vidrio</option>
+                    <option value="Aire Acondicionado / HVAC">Aire Acondicionado / HVAC</option>
+                    <option value="Impermeabilización / Humedad">Impermeabilización / Humedad</option>
+                    <option value="Cerrajería / Seguridad">Cerrajería / Seguridad</option>
+                    <option value="General">Otro / General</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#334155", display: "block", marginBottom: "0.3rem" }}>
+                    Título Breve del Reporte *
+                  </label>
+                  <input
+                    type="text"
+                    value={reportTitle}
+                    onChange={(e) => setReportTitle(e.target.value)}
+                    placeholder="Ej. Fuga en lavabo de baño de recámara principal"
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem 0.75rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.82rem",
+                      color: "#1E293B",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#334155", display: "block", marginBottom: "0.3rem" }}>
+                    Descripción Detallada del Problema *
+                  </label>
+                  <textarea
+                    value={reportDescription}
+                    onChange={(e) => setReportDescription(e.target.value)}
+                    placeholder="Explica qué ocurre, desde cuándo y en qué ubicación exacta dentro del departamento..."
+                    required
+                    rows={3}
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem 0.75rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      fontSize: "0.82rem",
+                      color: "#1E293B",
+                      outline: "none",
+                      resize: "none",
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#334155", display: "block", marginBottom: "0.3rem" }}>
+                    Fotos / Evidencia del Desperfecto
+                  </label>
+                  <DevioFileUploader
+                    accept="image/*,.pdf"
+                    maxFiles={4}
+                    files={reportUploadedFiles}
+                    onFilesChange={setReportUploadedFiles}
+                  />
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "0.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewClientIncidentModal(false)}
+                    style={{
+                      padding: "0.55rem 1.15rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      color: "#475569",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    style={{
+                      padding: "0.55rem 1.4rem",
+                      borderRadius: "0.5rem",
+                      border: "none",
+                      backgroundColor: "#1F3652",
+                      color: "#FFFFFF",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      boxShadow: "0 2px 6px rgba(31, 54, 82, 0.25)",
+                    }}
+                  >
+                    Enviar Reporte
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

@@ -178,7 +178,7 @@ export class SalesService {
     });
 
     // 6. Handle Co-owners (Supports 2, 3, 4, 5+ co-owners seamlessly)
-    const isCoOp = body.isCoOwnership === true || (Array.isArray(coOwners) && coOwners.length > 0 && body.isCoOwnership !== false);
+    const isCoOp = Boolean(body.isCoOwnership === true && Array.isArray(coOwners) && coOwners.length > 1);
     const createdCoClients: any[] = [];
 
     if (isCoOp && Array.isArray(coOwners) && coOwners.length > 0) {

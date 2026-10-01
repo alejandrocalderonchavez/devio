@@ -199,6 +199,10 @@ interface ProjectContextType {
   addPostventaIncident: (incident: PostventaIncident) => void;
   updatePostventaIncident: (incident: PostventaIncident) => void;
   deletePostventaIncident: (incidentId: string) => void;
+  markUnitAsDelivered: (projectId: string, unitNumber: string, isDelivered: boolean, deliveredAt?: string, deliveryActUrl?: string, warrantyExpiresAt?: string) => void;
+  addIncidentComment: (incidentId: string, comment: { authorName: string; authorRole: string; isInternalOnly: boolean; message: string; attachments?: string[] }) => void;
+  updateIncidentStatus: (incidentId: string, newStatus: PostventaIncident["status"], notes?: string) => void;
+  assignIncidentUser: (incidentId: string, assignedTo: { id: string; name: string; role: string }) => void;
   resetToCleanState: () => void;
   loadDemoData: () => void;
   toast: { title: string; desc: string; type?: "success" | "info" | "warning" } | null;
@@ -351,7 +355,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           },
           ...rawSecondaryCoOwners,
         ];
-      } else if (Array.isArray(s.coOwners) && s.coOwners.length > 0) {
+      } else if (Array.isArray(s.coOwners) && s.coOwners.length > 1) {
         mappedCoOwners = s.coOwners.map((c: any, idx: number) => ({
           id: c.id || c.clientId || c.client?.id || (c.email ? `cli-${c.email.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : `co-${Date.now()}-${idx}`),
           name: c.name || c.client?.fullName || `Cliente ${idx + 1}`,
@@ -492,8 +496,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         paidAmount: totalPaid,
         pendingAmount: totalPending,
         saleDate: saleDateIso,
-        isCoOwnership: Boolean(s.isCoOwnership || (mappedCoOwners.length > 0)),
-        coOwners: mappedCoOwners,
+        isCoOwnership: Boolean((s.isCoOwnership === true && mappedCoOwners.length > 1) || mappedCoOwners.length > 1),
+        coOwners: mappedCoOwners.length > 1 ? mappedCoOwners : [],
         coOwnerPayments: Array.isArray(s.coOwnerPayments) ? s.coOwnerPayments : [],
         client: s.client || {
           id: s.primaryClientId || s.clientId || primaryClientId,
@@ -967,6 +971,22 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           setPaymentPlans(parsed);
         }
       } catch (e) {}
+    }
+
+    const storedIncidents = localStorage.getItem("devio_postventa_incidents") || sessionStorage.getItem("devio_postventa_incidents");
+    if (storedIncidents) {
+      try {
+        const parsed = JSON.parse(storedIncidents);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setPostventaIncidents(parsed);
+        } else {
+          setPostventaIncidents(INITIAL_INCIDENTS);
+        }
+      } catch (e) {
+        setPostventaIncidents(INITIAL_INCIDENTS);
+      }
+    } else {
+      setPostventaIncidents(INITIAL_INCIDENTS);
     }
 
     const storedImpersonation = localStorage.getItem("devio_impersonation") || sessionStorage.getItem("devio_impersonation");
@@ -1708,19 +1728,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
     const unitNum = String(salePayload.unit?.number || "").trim();
     const primaryName = salePayload.client?.name || "Cliente Devio";
-    const coOwners: CoOwner[] = (salePayload.coOwners && salePayload.coOwners.length > 0)
-      ? salePayload.coOwners
-      : [
-          {
-            id: `co-${Date.now()}`,
-            name: primaryName,
-            email: salePayload.client?.email || "",
-            phone: salePayload.client?.phone || "",
-            rfc: salePayload.client?.rfc || "",
-            ownershipPct: 100,
-            isPrimary: true,
-          },
-        ];
+    const isCoOwnershipSale = Boolean(
+      salePayload.isCoOwnership === true &&
+      Array.isArray(salePayload.coOwners) &&
+      salePayload.coOwners.length > 1
+    );
+    const coOwners: CoOwner[] = isCoOwnershipSale ? salePayload.coOwners : [];
 
     // Format client summary display text
     const clientSummary =
@@ -1885,9 +1898,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       pendingAmount,
       saleDate: saleDateIso,
       createdAt: saleDateIso,
-      isCoOwnership: Boolean(salePayload.isCoOwnership || coOwners.length > 1),
-      coOwners,
-      coOwnerPayments: salePayload.coOwnerPayments || [],
+      isCoOwnership: isCoOwnershipSale,
+      coOwners: isCoOwnershipSale ? coOwners : [],
+      coOwnerPayments: isCoOwnershipSale ? (salePayload.coOwnerPayments || []) : [],
       additionals: salePayload.additionals || [],
       schedule: constructedSchedule,
       payments: initialPaymentsList,
@@ -1906,7 +1919,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
             ...u,
             status: "VENDIDA" as const,
             client: clientSummary,
-            coOwners,
+            coOwners: isCoOwnershipSale ? coOwners : [],
             price: Number(salePayload.financials?.unitPrice) || Number(salePayload.unit?.price) || u.price,
             saleFolio,
             saleDate: saleDateIso,
@@ -2006,9 +2019,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         unitNumber: unitNum,
         unitId: salePayload.unit?.id,
         client: salePayload.client,
-        isCoOwnership: Boolean(salePayload.isCoOwnership),
-        coOwners,
-        coOwnerPayments: salePayload.coOwnerPayments,
+        isCoOwnership: isCoOwnershipSale,
+        coOwners: isCoOwnershipSale ? coOwners : [],
+        coOwnerPayments: isCoOwnershipSale ? salePayload.coOwnerPayments : [],
         financials: salePayload.financials,
         schedule: salePayload.schedule,
         initialPayment: salePayload.initialPayment,
@@ -3500,6 +3513,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   const savePostventaIncidents = (newIncidents: PostventaIncident[]) => {
     setPostventaIncidents(newIncidents);
+    try {
+      localStorage.setItem("devio_postventa_incidents", JSON.stringify(newIncidents));
+      sessionStorage.setItem("devio_postventa_incidents", JSON.stringify(newIncidents));
+    } catch (e) {}
   };
 
   const addPostventaIncident = (incident: PostventaIncident) => {
@@ -3518,6 +3535,157 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const updated = postventaIncidents.filter((i) => i.id !== incidentId);
     savePostventaIncidents(updated);
     showToast("Incidencia Eliminada", "El ticket fue eliminado.", "info");
+  };
+
+  const markUnitAsDelivered = (
+    projectId: string,
+    unitNumber: string,
+    isDelivered: boolean,
+    deliveredAt?: string,
+    deliveryActUrl?: string,
+    warrantyExpiresAt?: string
+  ) => {
+    const nowMexico = getMexicoDateISO();
+    const effectiveDeliveryDate = deliveredAt || nowMexico;
+
+    const updated = projects.map((p) => {
+      if (p.id !== projectId) return p;
+      const updatedUnits = (p.unitsInventory || []).map((u) => {
+        if (u.unit.toLowerCase().trim() === unitNumber.toLowerCase().trim()) {
+          return {
+            ...u,
+            isDelivered,
+            deliveredAt: isDelivered ? effectiveDeliveryDate : undefined,
+            deliveryActUrl: isDelivered ? (deliveryActUrl || u.deliveryActUrl) : undefined,
+            warrantyExpiresAt: isDelivered ? (warrantyExpiresAt || u.warrantyExpiresAt) : undefined,
+          };
+        }
+        return u;
+      });
+      return {
+        ...p,
+        unitsInventory: updatedUnits,
+      };
+    });
+
+    saveProjects(updated);
+    showToast(
+      isDelivered ? "Unidad Entregada" : "Entrega Revertida",
+      isDelivered
+        ? `La unidad ${unitNumber} ha sido marcada como entregada. El cliente ahora puede reportar incidencias.`
+        : `La unidad ${unitNumber} ahora está pendiente de entrega.`,
+      "success"
+    );
+  };
+
+  const addIncidentComment = (
+    incidentId: string,
+    comment: {
+      authorName: string;
+      authorRole: string;
+      isInternalOnly: boolean;
+      message: string;
+      attachments?: string[];
+    }
+  ) => {
+    const now = formatDateMX(new Date());
+    const newCommentId = `cmt-${Date.now()}`;
+    const newComment = {
+      id: newCommentId,
+      timestamp: now,
+      authorName: comment.authorName || userName || "Usuario",
+      authorRole: comment.authorRole || userRole || "Equipo",
+      isInternalOnly: Boolean(comment.isInternalOnly),
+      message: comment.message,
+      attachments: comment.attachments || [],
+    };
+
+    const updated = postventaIncidents.map((inc) => {
+      if (inc.id !== incidentId) return inc;
+      const currentComments = inc.comments || [];
+      const currentLogs = inc.logs || [];
+      return {
+        ...inc,
+        updatedAt: now,
+        comments: [...currentComments, newComment],
+        logs: [
+          {
+            id: `log-${Date.now()}`,
+            timestamp: now,
+            authorName: comment.authorName || userName || "Usuario",
+            authorRole: comment.authorRole || userRole || "Equipo",
+            action: comment.isInternalOnly ? "Nota interna agregada" : "Mensaje enviado al cliente",
+            notes: comment.message.slice(0, 80),
+          },
+          ...currentLogs,
+        ],
+      };
+    });
+
+    savePostventaIncidents(updated);
+  };
+
+  const updateIncidentStatus = (
+    incidentId: string,
+    newStatus: PostventaIncident["status"],
+    notes?: string
+  ) => {
+    const now = formatDateMX(new Date());
+    const updated = postventaIncidents.map((inc) => {
+      if (inc.id !== incidentId) return inc;
+      const prevStatus = inc.status;
+      const currentLogs = inc.logs || [];
+      return {
+        ...inc,
+        status: newStatus,
+        updatedAt: now,
+        logs: [
+          {
+            id: `log-${Date.now()}`,
+            timestamp: now,
+            authorName: userName || "Usuario",
+            authorRole: userRole || "Equipo",
+            action: `Estatus cambiado de ${prevStatus} a ${newStatus}`,
+            previousState: prevStatus,
+            newState: newStatus,
+            notes: notes || undefined,
+          },
+          ...currentLogs,
+        ],
+      };
+    });
+
+    savePostventaIncidents(updated);
+    showToast("Estatus Actualizado", `El ticket cambió a ${newStatus}.`);
+  };
+
+  const assignIncidentUser = (
+    incidentId: string,
+    assignedTo: { id: string; name: string; role: string }
+  ) => {
+    const now = formatDateMX(new Date());
+    const updated = postventaIncidents.map((inc) => {
+      if (inc.id !== incidentId) return inc;
+      const currentLogs = inc.logs || [];
+      return {
+        ...inc,
+        assignedTo,
+        updatedAt: now,
+        logs: [
+          {
+            id: `log-${Date.now()}`,
+            timestamp: now,
+            authorName: userName || "Usuario",
+            authorRole: userRole || "Equipo",
+            action: `Asignado a ${assignedTo.name} (${assignedTo.role})`,
+          },
+          ...currentLogs,
+        ],
+      };
+    });
+
+    savePostventaIncidents(updated);
+    showToast("Asignación Actualizada", `Ticket asignado a ${assignedTo.name}.`);
   };
 
   const addQuote = (projectId: string, quote: QuoteRecord) => {
@@ -3659,6 +3827,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         addPostventaIncident,
         updatePostventaIncident,
         deletePostventaIncident,
+        markUnitAsDelivered,
+        addIncidentComment,
+        updateIncidentStatus,
+        assignIncidentUser,
         resetToCleanState,
         loadDemoData,
         toast,

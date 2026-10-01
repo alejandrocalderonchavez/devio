@@ -219,11 +219,11 @@ export default function ClientDetailPage() {
             (co.email && clientEmail && co.email.toLowerCase() === clientEmail.toLowerCase())
         );
         const hasActualCoOwners = Boolean(
-          s.isCoOwnership === true ||
-          (Array.isArray(s.coOwners) && s.coOwners.length > 0 && (s as any).isCoOwnership !== false)
+          (s.isCoOwnership === true && (s.coOwners?.length ?? 0) > 1) ||
+          (Array.isArray(s.coOwners) && s.coOwners.length > 1)
         );
         const ownershipPct = hasActualCoOwners
-          ? (coMatch ? Number(coMatch.ownershipPct) : (s.coOwners && s.coOwners.length > 0 ? (Number(s.coOwners[0]?.ownershipPct) || 100) : 100))
+          ? (coMatch ? Number(coMatch.ownershipPct) : (s.coOwners && s.coOwners.length > 1 ? (Number(s.coOwners[0]?.ownershipPct) || 100) : 100))
           : 100;
         return {
           unit: s.unit,
@@ -243,11 +243,11 @@ export default function ClientDetailPage() {
             (co.email && clientEmail && co.email.toLowerCase() === clientEmail.toLowerCase())
         );
         const hasActualCoOwners = Boolean(
-          s.isCoOwnership === true ||
-          (Array.isArray(s.coOwners) && s.coOwners.length > 0 && (s as any).isCoOwnership !== false)
+          (s.isCoOwnership === true && (s.coOwners?.length ?? 0) > 1) ||
+          (Array.isArray(s.coOwners) && s.coOwners.length > 1)
         );
         const ownershipPct = hasActualCoOwners
-          ? (coMatch ? Number(coMatch.ownershipPct) : (s.coOwners && s.coOwners.length > 0 ? (Number(s.coOwners[0]?.ownershipPct) || 100) : 100))
+          ? (coMatch ? Number(coMatch.ownershipPct) : (s.coOwners && s.coOwners.length > 1 ? (Number(s.coOwners[0]?.ownershipPct) || 100) : 100))
           : 100;
         const ratio = (isNaN(ownershipPct) || ownershipPct <= 0 ? 100 : ownershipPct) / 100;
 
@@ -298,11 +298,11 @@ export default function ClientDetailPage() {
             (co.email && clientEmail && co.email.toLowerCase() === clientEmail.toLowerCase())
         );
         const hasActualCoOwners = Boolean(
-          s.isCoOwnership === true ||
-          (Array.isArray(s.coOwners) && s.coOwners.length > 0 && (s as any).isCoOwnership !== false)
+          (s.isCoOwnership === true && (s.coOwners?.length ?? 0) > 1) ||
+          (Array.isArray(s.coOwners) && s.coOwners.length > 1)
         );
         const ownershipPct = hasActualCoOwners
-          ? (coMatch ? Number(coMatch.ownershipPct) : (s.coOwners && s.coOwners.length > 0 ? (Number(s.coOwners[0]?.ownershipPct) || 100) : 100))
+          ? (coMatch ? Number(coMatch.ownershipPct) : (s.coOwners && s.coOwners.length > 1 ? (Number(s.coOwners[0]?.ownershipPct) || 100) : 100))
           : 100;
         const ratio = (isNaN(ownershipPct) || ownershipPct <= 0 ? 100 : ownershipPct) / 100;
         return acc + Math.round((s.totalPrice || 0) * ratio);
@@ -536,39 +536,29 @@ export default function ClientDetailPage() {
   };
 
   const isCoOwned = Boolean(
-    currentSale?.isCoOwnership === true ||
+    (currentSale?.isCoOwnership === true && ((currentSale?.coOwners?.length ?? 0) > 1)) ||
     (currentUnitObj?.coOwners && currentUnitObj.coOwners.length > 1) ||
     (Array.isArray(currentSale?.coOwners) && currentSale.coOwners.length > 1) ||
     (currentUnitObj?.ownershipPct !== undefined && currentUnitObj.ownershipPct < 100)
   );
 
   const allCoOwners = useMemo(() => {
+    if (!isCoOwned) return [];
     let list: any[] = [];
-    if (Array.isArray(currentSale?.coOwners) && currentSale.coOwners.length > 0) {
+    if (Array.isArray(currentSale?.coOwners) && currentSale.coOwners.length > 1) {
       list = currentSale.coOwners;
-    } else if (Array.isArray(currentUnitObj?.coOwners) && currentUnitObj.coOwners.length > 0) {
+    } else if (Array.isArray(currentUnitObj?.coOwners) && currentUnitObj.coOwners.length > 1) {
       list = currentUnitObj.coOwners;
     }
 
-    if (list.length === 0 && isCoOwned) {
-      list = [
-        {
-          id: rawClient.id,
-          name: rawClient.name,
-          email: rawClient.email,
-          phone: rawClient.phone,
-          ownershipPct: currentUnitObj?.ownershipPct || 50,
-          isPrimary: currentUnitObj?.isPrimary ?? true,
-        },
-      ];
-    }
+    if (list.length <= 1) return [];
 
     return list.map((c: any, idx: number) => ({
       ...c,
       ownershipPct: Number(c.ownershipPct ?? c.ownershipPercentage ?? (100 / Math.max(1, list.length))),
       isPrimary: c.isPrimary !== undefined ? Boolean(c.isPrimary) : idx === 0,
     }));
-  }, [currentSale, currentUnitObj, isCoOwned, rawClient]);
+  }, [currentSale, currentUnitObj, isCoOwned]);
 
   const clientShareRatio = (isCoOwned && coOwnershipViewMode === "proportional")
     ? (currentUnitObj?.ownershipPct || 100) / 100

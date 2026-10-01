@@ -53,6 +53,10 @@ export interface UnitItem {
   constructionPct?: number; // Porcentaje de avance de obra específico de la unidad
   advisor?: string; // Nombre del Asesor comercial asignado
   advisorEmail?: string; // Email del Asesor asignado
+  isDelivered?: boolean; // Indica si la unidad ya fue entregada formalmente
+  deliveredAt?: string; // Fecha en que fue entregada
+  deliveryActUrl?: string; // URL o nombre del acta de entrega/recepción
+  warrantyExpiresAt?: string; // Fecha de vencimiento de la póliza de garantía
   customAttributes?: Record<string, any>;
 }
 

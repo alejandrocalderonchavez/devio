@@ -20,6 +20,8 @@ import {
   Building,
   User,
   Truck,
+  ShieldCheck,
+  ShieldAlert,
 } from "lucide-react";
 import {
   PostventaIncident,
@@ -32,14 +34,26 @@ import { useProject } from "../../../../context/project-context";
 import { exportTableToExcel, exportTableToPDF } from "../../../../lib/export-utils";
 import { NewIncidentModal } from "../../../../components/postventa/new-incident-modal";
 import { IncidentDetailDrawer } from "../../../../components/postventa/incident-detail-drawer";
+import { UnitDeliveryModal, DeliveryUnitData } from "../../../../components/postventa/unit-delivery-modal";
 
 export default function ProjectPostventaPage() {
   const params = useParams();
   const projectId = (params?.id as string) || "p-1";
-  const { getProject, postventaIncidents, addPostventaIncident, updatePostventaIncident } = useProject();
+  const {
+    getProject,
+    postventaIncidents,
+    addPostventaIncident,
+    updatePostventaIncident,
+    markUnitAsDelivered,
+    hasPermission,
+  } = useProject();
+
   const project = getProject(projectId);
 
-  // Filters
+  // Main Tab
+  const [mainTab, setMainTab] = useState<"incidents" | "deliveries">("incidents");
+
+  // Filters for Incidents
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
   const [selectedPriority, setSelectedPriority] = useState<string>("ALL");
@@ -49,15 +63,86 @@ export default function ProjectPostventaPage() {
   const [sortField, setSortField] = useState<keyof PostventaIncident>("createdAt");
   const [sortAsc, setSortAsc] = useState(false);
 
+  // Filters for Deliveries Tab
+  const [deliverySearch, setDeliverySearch] = useState("");
+  const [deliveryStatusFilter, setDeliveryStatusFilter] = useState<"ALL" | "DELIVERED" | "PENDING">("ALL");
+
   // Modals & Drawer State
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [newIncidentDefaults, setNewIncidentDefaults] = useState<{ projectId?: string; unit?: string } | undefined>(undefined);
   const [selectedIncident, setSelectedIncident] = useState<PostventaIncident | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [deliveryModalUnit, setDeliveryModalUnit] = useState<DeliveryUnitData | null>(null);
 
   // Filter scoped to this project
   const projectIncidents = useMemo(() => {
     return postventaIncidents.filter((i) => i.projectId === projectId);
   }, [postventaIncidents, projectId]);
+
+  // Project Sold Units
+  const projectSoldUnits = useMemo(() => {
+    if (!project || !Array.isArray(project.unitsInventory)) return [];
+    const list: Array<DeliveryUnitData & {
+      price: number;
+      saleDate: string;
+      activeIncidentsCount: number;
+      totalIncidentsCount: number;
+    }> = [];
+
+    project.unitsInventory.forEach((u: any) => {
+      if (u.status === "VENDIDA") {
+        const unitIncidents = projectIncidents.filter(
+          (inc) => inc.unit.toLowerCase().trim() === u.unit.toLowerCase().trim()
+        );
+        const activeCount = unitIncidents.filter(
+          (i) => i.status !== "Cerrada" && i.status !== "Resuelta"
+        ).length;
+
+        list.push({
+          projectId: project.id,
+          projectName: project.name,
+          unitNumber: u.unit,
+          unitType: u.type,
+          clientName: u.client || "Cliente sin asignar",
+          price: u.price,
+          saleDate: u.saleDate || "-",
+          isDelivered: Boolean(u.isDelivered),
+          deliveredAt: u.deliveredAt,
+          deliveryActUrl: u.deliveryActUrl,
+          warrantyExpiresAt: u.warrantyExpiresAt,
+          activeIncidentsCount: activeCount,
+          totalIncidentsCount: unitIncidents.length,
+        });
+      }
+    });
+
+    return list;
+  }, [project, projectIncidents]);
+
+  // Deliveries KPIs
+  const deliveryKpis = useMemo(() => {
+    const total = projectSoldUnits.length;
+    const delivered = projectSoldUnits.filter((u) => u.isDelivered).length;
+    const pending = total - delivered;
+    const activeWithIssues = projectSoldUnits.filter((u) => u.isDelivered && u.activeIncidentsCount > 0).length;
+    const rate = total > 0 ? Math.round((delivered / total) * 100) : 0;
+    return { total, delivered, pending, activeWithIssues, rate };
+  }, [projectSoldUnits]);
+
+  // Filtered Sold Units
+  const filteredSoldUnits = useMemo(() => {
+    return projectSoldUnits.filter((u) => {
+      if (deliveryStatusFilter === "DELIVERED" && !u.isDelivered) return false;
+      if (deliveryStatusFilter === "PENDING" && u.isDelivered) return false;
+      if (deliverySearch.trim()) {
+        const q = deliverySearch.toLowerCase();
+        const matchUnit = u.unitNumber.toLowerCase().includes(q);
+        const matchClient = u.clientName.toLowerCase().includes(q);
+        if (!matchUnit && !matchClient) return false;
+      }
+      return true;
+    });
+  }, [projectSoldUnits, deliveryStatusFilter, deliverySearch]);
 
   // KPI calculations
   const kpis = useMemo(() => {
@@ -186,25 +271,21 @@ export default function ProjectPostventaPage() {
     }
   };
 
+  // Export handlers
   const handleExportExcel = () => {
     const data = filteredIncidents.map((inc) => ({
       Folio: inc.folio,
       Proyecto: inc.projectName,
       Unidad: inc.unit,
       Cliente: inc.clientName,
-      Teléfono: inc.clientPhone,
-      Copropietarios: inc.coOwners?.map((c) => `${c.name} (${c.pct}%)`).join(", ") || "N/A",
       Categoría: inc.category,
       Prioridad: inc.priority,
       Estado: inc.status,
-      Título: inc.title,
-      "SLA Horas": inc.slaHours,
       Proveedor: inc.supplier?.name || "Sin asignar",
+      "Horas SLA": inc.slaHours,
+      "SLA Vencido": inc.slaExpired ? "Sí" : "No",
       "Fecha Creación": inc.createdAt,
-      "Última Actualización": inc.updatedAt,
-      "CSAT Calificación": inc.csat?.rating ? `${inc.csat.rating} / 5` : "Pendiente",
     }));
-
     exportTableToExcel(data, `Devio_Postventa_${project?.name || "Proyecto"}`);
   };
 
@@ -233,19 +314,37 @@ export default function ProjectPostventaPage() {
       inc.createdAt,
     ]);
 
-    const summary = `Desarrollo: ${project?.name || "Tradere"} | Total: ${filteredIncidents.length} | Casos Abiertos: ${kpis.openCases} | CSAT: ${kpis.avgCsat} ★`;
+    const summary = `Total Incidencias: ${filteredIncidents.length} | Casos Abiertos: ${kpis.openCases} | Satisfacción CSAT: ${kpis.avgCsat} ★`;
 
     exportTableToPDF(
-      "Reporte de Postventa e Incidencias",
-      project?.name || "Tradere",
+      `Reporte de Postventa e Incidencias - ${project?.name || "Proyecto"}`,
+      project?.name || "Proyecto",
       headers,
       rows,
       summary
     );
   };
 
+  if (!hasPermission("postventa.view")) {
+    return (
+      <AppLayout>
+        <main style={{ padding: "3rem 2rem", flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "1.25rem", padding: "3rem", textAlign: "center", maxWidth: "480px", border: "1px solid #E2E8F0", boxShadow: "0 4px 12px rgba(0,0,0,0.04)" }}>
+            <div style={{ width: "56px", height: "56px", borderRadius: "50%", backgroundColor: "#FEF2F2", color: "#EF4444", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem auto" }}>
+              <ShieldAlert size={28} />
+            </div>
+            <h2 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1F3652", marginBottom: "0.5rem" }}>Acceso Restringido</h2>
+            <p style={{ fontSize: "0.88rem", color: "#64748B", lineHeight: 1.5, margin: 0 }}>
+              Tu perfil de usuario no cuenta con permisos para ver el módulo de Postventa e Incidencias.
+            </p>
+          </div>
+        </main>
+      </AppLayout>
+    );
+  }
+
   return (
-    <AppLayout activeProjectId={projectId} projectSubTab="postventa">
+    <AppLayout>
       <div
         style={{
           flex: 1,
@@ -253,10 +352,10 @@ export default function ProjectPostventaPage() {
           flexDirection: "column",
           overflowY: "auto",
           padding: "1.25rem 2rem 2.5rem 2rem",
-          gap: "1.5rem",
+          gap: "1.25rem",
         }}
       >
-        {/* Top Header */}
+        {/* Top Header & Action Buttons */}
         <div
           style={{
             display: "flex",
@@ -291,457 +390,779 @@ export default function ProjectPostventaPage() {
                   letterSpacing: "-0.02em",
                 }}
               >
-                Postventa &bull; {project?.name || "Tradere"}
+                Postventa & Entregas • {project?.name || "Proyecto"}
               </h1>
             </div>
             <p style={{ fontSize: "0.85rem", color: "#64748B", margin: "0.35rem 0 0 0" }}>
-              Mesa de atención a residentes, gestión de garantías y asignación de proveedores para {project?.name}.
+              Gestión de entregas de unidades, registro de tickets, asignación técnica y chat interactivo para {project?.name}.
             </p>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.45rem",
-                backgroundColor: "#FFFFFF",
-                color: "#1B3047",
-                padding: "0.55rem 1.15rem",
-                borderRadius: "9999px",
-                border: "1px solid #CBD5E1",
-                fontSize: "0.82rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              }}
-            >
-              <FileSpreadsheet size={15} color="#059669" /> Exportar Excel
-            </button>
+            {hasPermission("postventa.view") && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.45rem",
+                    backgroundColor: "#FFFFFF",
+                    color: "#1B3047",
+                    padding: "0.55rem 1.15rem",
+                    borderRadius: "9999px",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <FileSpreadsheet size={15} color="#059669" /> Exportar Excel
+                </button>
 
-            <button
-              type="button"
-              onClick={handleExportPDF}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.45rem",
-                backgroundColor: "#FFFFFF",
-                color: "#1B3047",
-                padding: "0.55rem 1.15rem",
-                borderRadius: "9999px",
-                border: "1px solid #CBD5E1",
-                fontSize: "0.82rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              }}
-            >
-              <Printer size={15} color="#2563EB" /> Exportar PDF
-            </button>
+                <button
+                  type="button"
+                  onClick={handleExportPDF}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.45rem",
+                    backgroundColor: "#FFFFFF",
+                    color: "#1B3047",
+                    padding: "0.55rem 1.15rem",
+                    borderRadius: "9999px",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <Printer size={15} color="#2563EB" /> Exportar PDF
+                </button>
+              </>
+            )}
 
-            <button
-              type="button"
-              onClick={() => setIsNewModalOpen(true)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.45rem",
-                backgroundColor: "#1B3047",
-                color: "#FFFFFF",
-                padding: "0.55rem 1.35rem",
-                borderRadius: "9999px",
-                border: "none",
-                fontSize: "0.82rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                boxShadow: "0 4px 12px rgba(27, 48, 71, 0.2)",
-              }}
-            >
-              <Plus size={16} /> Nueva Incidencia
-            </button>
+            {hasPermission("postventa.manage") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setNewIncidentDefaults({ projectId });
+                  setIsNewModalOpen(true);
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  backgroundColor: "#1B3047",
+                  color: "#FFFFFF",
+                  padding: "0.55rem 1.35rem",
+                  borderRadius: "9999px",
+                  border: "none",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(27, 48, 71, 0.2)",
+                }}
+              >
+                <Plus size={16} /> Nueva Incidencia
+              </button>
+            )}
           </div>
         </div>
 
-        {/* 6 KPIs */}
+        {/* Tab Switcher */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-            gap: "1rem",
-          }}
-        >
-          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0" }}>
-            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
-              Incidencias Abiertas
-            </span>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
-              <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#1E293B" }}>
-                {kpis.openCases}
-              </span>
-              <span style={{ fontSize: "0.72rem", color: "#64748B" }}>en proceso</span>
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0" }}>
-            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
-              1ra Respuesta Promedio
-            </span>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
-              <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#2563EB" }}>
-                {kpis.firstResponseTime}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0" }}>
-            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
-              Tiempo de Resolución
-            </span>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
-              <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#00C48C" }}>
-                {kpis.avgResolutionTime}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0" }}>
-            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
-              Casos Vencidos (SLA)
-            </span>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
-              <span style={{ fontSize: "1.5rem", fontWeight: 800, color: kpis.expiredCases > 0 ? "#DC2626" : "#059669" }}>
-                {kpis.expiredCases}
-              </span>
-              <span style={{ fontSize: "0.72rem", color: "#64748B" }}>
-                {kpis.expiredCases === 0 ? "100% en tiempo" : "fuera de SLA"}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0" }}>
-            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
-              Satisfacción CSAT
-            </span>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.35rem" }}>
-              <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#1E293B" }}>
-                {kpis.avgCsat}
-              </span>
-              <div style={{ display: "flex", color: "#EAB308" }}>
-                <Star size={16} style={{ fill: "#EAB308" }} />
-              </div>
-              <span style={{ fontSize: "0.72rem", color: "#64748B" }}>/ 5.0</span>
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0" }}>
-            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
-              Reincidencias
-            </span>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
-              <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#EA580C" }}>
-                {kpis.reopenedCases}
-              </span>
-              <span style={{ fontSize: "0.72rem", color: "#64748B" }}>reabiertas</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div
-          style={{
-            backgroundColor: "#FFFFFF",
-            padding: "1rem 1.25rem",
-            borderRadius: "0.85rem",
-            border: "1px solid #E2E8F0",
             display: "flex",
-            flexWrap: "wrap",
-            gap: "0.75rem",
-            alignItems: "center",
-            justifyContent: "space-between",
+            gap: "0.5rem",
+            borderBottom: "2px solid #E2E8F0",
+            paddingBottom: "0.15rem",
           }}
         >
-          <div
+          <button
+            onClick={() => setMainTab("incidents")}
             style={{
+              padding: "0.65rem 1.25rem",
+              borderRadius: "0.6rem 0.6rem 0 0",
+              border: "none",
+              backgroundColor: mainTab === "incidents" ? "#1B3047" : "transparent",
+              color: mainTab === "incidents" ? "#FFFFFF" : "#64748B",
+              fontWeight: 700,
+              fontSize: "0.85rem",
               display: "flex",
               alignItems: "center",
               gap: "0.5rem",
-              backgroundColor: "#F8FAFC",
-              border: "1px solid #CBD5E1",
-              borderRadius: "0.6rem",
-              padding: "0.45rem 0.85rem",
-              minWidth: "280px",
-              flex: 1,
+              cursor: "pointer",
             }}
           >
-            <Search size={16} style={{ color: "#94A3B8" }} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar por folio, unidad, cliente o contratista..."
-              style={{
-                border: "none",
-                backgroundColor: "transparent",
-                outline: "none",
-                fontSize: "0.82rem",
-                width: "100%",
-                color: "#1E293B",
-              }}
-            />
-          </div>
+            <Wrench size={16} />
+            <span>Incidencias ({projectIncidents.length})</span>
+          </button>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              style={{ padding: "0.45rem 0.75rem", borderRadius: "0.5rem", border: "1px solid #CBD5E1", fontSize: "0.8rem", color: "#475569", backgroundColor: "#FFFFFF" }}
-            >
-              <option value="ALL">Todos los Estados (9)</option>
-              <option value="Reportada">Reportada</option>
-              <option value="En revisión">En revisión</option>
-              <option value="Asignada">Asignada</option>
-              <option value="Visita programada">Visita programada</option>
-              <option value="En reparación">En reparación</option>
-              <option value="Esperando cliente">Esperando cliente</option>
-              <option value="Resuelta">Resuelta</option>
-              <option value="Cerrada">Cerrada</option>
-              <option value="Reabierta">Reabierta</option>
-            </select>
-
-            <select
-              value={selectedPriority}
-              onChange={(e) => setSelectedPriority(e.target.value)}
-              style={{ padding: "0.45rem 0.75rem", borderRadius: "0.5rem", border: "1px solid #CBD5E1", fontSize: "0.8rem", color: "#475569", backgroundColor: "#FFFFFF" }}
-            >
-              <option value="ALL">Todas las Prioridades</option>
-              <option value="Urgente">Urgente</option>
-              <option value="Alta">Alta</option>
-              <option value="Media">Media</option>
-              <option value="Baja">Baja</option>
-            </select>
-
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              style={{ padding: "0.45rem 0.75rem", borderRadius: "0.5rem", border: "1px solid #CBD5E1", fontSize: "0.8rem", color: "#475569", backgroundColor: "#FFFFFF" }}
-            >
-              <option value="ALL">Todas las Categorías</option>
-              <option value="Plomería / Hidráulico">Plomería / Hidráulico</option>
-              <option value="Eléctrico">Eléctrico</option>
-              <option value="Acabados / Pintura">Acabados / Pintura</option>
-              <option value="Carpintería">Carpintería</option>
-              <option value="Cancelaría / Vidrio">Cancelaría / Vidrio</option>
-              <option value="Aire Acondicionado / HVAC">Aire Acondicionado / HVAC</option>
-              <option value="Impermeabilización / Humedad">Impermeabilización / Humedad</option>
-              <option value="Estructural / Albañilería">Estructural / Albañilería</option>
-              <option value="Cerrajería / Seguridad">Cerrajería / Seguridad</option>
-            </select>
-          </div>
+          <button
+            onClick={() => setMainTab("deliveries")}
+            style={{
+              padding: "0.65rem 1.25rem",
+              borderRadius: "0.6rem 0.6rem 0 0",
+              border: "none",
+              backgroundColor: mainTab === "deliveries" ? "#1B3047" : "transparent",
+              color: mainTab === "deliveries" ? "#FFFFFF" : "#64748B",
+              fontWeight: 700,
+              fontSize: "0.85rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              cursor: "pointer",
+            }}
+          >
+            <CheckCircle2 size={16} />
+            <span>Unidades Vendidas & Entregas ({projectSoldUnits.length})</span>
+          </button>
         </div>
 
-        {/* Master Table */}
-        <div
-          style={{
-            backgroundColor: "#FFFFFF",
-            borderRadius: "0.85rem",
-            border: "1px solid #E2E8F0",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem" }}>
-              <thead>
-                <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569" }}>
-                  <th onClick={() => handleSort("folio")} style={{ padding: "0.85rem 1rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                      Folio <ArrowUpDown size={12} color="#94A3B8" />
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort("unit")} style={{ padding: "0.85rem 1rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                      Unidad <ArrowUpDown size={12} color="#94A3B8" />
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort("clientName")} style={{ padding: "0.85rem 1rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                      Cliente / Propietario <ArrowUpDown size={12} color="#94A3B8" />
-                    </div>
-                  </th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, whiteSpace: "nowrap" }}>Categoría & Falla</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, whiteSpace: "nowrap" }}>Prioridad</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, whiteSpace: "nowrap" }}>Estado</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, whiteSpace: "nowrap" }}>Proveedor Asignado</th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, whiteSpace: "nowrap" }}>SLA</th>
-                  <th onClick={() => handleSort("createdAt")} style={{ padding: "0.85rem 1rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                      Reportado <ArrowUpDown size={12} color="#94A3B8" />
-                    </div>
-                  </th>
-                  <th style={{ padding: "0.85rem 1rem", fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredIncidents.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} style={{ padding: "4rem 2rem", textAlign: "center" }}>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                        <div
-                          style={{
-                            width: "56px",
-                            height: "56px",
-                            borderRadius: "16px",
-                            backgroundColor: "rgba(31, 54, 82, 0.06)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "var(--devio-blue)",
-                            marginBottom: "1rem",
-                          }}
-                        >
-                          <Wrench size={28} />
-                        </div>
-                        <h4 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--devio-blue-dark)", margin: "0 0 0.35rem 0" }}>
-                          {searchQuery.trim() || selectedStatus !== "ALL" || selectedPriority !== "ALL" || selectedCategory !== "ALL"
-                            ? "No se encontraron incidencias"
-                            : "No hay reportes de postventa"}
-                        </h4>
-                        <p style={{ fontSize: "0.85rem", color: "var(--devio-neutral-3)", maxWidth: "440px", margin: "0 0 1.25rem 0", lineHeight: 1.5 }}>
-                          {searchQuery.trim() || selectedStatus !== "ALL" || selectedPriority !== "ALL" || selectedCategory !== "ALL"
-                            ? "No hay tickets que coincidan con los filtros seleccionados."
-                            : "Registra y atiende solicitudes de garantía, reparaciones o vicios ocultos para este desarrollo."}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setIsNewModalOpen(true)}
-                          style={{
-                            backgroundColor: "var(--devio-blue-dark)",
-                            color: "var(--devio-white)",
-                            padding: "0.6rem 1.4rem",
-                            borderRadius: "9999px",
-                            fontSize: "0.82rem",
-                            fontWeight: 700,
-                            border: "none",
-                            cursor: "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            boxShadow: "0 2px 6px rgba(27, 48, 71, 0.15)",
-                          }}
-                        >
-                          <Plus size={16} /> Levantar Primer Reporte
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredIncidents.map((inc) => {
-                    const statusPill = getStatusPill(inc.status);
-                    const priorityPill = getPriorityPill(inc.priority);
+        {/* TAB 1: INCIDENCIAS */}
+        {mainTab === "incidents" && (
+          <>
+            {/* KPI Cards */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+                gap: "1rem",
+              }}
+            >
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  Incidencias Abiertas
+                </span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
+                  <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#1E293B" }}>
+                    {kpis.openCases}
+                  </span>
+                  <span style={{ fontSize: "0.72rem", color: "#64748B" }}>en proceso</span>
+                </div>
+              </div>
 
-                    return (
-                      <tr
-                        key={inc.id}
-                        onClick={() => {
-                          setSelectedIncident(inc);
-                          setIsDrawerOpen(true);
-                        }}
-                        style={{ borderBottom: "1px solid #F1F5F9", cursor: "pointer", transition: "background-color 0.15s ease" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
-                      >
-                        <td style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1B3047", whiteSpace: "nowrap" }}>
-                          {inc.folio}
-                        </td>
-                        <td style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1E293B", whiteSpace: "nowrap" }}>
-                          Unidad {inc.unit}
-                        </td>
-                        <td style={{ padding: "0.85rem 1rem" }}>
-                          <span style={{ fontWeight: 600, color: "#1E293B", display: "block" }}>{inc.clientName}</span>
-                          {inc.coOwners && inc.coOwners.length > 0 && inc.coOwners[0] && (
-                            <span style={{ fontSize: "0.7rem", color: "#2563EB", display: "block" }}>
-                              +{inc.coOwners.length} copropietario ({inc.coOwners[0].pct}%)
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: "0.85rem 1rem", maxWidth: "240px" }}>
-                          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#2F80ED", display: "block" }}>{inc.category}</span>
-                          <span style={{ fontSize: "0.78rem", color: "#334155", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
-                            {inc.title}
-                          </span>
-                        </td>
-                        <td style={{ padding: "0.85rem 1rem", whiteSpace: "nowrap" }}>
-                          <span style={{ backgroundColor: priorityPill.bg, color: priorityPill.color, padding: "0.2rem 0.55rem", borderRadius: "9999px", fontSize: "0.72rem", fontWeight: 700 }}>
-                            {priorityPill.text}
-                          </span>
-                        </td>
-                        <td style={{ padding: "0.85rem 1rem", whiteSpace: "nowrap" }}>
-                          <span style={{ backgroundColor: statusPill.bg, color: statusPill.color, border: `1px solid ${statusPill.border}`, padding: "0.25rem 0.65rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 700 }}>
-                            {inc.status}
-                          </span>
-                        </td>
-                        <td style={{ padding: "0.85rem 1rem", whiteSpace: "nowrap" }}>
-                          <span style={{ fontSize: "0.78rem", fontWeight: 600, color: inc.supplier ? "#1E293B" : "#94A3B8" }}>
-                            {inc.supplier?.name || "Pendiente"}
-                          </span>
-                        </td>
-                        <td style={{ padding: "0.85rem 1rem", whiteSpace: "nowrap" }}>
-                          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: inc.slaExpired ? "#DC2626" : "#059669", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                            <Clock size={13} /> {inc.slaHours} hrs
-                          </span>
-                        </td>
-                        <td style={{ padding: "0.85rem 1rem", color: "#64748B", fontSize: "0.75rem", whiteSpace: "nowrap" }}>
-                          {inc.createdAt}
-                        </td>
-                        <td style={{ padding: "0.85rem 1rem", textAlign: "right", whiteSpace: "nowrap" }}>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedIncident(inc);
-                              setIsDrawerOpen(true);
-                            }}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.3rem",
-                              backgroundColor: "#F1F5F9",
-                              color: "#1B3047",
-                              border: "1px solid #CBD5E1",
-                              padding: "0.35rem 0.75rem",
-                              borderRadius: "9999px",
-                              fontSize: "0.75rem",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                            }}
-                          >
-                            <Eye size={13} /> Gestionar
-                          </button>
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  1ra Respuesta Promedio
+                </span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
+                  <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#2563EB" }}>
+                    {kpis.firstResponseTime}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  Tiempo de Resolución
+                </span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
+                  <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#00C48C" }}>
+                    {kpis.avgResolutionTime}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  Casos Vencidos (SLA)
+                </span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
+                  <span style={{ fontSize: "1.5rem", fontWeight: 800, color: kpis.expiredCases > 0 ? "#DC2626" : "#059669" }}>
+                    {kpis.expiredCases}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  Satisfacción CSAT
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.35rem" }}>
+                  <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#1E293B" }}>
+                    {kpis.avgCsat}
+                  </span>
+                  <Star size={16} style={{ fill: "#EAB308", color: "#EAB308" }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Bar */}
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                padding: "1rem 1.25rem",
+                borderRadius: "0.85rem",
+                border: "1px solid #E2E8F0",
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.75rem",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  backgroundColor: "#F8FAFC",
+                  border: "1px solid #CBD5E1",
+                  borderRadius: "0.6rem",
+                  padding: "0.45rem 0.85rem",
+                  minWidth: "280px",
+                  flex: 1,
+                }}
+              >
+                <Search size={16} style={{ color: "#94A3B8" }} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar por folio, cliente, unidad o defecto..."
+                  style={{
+                    border: "none",
+                    backgroundColor: "transparent",
+                    outline: "none",
+                    fontSize: "0.82rem",
+                    width: "100%",
+                    color: "#1E293B",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  style={{
+                    padding: "0.45rem 0.75rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.8rem",
+                    color: "#475569",
+                    backgroundColor: "#FFFFFF",
+                    outline: "none",
+                  }}
+                >
+                  <option value="ALL">Todos los Estados</option>
+                  <option value="Reportada">Reportada</option>
+                  <option value="En revisión">En revisión</option>
+                  <option value="Asignada">Asignada</option>
+                  <option value="Visita programada">Visita programada</option>
+                  <option value="En reparación">En reparación</option>
+                  <option value="Esperando cliente">Esperando cliente</option>
+                  <option value="Resuelta">Resuelta</option>
+                  <option value="Cerrada">Cerrada</option>
+                </select>
+
+                <select
+                  value={selectedPriority}
+                  onChange={(e) => setSelectedPriority(e.target.value)}
+                  style={{
+                    padding: "0.45rem 0.75rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #CBD5E1",
+                    fontSize: "0.8rem",
+                    color: "#475569",
+                    backgroundColor: "#FFFFFF",
+                    outline: "none",
+                  }}
+                >
+                  <option value="ALL">Todas las Prioridades</option>
+                  <option value="Urgente">Urgente</option>
+                  <option value="Alta">Alta</option>
+                  <option value="Media">Media</option>
+                  <option value="Baja">Baja</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "0.85rem",
+                border: "1px solid #E2E8F0",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", fontSize: "0.75rem", color: "#64748B", textTransform: "uppercase" }}>
+                      <th style={{ padding: "0.85rem 1rem", cursor: "pointer" }} onClick={() => handleSort("folio")}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                          Folio <ArrowUpDown size={12} />
+                        </div>
+                      </th>
+                      <th style={{ padding: "0.85rem 1rem" }}>Unidad</th>
+                      <th style={{ padding: "0.85rem 1rem" }}>Cliente</th>
+                      <th style={{ padding: "0.85rem 1rem" }}>Categoría & Asunto</th>
+                      <th style={{ padding: "0.85rem 1rem" }}>Prioridad</th>
+                      <th style={{ padding: "0.85rem 1rem" }}>Estado</th>
+                      <th style={{ padding: "0.85rem 1rem" }}>Asignado A</th>
+                      <th style={{ padding: "0.85rem 1rem" }}>SLA</th>
+                      <th style={{ padding: "0.85rem 1rem", textAlign: "right" }}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredIncidents.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} style={{ padding: "3rem", textAlign: "center", color: "#94A3B8" }}>
+                          <Wrench size={36} style={{ margin: "0 auto 0.5rem auto", opacity: 0.5 }} />
+                          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#64748B" }}>
+                            No hay incidencias registradas en este proyecto
+                          </div>
                         </td>
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                    ) : (
+                      filteredIncidents.map((inc) => {
+                        const statusPill = getStatusPill(inc.status);
+                        const priorityPill = getPriorityPill(inc.priority);
+                        const commentsCount = (inc.comments || []).length;
 
-          <div style={{ padding: "0.75rem 1.25rem", borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.78rem", color: "#64748B" }}>
-            <span>Mostrando <strong>{filteredIncidents.length}</strong> incidencias registradas en {project?.name}</span>
-            <span>Devio Postventa v2.4</span>
-          </div>
-        </div>
+                        return (
+                          <tr
+                            key={inc.id}
+                            style={{
+                              borderBottom: "1px solid #F1F5F9",
+                              fontSize: "0.82rem",
+                              transition: "background 0.1s",
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                          >
+                            <td style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1B3047" }}>
+                              {inc.folio}
+                            </td>
+                            <td style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#2563EB" }}>
+                              {inc.unit}
+                            </td>
+                            <td style={{ padding: "0.85rem 1rem" }}>
+                              <div style={{ fontWeight: 600, color: "#1E293B" }}>{inc.clientName}</div>
+                              <div style={{ fontSize: "0.72rem", color: "#64748B" }}>{inc.clientPhone}</div>
+                            </td>
+                            <td style={{ padding: "0.85rem 1rem", maxWidth: "260px" }}>
+                              <div style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 600 }}>
+                                {inc.category}
+                              </div>
+                              <div style={{ fontWeight: 600, color: "#1E293B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {inc.title}
+                              </div>
+                            </td>
+                            <td style={{ padding: "0.85rem 1rem" }}>
+                              <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "0.2rem 0.5rem", borderRadius: "999px", backgroundColor: priorityPill.bg, color: priorityPill.color }}>
+                                {priorityPill.text}
+                              </span>
+                            </td>
+                            <td style={{ padding: "0.85rem 1rem" }}>
+                              <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "0.2rem 0.5rem", borderRadius: "999px", backgroundColor: statusPill.bg, color: statusPill.color, border: `1px solid ${statusPill.border}` }}>
+                                {inc.status}
+                              </span>
+                            </td>
+                            <td style={{ padding: "0.85rem 1rem" }}>
+                              <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "#334155" }}>
+                                {inc.assignedTo?.name || "Sin asignar"}
+                              </div>
+                            </td>
+                            <td style={{ padding: "0.85rem 1rem" }}>
+                              <div style={{ fontSize: "0.75rem", fontWeight: 700, color: inc.slaExpired ? "#DC2626" : "#059669" }}>
+                                {inc.slaHours}h
+                              </div>
+                              {commentsCount > 0 && (
+                                <div style={{ fontSize: "0.68rem", color: "#2563EB", marginTop: "2px" }}>
+                                  💬 {commentsCount} mensaje{commentsCount > 1 ? "s" : ""}
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedIncident(inc);
+                                  setIsDrawerOpen(true);
+                                }}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.3rem",
+                                  backgroundColor: "#F1F5F9",
+                                  color: "#1B3047",
+                                  border: "1px solid #CBD5E1",
+                                  padding: "0.35rem 0.75rem",
+                                  borderRadius: "9999px",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <Eye size={13} /> Gestionar & Chat
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
 
+        {/* TAB 2: UNIDADES VENDIDAS & ENTREGAS */}
+        {mainTab === "deliveries" && (
+          <>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+                gap: "1rem",
+              }}
+            >
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  Total Unidades Vendidas
+                </span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
+                  <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#1E293B" }}>
+                    {deliveryKpis.total}
+                  </span>
+                  <span style={{ fontSize: "0.72rem", color: "#64748B" }}>en {project?.name}</span>
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  Unidades Entregadas
+                </span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
+                  <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#059669" }}>
+                    {deliveryKpis.delivered}
+                  </span>
+                  <span style={{ fontSize: "0.72rem", color: "#059669", fontWeight: 700 }}>
+                    ({deliveryKpis.rate}%)
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  Pendientes de Entrega
+                </span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
+                  <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#D97706" }}>
+                    {deliveryKpis.pending}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "0.85rem", padding: "1rem 1.15rem", border: "1px solid #E2E8F0", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  Entregadas con Incidencias
+                </span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.35rem" }}>
+                  <span style={{ fontSize: "1.5rem", fontWeight: 800, color: deliveryKpis.activeWithIssues > 0 ? "#DC2626" : "#059669" }}>
+                    {deliveryKpis.activeWithIssues}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Toolbar */}
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                padding: "1rem 1.25rem",
+                borderRadius: "0.85rem",
+                border: "1px solid #E2E8F0",
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.75rem",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  backgroundColor: "#F8FAFC",
+                  border: "1px solid #CBD5E1",
+                  borderRadius: "0.6rem",
+                  padding: "0.45rem 0.85rem",
+                  minWidth: "280px",
+                  flex: 1,
+                }}
+              >
+                <Search size={16} style={{ color: "#94A3B8" }} />
+                <input
+                  type="text"
+                  value={deliverySearch}
+                  onChange={(e) => setDeliverySearch(e.target.value)}
+                  placeholder="Buscar unidad o cliente..."
+                  style={{
+                    border: "none",
+                    backgroundColor: "transparent",
+                    outline: "none",
+                    fontSize: "0.82rem",
+                    width: "100%",
+                    color: "#1E293B",
+                  }}
+                />
+              </div>
+
+              <select
+                value={deliveryStatusFilter}
+                onChange={(e) => setDeliveryStatusFilter(e.target.value as any)}
+                style={{
+                  padding: "0.45rem 0.75rem",
+                  borderRadius: "0.5rem",
+                  border: "1px solid #CBD5E1",
+                  fontSize: "0.8rem",
+                  color: "#475569",
+                  backgroundColor: "#FFFFFF",
+                  outline: "none",
+                }}
+              >
+                <option value="ALL">Todos los Estatus</option>
+                <option value="DELIVERED">✓ Solo Entregadas (Garantía Activa)</option>
+                <option value="PENDING">⏳ Solo Pendientes de Entrega</option>
+              </select>
+            </div>
+
+            {/* Table */}
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "0.85rem",
+                border: "1px solid #E2E8F0",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", fontSize: "0.75rem", color: "#64748B", textTransform: "uppercase" }}>
+                      <th style={{ padding: "0.85rem 1rem" }}>Unidad</th>
+                      <th style={{ padding: "0.85rem 1rem" }}>Propietario / Cliente</th>
+                      <th style={{ padding: "0.85rem 1rem" }}>Fecha Venta</th>
+                      <th style={{ padding: "0.85rem 1rem" }}>Estatus Entrega</th>
+                      <th style={{ padding: "0.85rem 1rem" }}>Fecha Entrega & Garantía</th>
+                      <th style={{ padding: "0.85rem 1rem" }}>Incidencias Activas</th>
+                      <th style={{ padding: "0.85rem 1rem", textAlign: "right" }}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSoldUnits.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} style={{ padding: "3rem", textAlign: "center", color: "#94A3B8" }}>
+                          <Building size={36} style={{ margin: "0 auto 0.5rem auto", opacity: 0.5 }} />
+                          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#64748B" }}>
+                            No se encontraron unidades vendidas en este proyecto
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSoldUnits.map((u, idx) => (
+                        <tr
+                          key={`${u.projectId}-${u.unitNumber}-${idx}`}
+                          style={{
+                            borderBottom: "1px solid #F1F5F9",
+                            fontSize: "0.82rem",
+                            transition: "background 0.1s",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                        >
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <div style={{ fontSize: "0.85rem", color: "#2563EB", fontWeight: 800 }}>
+                              Unidad {u.unitNumber}
+                            </div>
+                            <div style={{ fontSize: "0.72rem", color: "#64748B" }}>
+                              {u.unitType}
+                            </div>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1E293B" }}>
+                            {u.clientName}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", color: "#64748B" }}>
+                            {u.saleDate}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            {u.isDelivered ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.3rem",
+                                  backgroundColor: "#ECFDF5",
+                                  color: "#065F46",
+                                  border: "1px solid #A7F3D0",
+                                  padding: "0.25rem 0.65rem",
+                                  borderRadius: "999px",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                <CheckCircle2 size={12} /> Entregada
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.3rem",
+                                  backgroundColor: "#FEF3C7",
+                                  color: "#92400E",
+                                  border: "1px solid #FDE68A",
+                                  padding: "0.25rem 0.65rem",
+                                  borderRadius: "999px",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                <Clock size={12} /> Pendiente
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            {u.isDelivered ? (
+                              <div>
+                                <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#1E293B" }}>
+                                  {u.deliveredAt || "Fecha registrada"}
+                                </div>
+                                <div style={{ fontSize: "0.7rem", color: "#059669", display: "flex", alignItems: "center", gap: "3px" }}>
+                                  <ShieldCheck size={11} /> Garantía activa
+                                </div>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: "0.75rem", color: "#94A3B8" }}>
+                                Sin entrega formal aún
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            {u.activeIncidentsCount > 0 ? (
+                              <button
+                                onClick={() => {
+                                  setMainTab("incidents");
+                                  setSearchQuery(u.unitNumber);
+                                }}
+                                style={{
+                                  backgroundColor: "#FEF2F2",
+                                  color: "#DC2626",
+                                  border: "1px solid #FECACA",
+                                  borderRadius: "999px",
+                                  padding: "0.15rem 0.55rem",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                🔴 {u.activeIncidentsCount} ticket{u.activeIncidentsCount > 1 ? "s" : ""}
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                                {u.totalIncidentsCount > 0 ? `0 activas (${u.totalIncidentsCount} resueltas)` : "Sin incidencias"}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.45rem" }}>
+                              <button
+                                type="button"
+                                onClick={() => setDeliveryModalUnit(u)}
+                                style={{
+                                  backgroundColor: u.isDelivered ? "#F1F5F9" : "#1B3047",
+                                  color: u.isDelivered ? "#1B3047" : "#FFFFFF",
+                                  border: "1px solid #CBD5E1",
+                                  borderRadius: "0.45rem",
+                                  padding: "0.35rem 0.75rem",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {u.isDelivered ? "Editar Entrega" : "Marcar como Entregada"}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setNewIncidentDefaults({ projectId: u.projectId, unit: u.unitNumber });
+                                  setIsNewModalOpen(true);
+                                }}
+                                style={{
+                                  backgroundColor: "#2563EB",
+                                  color: "#FFFFFF",
+                                  border: "none",
+                                  borderRadius: "0.45rem",
+                                  padding: "0.35rem 0.75rem",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                <Plus size={12} /> Incidencia
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Modal: New Incident */}
         <NewIncidentModal
           isOpen={isNewModalOpen}
-          onClose={() => setIsNewModalOpen(false)}
+          onClose={() => {
+            setIsNewModalOpen(false);
+            setNewIncidentDefaults(undefined);
+          }}
           onSave={handleSaveNewIncident}
-          defaultProjectId={projectId}
+          defaultProjectId={newIncidentDefaults?.projectId || projectId}
+          defaultUnit={newIncidentDefaults?.unit}
         />
 
+        {/* Modal: Unit Delivery Handover */}
+        <UnitDeliveryModal
+          unitData={deliveryModalUnit}
+          isOpen={Boolean(deliveryModalUnit)}
+          onClose={() => setDeliveryModalUnit(null)}
+          onConfirm={(isDelivered, deliveredAt, deliveryActUrl, warrantyExpiresAt) => {
+            if (deliveryModalUnit) {
+              markUnitAsDelivered(
+                deliveryModalUnit.projectId,
+                deliveryModalUnit.unitNumber,
+                isDelivered,
+                deliveredAt,
+                deliveryActUrl,
+                warrantyExpiresAt
+              );
+              setDeliveryModalUnit(null);
+            }
+          }}
+        />
+
+        {/* Drawer: Incident Detail Workspace & Live Chat */}
         <IncidentDetailDrawer
           incident={selectedIncident}
           isOpen={isDrawerOpen}

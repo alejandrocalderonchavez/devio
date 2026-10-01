@@ -22,6 +22,7 @@ interface NewIncidentModalProps {
   onClose: () => void;
   onSave: (incident: PostventaIncident) => void;
   defaultProjectId?: string;
+  defaultUnit?: string;
 }
 
 export function NewIncidentModal({
@@ -29,13 +30,14 @@ export function NewIncidentModal({
   onClose,
   onSave,
   defaultProjectId,
+  defaultUnit,
 }: NewIncidentModalProps) {
   const { projects } = useProject();
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>(
     defaultProjectId || (projects[0]?.id ?? "p-1")
   );
-  const [unit, setUnit] = useState<string>("");
+  const [unit, setUnit] = useState<string>(defaultUnit || "");
   const [clientName, setClientName] = useState<string>("");
   const [clientEmail, setClientEmail] = useState<string>("");
   const [clientPhone, setClientPhone] = useState<string>("");
@@ -48,7 +50,7 @@ export function NewIncidentModal({
   const [title, setTitle] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [supplierId, setSupplierId] = useState<string>("");
-  const [assignedStaff, setAssignedStaff] = useState<string>("");
+  const [assignedStaff, setAssignedStaff] = useState<string>("Alejandro Calderón");
   const [uploadedFiles, setUploadedFiles] = useState<DevioUploadedFile[]>([]);
 
   // Auto-folio generation
@@ -61,8 +63,31 @@ export function NewIncidentModal({
       if (defaultProjectId) {
         setSelectedProjectId(defaultProjectId);
       }
+      if (defaultUnit) {
+        setUnit(defaultUnit);
+      }
     }
-  }, [isOpen, defaultProjectId]);
+  }, [isOpen, defaultProjectId, defaultUnit]);
+
+  // When project or unit changes, attempt auto-fill of client details
+  useEffect(() => {
+    if (!isOpen) return;
+    const proj = projects.find((p) => p.id === selectedProjectId);
+    if (!proj || !unit) return;
+    const matchedUnit = (proj.unitsInventory || []).find(
+      (u: any) => u.unit.toLowerCase().trim() === unit.toLowerCase().trim()
+    );
+    if (matchedUnit) {
+      if (matchedUnit.client && !clientName) {
+        setClientName(matchedUnit.client);
+      }
+      if (matchedUnit.coOwners && matchedUnit.coOwners.length > 0 && !hasCoOwners) {
+        setHasCoOwners(true);
+        setCoOwnerName(matchedUnit.coOwners[0]?.name || "");
+        setCoOwnerPct((matchedUnit.coOwners[0] as any)?.ownershipPct || (matchedUnit.coOwners[0] as any)?.percentage || 50);
+      }
+    }
+  }, [selectedProjectId, unit, isOpen, projects]);
 
   // SLA calculation based on Priority
   const getSlaHours = (p: PostventaPriority) => {
