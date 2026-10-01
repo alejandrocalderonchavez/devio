@@ -29,6 +29,43 @@ interface UnitDeliveryModalProps {
   ) => void;
 }
 
+function addMonthsToISODate(isoDate: string, months: number): string {
+  if (!isoDate) return "";
+  const parts = isoDate.split("-").map(Number);
+  if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+    const year = parts[0];
+    const month = parts[1] - 1;
+    const day = parts[2];
+    const target = new Date(year, month + months, day);
+    const y = target.getFullYear();
+    const m = (target.getMonth() + 1).toString().padStart(2, "0");
+    const d = target.getDate().toString().padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  const date = new Date(isoDate);
+  date.setMonth(date.getMonth() + months);
+  return date.toISOString().split("T")[0] || "";
+}
+
+function formatReadableDate(isoDate: string): string {
+  if (!isoDate) return "-";
+  const parts = isoDate.split("-").map(Number);
+  if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    return d.toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
+  }
+  return isoDate;
+}
+
+const WARRANTY_PRESETS = [
+  { label: "6 Meses", months: 6 },
+  { label: "12 Meses (1 Año)", months: 12 },
+  { label: "18 Meses", months: 18 },
+  { label: "24 Meses (2 Años)", months: 24 },
+  { label: "36 Meses (3 Años)", months: 36 },
+  { label: "5 Años", months: 60 },
+];
+
 export function UnitDeliveryModal({
   unitData,
   isOpen,
@@ -48,20 +85,29 @@ export function UnitDeliveryModal({
     unitData.deliveryActUrl || ""
   );
 
+  // Warranty Duration State
+  const [warrantyPreset, setWarrantyPreset] = useState<number | "custom">(12);
+  const [customMonths, setCustomMonths] = useState<number>(12);
+  const [customWarrantyDate, setCustomWarrantyDate] = useState<string>(
+    unitData.warrantyExpiresAt || addMonthsToISODate(unitData.deliveredAt || todayIso, 12)
+  );
+
+  // Compute effective warranty expiration date
+  const effectiveWarrantyDate = React.useMemo(() => {
+    if (!isDelivered || !deliveryDate) return "";
+    if (warrantyPreset === "custom") {
+      return customWarrantyDate || addMonthsToISODate(deliveryDate, customMonths || 12);
+    }
+    return addMonthsToISODate(deliveryDate, warrantyPreset);
+  }, [isDelivered, deliveryDate, warrantyPreset, customMonths, customWarrantyDate]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Default 1 year warranty from delivery date
-    let warrantyDate = "";
-    if (isDelivered && deliveryDate) {
-      const d = new Date(deliveryDate);
-      d.setFullYear(d.getFullYear() + 1);
-      warrantyDate = d.toISOString().split("T")[0] || "";
-    }
     onConfirm(
       isDelivered,
       isDelivered ? deliveryDate : undefined,
       isDelivered ? (deliveryAct.trim() || undefined) : undefined,
-      isDelivered ? warrantyDate : undefined
+      isDelivered ? effectiveWarrantyDate : undefined
     );
   };
 
@@ -270,9 +316,130 @@ export function UnitDeliveryModal({
                 />
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "#065F46", fontSize: "0.75rem", fontWeight: 600 }}>
-                <ShieldCheck size={16} />
-                <span>La póliza de garantía legal por vicios ocultos iniciará a partir de esta fecha (12 meses).</span>
+              {/* Warranty Duration Section */}
+              <div>
+                <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "#1F3652", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+                  <span>Vigencia y Tiempo de Garantía *</span>
+                  <span style={{ fontSize: "0.72rem", color: "#2563EB", fontWeight: 600 }}>
+                    {warrantyPreset === "custom" ? "Personalizada" : `${warrantyPreset} meses de cobertura`}
+                  </span>
+                </label>
+
+                {/* Preset Chips Grid */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.4rem", marginBottom: "0.6rem" }}>
+                  {WARRANTY_PRESETS.map((p) => {
+                    const isSelected = warrantyPreset === p.months;
+                    return (
+                      <button
+                        key={p.months}
+                        type="button"
+                        onClick={() => {
+                          setWarrantyPreset(p.months);
+                          setCustomWarrantyDate(addMonthsToISODate(deliveryDate, p.months));
+                        }}
+                        style={{
+                          padding: "0.45rem 0.5rem",
+                          borderRadius: "0.5rem",
+                          border: isSelected ? "1.5px solid #2563EB" : "1px solid #CBD5E1",
+                          backgroundColor: isSelected ? "#EFF6FF" : "#FFFFFF",
+                          color: isSelected ? "#1E40AF" : "#475569",
+                          fontSize: "0.75rem",
+                          fontWeight: isSelected ? 700 : 500,
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                          textAlign: "center",
+                        }}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setWarrantyPreset("custom")}
+                    style={{
+                      padding: "0.45rem 0.5rem",
+                      borderRadius: "0.5rem",
+                      border: warrantyPreset === "custom" ? "1.5px solid #2563EB" : "1px solid #CBD5E1",
+                      backgroundColor: warrantyPreset === "custom" ? "#EFF6FF" : "#FFFFFF",
+                      color: warrantyPreset === "custom" ? "#1E40AF" : "#475569",
+                      fontSize: "0.75rem",
+                      fontWeight: warrantyPreset === "custom" ? 700 : 500,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                      textAlign: "center",
+                    }}
+                  >
+                    Personalizado...
+                  </button>
+                </div>
+
+                {/* If Custom is selected */}
+                {warrantyPreset === "custom" && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: "0.6rem", marginTop: "0.5rem", backgroundColor: "#F1F5F9", padding: "0.75rem", borderRadius: "0.6rem", border: "1px solid #CBD5E1" }}>
+                    <div>
+                      <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "0.25rem" }}>
+                        Meses de Garantía
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="240"
+                        value={customMonths}
+                        onChange={(e) => {
+                          const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                          setCustomMonths(val);
+                          setCustomWarrantyDate(addMonthsToISODate(deliveryDate, val));
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem 0.65rem",
+                          borderRadius: "0.45rem",
+                          border: "1px solid #CBD5E1",
+                          fontSize: "0.82rem",
+                          color: "#1E293B",
+                          backgroundColor: "#FFFFFF",
+                          outline: "none",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "0.25rem" }}>
+                        Fecha Límite Exacta
+                      </label>
+                      <DevioDatePicker
+                        value={customWarrantyDate}
+                        onChange={(val) => {
+                          setCustomWarrantyDate(val);
+                        }}
+                        placeholder="Fecha de expiración"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Warranty Coverage Status Summary Card */}
+              <div
+                style={{
+                  backgroundColor: "#ECFDF5",
+                  borderRadius: "0.6rem",
+                  border: "1px solid #A7F3D0",
+                  padding: "0.75rem 0.85rem",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "0.5rem",
+                }}
+              >
+                <ShieldCheck size={18} color="#059669" style={{ flexShrink: 0, marginTop: "2px" }} />
+                <div style={{ fontSize: "0.76rem", color: "#065F46", lineHeight: 1.45 }}>
+                  <div style={{ fontWeight: 800, color: "#065F46" }}>
+                    Póliza de Garantía Legal & Vicios Ocultos
+                  </div>
+                  <div>
+                    Vigente desde el <strong>{formatReadableDate(deliveryDate)}</strong> hasta el <strong>{formatReadableDate(effectiveWarrantyDate)}</strong>.
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
