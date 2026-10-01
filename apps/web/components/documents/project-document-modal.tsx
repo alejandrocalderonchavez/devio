@@ -117,12 +117,7 @@ export default function ProjectDocumentModal({
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      // Only keep base64 preview for small files (<50KB) to avoid blowing up storage quota
-      if (file.size < 50000 || file.type.startsWith("image/")) {
-        setFileDataUrl((e.target?.result as string) || "");
-      } else {
-        setFileDataUrl("");
-      }
+      setFileDataUrl((e.target?.result as string) || "");
     };
     reader.readAsDataURL(file);
   };

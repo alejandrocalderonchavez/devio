@@ -641,24 +641,90 @@ export default function ProjectDocumentsPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      const docUrl = selectedDocForView.url;
+                      const docUrl = selectedDocForView.url || (selectedDocForView as any).fileDataUrl;
                       if (docUrl) {
-                        if (docUrl.startsWith("data:") || docUrl.startsWith("http") || docUrl.startsWith("blob:")) {
-                          const newTab = window.open();
-                          if (newTab) {
-                            if (docUrl.startsWith("data:image")) {
-                              newTab.document.write(`<img src="${docUrl}" style="max-width:100%;" />`);
-                            } else if (docUrl.startsWith("data:application/pdf")) {
-                              newTab.document.write(`<iframe src="${docUrl}" style="width:100%; height:100vh; border:none;"></iframe>`);
-                            } else {
-                              newTab.location.href = docUrl;
+                        if (docUrl.startsWith("data:")) {
+                          try {
+                            const parts = docUrl.split(",");
+                            const mime = parts[0]?.match(/:(.*?);/)?.[1] || "application/pdf";
+                            const byteString = atob(parts[1] || "");
+                            const ab = new ArrayBuffer(byteString.length);
+                            const ia = new Uint8Array(ab);
+                            for (let i = 0; i < byteString.length; i++) {
+                              ia[i] = byteString.charCodeAt(i);
                             }
+                            const blob = new Blob([ab], { type: mime });
+                            const blobUrl = URL.createObjectURL(blob);
+                            window.open(blobUrl, "_blank");
+                            return;
+                          } catch (e) {
+                            const newTab = window.open();
+                            if (newTab) {
+                              if (docUrl.startsWith("data:image")) {
+                                newTab.document.write(`<img src="${docUrl}" style="max-width:100%;" />`);
+                              } else {
+                                newTab.document.write(`<iframe src="${docUrl}" style="width:100%; height:100vh; border:none;"></iframe>`);
+                              }
+                            }
+                            return;
                           }
-                        } else {
-                          window.open(docUrl, "_blank");
                         }
-                      } else {
-                        showToast("Vista Previa", `Abriendo ${selectedDocForView.title}...`);
+                        if (docUrl.startsWith("http") || docUrl.startsWith("blob:")) {
+                          window.open(docUrl, "_blank");
+                          return;
+                        }
+                      }
+
+                      // Fallback: create printable dossier window
+                      const htmlContent = `
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                          <meta charset="utf-8" />
+                          <title>${selectedDocForView.title}</title>
+                          <style>
+                            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; color: #1F3652; line-height: 1.6; }
+                            .header { border-bottom: 2px solid #2F80ED; padding-bottom: 20px; margin-bottom: 30px; }
+                            .logo { font-size: 24px; font-weight: 800; color: #1F3652; }
+                            .badge { display: inline-block; background: #EFF6FF; color: #2563EB; font-weight: 700; padding: 4px 12px; border-radius: 9999px; font-size: 12px; margin-top: 10px; }
+                            .field { margin-bottom: 16px; }
+                            .label { font-size: 12px; color: #64748B; font-weight: 700; text-transform: uppercase; }
+                            .value { font-size: 16px; font-weight: 600; color: #1E293B; margin-top: 2px; }
+                            .box { background: #F8FAFC; border: 1px solid #E2E8F0; padding: 20px; border-radius: 12px; margin-top: 20px; }
+                          </style>
+                        </head>
+                        <body>
+                          <div class="header">
+                            <div class="logo">DEVIO • Bóveda de Documentos</div>
+                            <div class="badge">${selectedDocForView.category}</div>
+                          </div>
+                          <h2>${selectedDocForView.title}</h2>
+                          <div class="box">
+                            <div class="field">
+                              <div class="label">Proyecto</div>
+                              <div class="value">${project.name}</div>
+                            </div>
+                            <div class="field">
+                              <div class="label">Versión</div>
+                              <div class="value">${selectedDocForView.version || "v1.0"}</div>
+                            </div>
+                            <div class="field">
+                              <div class="label">Fecha de Expedición / Carga</div>
+                              <div class="value">${selectedDocForView.uploadDate}</div>
+                            </div>
+                            <div class="field">
+                              <div class="label">Notas y Observaciones</div>
+                              <div class="value">${selectedDocForView.notes || "Documento oficial del desarrollo registrado en plataforma."}</div>
+                            </div>
+                          </div>
+                        </body>
+                        </html>
+                      `;
+                      const printWindow = window.open("", "_blank");
+                      if (printWindow) {
+                        printWindow.document.open();
+                        printWindow.document.write(htmlContent);
+                        printWindow.document.close();
                       }
                     }}
                     style={{
@@ -681,10 +747,33 @@ export default function ProjectDocumentsPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      const docUrl = selectedDocForView.url;
+                      const docUrl = selectedDocForView.url || (selectedDocForView as any).fileDataUrl;
                       const ext = selectedDocForView.fileType ? selectedDocForView.fileType.toLowerCase() : "pdf";
                       const fileName = `${selectedDocForView.title}.${ext}`;
                       if (docUrl && (docUrl.startsWith("data:") || docUrl.startsWith("http") || docUrl.startsWith("blob:"))) {
+                        if (docUrl.startsWith("data:")) {
+                          try {
+                            const parts = docUrl.split(",");
+                            const mime = parts[0]?.match(/:(.*?);/)?.[1] || "application/pdf";
+                            const byteString = atob(parts[1] || "");
+                            const ab = new ArrayBuffer(byteString.length);
+                            const ia = new Uint8Array(ab);
+                            for (let i = 0; i < byteString.length; i++) {
+                              ia[i] = byteString.charCodeAt(i);
+                            }
+                            const blob = new Blob([ab], { type: mime });
+                            const blobUrl = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = blobUrl;
+                            a.download = fileName;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(blobUrl);
+                            showToast("Descarga Completa", `Descargando ${fileName}...`, "success");
+                            return;
+                          } catch (e) {}
+                        }
                         const a = document.createElement("a");
                         a.href = docUrl;
                         a.download = fileName;
@@ -693,16 +782,60 @@ export default function ProjectDocumentsPage() {
                         document.body.removeChild(a);
                         showToast("Descarga Completa", `Descargando ${fileName}...`, "success");
                       } else {
-                        const blob = new Blob([`Expediente Oficial: ${selectedDocForView.title}\nProyecto: ${project.name}\nCategoría: ${selectedDocForView.category}\nVersión: ${selectedDocForView.version || "v1.0"}\nFecha: ${selectedDocForView.uploadDate}\nNotas: ${selectedDocForView.notes || ""}`], { type: "text/plain" });
+                        // Create HTML printable blob as PDF/HTML
+                        const blob = new Blob([`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${selectedDocForView.title}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; color: #1F3652; line-height: 1.6; }
+    .header { border-bottom: 2px solid #2F80ED; padding-bottom: 20px; margin-bottom: 30px; }
+    .logo { font-size: 24px; font-weight: 800; color: #1F3652; }
+    .badge { display: inline-block; background: #EFF6FF; color: #2563EB; font-weight: 700; padding: 4px 12px; border-radius: 9999px; font-size: 12px; margin-top: 10px; }
+    .field { margin-bottom: 16px; }
+    .label { font-size: 12px; color: #64748B; font-weight: 700; text-transform: uppercase; }
+    .value { font-size: 16px; font-weight: 600; color: #1E293B; margin-top: 2px; }
+    .box { background: #F8FAFC; border: 1px solid #E2E8F0; padding: 20px; border-radius: 12px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">DEVIO • Bóveda de Documentos</div>
+    <div class="badge">${selectedDocForView.category}</div>
+  </div>
+  <h2>${selectedDocForView.title}</h2>
+  <div class="box">
+    <div class="field">
+      <div class="label">Proyecto</div>
+      <div class="value">${project.name}</div>
+    </div>
+    <div class="field">
+      <div class="label">Versión</div>
+      <div class="value">${selectedDocForView.version || "v1.0"}</div>
+    </div>
+    <div class="field">
+      <div class="label">Fecha de Expedición / Carga</div>
+      <div class="value">${selectedDocForView.uploadDate}</div>
+    </div>
+    <div class="field">
+      <div class="label">Notas y Observaciones</div>
+      <div class="value">${selectedDocForView.notes || "Documento oficial del desarrollo registrado en plataforma."}</div>
+    </div>
+  </div>
+</body>
+</html>
+                        `], { type: "text/html" });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement("a");
                         a.href = url;
-                        a.download = `${selectedDocForView.title}.txt`;
+                        a.download = `${selectedDocForView.title}.html`;
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
                         URL.revokeObjectURL(url);
-                        showToast("Descarga Completa", `Descargando ${selectedDocForView.title}...`, "success");
+                        showToast("Descarga Completa", `Descargando expediente oficial de ${selectedDocForView.title}...`, "success");
                       }
                     }}
                     style={{

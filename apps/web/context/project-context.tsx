@@ -724,6 +724,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       // Exclude floor plan documents from generic file management lists
       if (d.metadata?.isFloorPlan === true) return;
 
+      // Exclude quotes from general project documents vault
+      const isQuoteDoc =
+        d.type === "QUOTE" ||
+        d.category === "QUOTE" ||
+        (d.title && typeof d.title === "string" && d.title.startsWith("Cotización ") && d.title.includes("COT-"));
+      if (isQuoteDoc) return;
+
       const unitNum = d.unit?.unitNumber || d.metadata?.unit || d.unit || "";
       const cId = d.clientId || d.client?.id || d.metadata?.clientId || "";
       const cName = d.client?.fullName || d.metadata?.clientName || d.clientName || "";
@@ -1222,10 +1229,46 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
               return u;
             });
 
+            // 3. Merge quotes: keep local quotes created by the user
+            const apiQuoteIds = new Set((mappedItem.quotes || []).map((q: any) => q.id));
+            const localOnlyQuotes = (localProj.quotes || []).filter((lq: any) => !apiQuoteIds.has(lq.id));
+            const mergedQuotes = [...(mappedItem.quotes || []), ...localOnlyQuotes];
+
+            // 4. Merge documents: preserve local file data URLs and newly added local documents
+            const apiDocIds = new Set((mappedItem.documents || []).map((d: any) => d.id));
+            const localOnlyDocs = (localProj.documents || []).filter((ld: any) => !apiDocIds.has(ld.id));
+            const mergedDocuments = [
+              ...(mappedItem.documents || []).map((md: any) => {
+                const localMatch = (localProj.documents || []).find((ld: any) => ld.id === md.id || ld.title === md.title);
+                if (localMatch && localMatch.url && !md.url) {
+                  return { ...md, url: localMatch.url, fileDataUrl: (localMatch as any).fileDataUrl || localMatch.url };
+                }
+                return md;
+              }),
+              ...localOnlyDocs,
+            ];
+
+            // 5. Merge clientDocuments
+            const apiClientDocIds = new Set((mappedItem.clientDocuments || []).map((d: any) => d.id));
+            const localOnlyClientDocs = (localProj.clientDocuments || []).filter((ld: any) => !apiClientDocIds.has(ld.id));
+            const mergedClientDocs = [
+              ...(mappedItem.clientDocuments || []).map((md: any) => {
+                const localMatch = (localProj.clientDocuments || []).find((ld: any) => ld.id === md.id || ld.title === md.title);
+                if (localMatch && localMatch.url && !md.url) {
+                  return { ...md, url: localMatch.url, fileDataUrl: (localMatch as any).fileDataUrl || localMatch.url };
+                }
+                return md;
+              }),
+              ...localOnlyClientDocs,
+            ];
+
             return {
               ...mappedItem,
               sales: mergedSales,
               unitsInventory: mergedUnitsInventory,
+              quotes: mergedQuotes,
+              documents: mergedDocuments,
+              clientDocuments: mergedClientDocs,
               floorPlans: (mappedItem.floorPlans && mappedItem.floorPlans.length > 0) ? mappedItem.floorPlans : (localProj.floorPlans || []),
             };
           }
