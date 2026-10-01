@@ -297,7 +297,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const cleanPrimName = primaryClientName.toLowerCase().trim();
       const primaryClientId = s.primaryClientId || s.clientId;
 
-      const mappedCoOwners: CoOwner[] = Array.isArray(s.coOwners)
+      const rawSecondaryCoOwners = Array.isArray(s.coOwners)
         ? s.coOwners
             .filter((c: any) => {
               const cEmail = (c.client?.email || c.email || "").toLowerCase().trim();
@@ -309,14 +309,45 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
               return true;
             })
             .map((c: any) => ({
-              id: c.clientId || c.client?.id || c.id,
+              id: c.clientId || c.client?.id || c.id || `co-${Date.now()}`,
               name: c.client?.fullName || c.name || "Co-propietario",
               email: c.client?.email || c.email || "",
               phone: c.client?.phone || c.phone || "",
               rfc: c.client?.taxId || c.rfc || "",
               ownershipPct: Number(c.ownershipPercentage ?? c.ownershipPct ?? 50),
+              isPrimary: false,
             }))
         : [];
+
+      let mappedCoOwners: CoOwner[] = [];
+      const hasSecondary = rawSecondaryCoOwners.length > 0;
+
+      if (hasSecondary) {
+        const secPctSum = rawSecondaryCoOwners.reduce((acc: number, c: any) => acc + (Number(c.ownershipPct) || 0), 0);
+        const primPct = Math.max(0, 100 - secPctSum);
+        mappedCoOwners = [
+          {
+            id: primaryClientId || (cleanPrimEmail ? `cli-${cleanPrimEmail.replace(/[^a-z0-9]/g, "-")}` : "owner-primary"),
+            name: primaryClientName,
+            email: primaryClientEmail,
+            phone: primaryClientPhone,
+            rfc: primaryClientRfc,
+            ownershipPct: primPct > 0 ? primPct : (100 / (rawSecondaryCoOwners.length + 1)),
+            isPrimary: true,
+          },
+          ...rawSecondaryCoOwners,
+        ];
+      } else if (Array.isArray(s.coOwners) && s.coOwners.length > 0) {
+        mappedCoOwners = s.coOwners.map((c: any, idx: number) => ({
+          id: c.id || c.clientId || `co-${idx}`,
+          name: c.name || c.client?.fullName || "Cliente",
+          email: c.email || c.client?.email || "",
+          phone: c.phone || c.client?.phone || "",
+          rfc: c.rfc || c.client?.taxId || "",
+          ownershipPct: Number(c.ownershipPct ?? c.ownershipPercentage ?? 100),
+          isPrimary: c.isPrimary !== undefined ? Boolean(c.isPrimary) : idx === 0,
+        }));
+      }
 
       const rawReceipts = Array.isArray(s.paymentReceipts)
         ? s.paymentReceipts
@@ -1756,13 +1787,17 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       clientEmail: salePayload.client?.email || "",
       clientPhone: salePayload.client?.phone || "",
       clientRfc: salePayload.client?.rfc || "",
+      client: salePayload.client,
       unit: unitNum,
       paymentPlan: planName,
       totalPrice: netSaleTotal,
       paidAmount: initialPaid,
       pendingAmount,
       saleDate: saleDateIso,
+      createdAt: saleDateIso,
+      isCoOwnership: Boolean(salePayload.isCoOwnership || coOwners.length > 1),
       coOwners,
+      coOwnerPayments: salePayload.coOwnerPayments || [],
       additionals: salePayload.additionals || [],
       schedule: constructedSchedule,
       payments: initialPaymentsList,

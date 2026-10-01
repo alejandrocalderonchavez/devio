@@ -377,7 +377,7 @@ export default function ClientDetailPage() {
   }, [project, selectedUnit]);
 
   // Co-ownership view mode: "global" (100% of unit) vs "proportional" (client's share %)
-  const [coOwnershipViewMode, setCoOwnershipViewMode] = useState<"global" | "proportional">("global");
+  const [coOwnershipViewMode, setCoOwnershipViewMode] = useState<"global" | "proportional">("proportional");
 
   // Active View Tab: "statement" (Estado de Cuenta) vs "payments" (Pagos) vs "quotes" (Cotizaciones)
   const [activeTab, setActiveTab] = useState<"statement" | "payments" | "quotes">("statement");
