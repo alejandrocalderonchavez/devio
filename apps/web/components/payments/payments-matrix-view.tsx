@@ -1982,9 +1982,17 @@ export default function PaymentsMatrixView({
               {/* STEP 1: SEMÁFORO Y CÓDIGO DE COLORES */}
               {guideStep === 1 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  <p style={{ margin: 0, fontSize: "0.82rem", color: "#475569" }}>
-                    Cada celda en la matriz representa la cuota exigible en ese periodo de tiempo. El color indica el estado de cumplimiento en tiempo real:
-                  </p>
+                  <div style={{ backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "0.85rem", padding: "0.85rem 1.1rem" }}>
+                    <h4 style={{ margin: "0 0 0.25rem", color: "#1D4ED8", fontSize: "0.9rem", fontWeight: 800 }}>
+                      💡 Regla Rápida para Entender los Números en la Tabla:
+                    </h4>
+                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#1E40AF", lineHeight: 1.5 }}>
+                      • <strong>Verde (+):</strong> El número es lo que <u>YA SE PAGÓ</u>.<br />
+                      • <strong>Amarillo (-):</strong> El número es lo que <u>SE DEBE</u> (lo que falta para completar la cuota).<br />
+                      • <strong>Rojo (-):</strong> El número es lo que <u>SE DEBE Y ESTÁ VENCIDO</u> (deuda en mora).<br />
+                      • <strong>Gris (+):</strong> El número es lo que <u>SE PAGARÁ EN EL FUTURO</u>.
+                    </p>
+                  </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                     {/* VERDE */}
@@ -1993,9 +2001,26 @@ export default function PaymentsMatrixView({
                         🟢 $ 18,333.33
                       </div>
                       <div>
-                        <strong style={{ color: "#065F46", fontSize: "0.85rem", display: "block" }}>Verde — Pagado / Al corriente (100%)</strong>
+                        <strong style={{ color: "#065F46", fontSize: "0.85rem", display: "block" }}>
+                          Verde — Pagado / Al corriente (Monto pagado)
+                        </strong>
                         <span style={{ fontSize: "0.78rem", color: "#047857" }}>
-                          La cuota pactada fue pagada en su totalidad en o antes de su fecha programada. El monto mostrado corresponde al importe liquidado.
+                          Significa que <strong>este monto YA LO PAGÓ el cliente al 100%</strong> dentro o antes de la fecha programada. El número positivo indica que el dinero ya ingresó al banco y cuenta con recibo.
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* AMARILLO */}
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.85rem", padding: "0.85rem", borderRadius: "0.75rem", backgroundColor: "#FFFBEB", border: "1px solid #FDE68A" }}>
+                      <div style={{ minWidth: "120px", padding: "0.4rem 0.75rem", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontWeight: 800, fontSize: "0.8rem", textAlign: "center" }}>
+                        🟡 -$ 8,000.00
+                      </div>
+                      <div>
+                        <strong style={{ color: "#92400E", fontSize: "0.85rem", display: "block" }}>
+                          Amarillo / Ámbar — Abono Parcial (Monto que se debe)
+                        </strong>
+                        <span style={{ fontSize: "0.78rem", color: "#B45309" }}>
+                          Significa que <strong>este monto es lo que AÚN SE DEBE</strong> de esa cuota. El cliente realizó un abono parcial (por ejemplo abonó \$12,000 de una cuota de \$20,000), por lo que la celda muestra en amarillo los <strong>-\$8,000 que restan por liquidar</strong>.
                         </span>
                       </div>
                     </div>
@@ -2006,22 +2031,11 @@ export default function PaymentsMatrixView({
                         🔴 -$ 18,333.33
                       </div>
                       <div>
-                        <strong style={{ color: "#991B1B", fontSize: "0.85rem", display: "block" }}>Rojo — Vencido / En Mora (Saldo no cubierto)</strong>
+                        <strong style={{ color: "#991B1B", fontSize: "0.85rem", display: "block" }}>
+                          Rojo — Vencido / En Mora (Monto total adeudado)
+                        </strong>
                         <span style={{ fontSize: "0.78rem", color: "#B91C1C" }}>
-                          La fecha límite de pago ya expiró según el <em>Día de Referencia</em> y el cliente aún debe esta cuota. Genera cálculo de intereses moratorios automáticos.
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* AMARILLO */}
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.85rem", padding: "0.85rem", borderRadius: "0.75rem", backgroundColor: "#FFFBEB", border: "1px solid #FDE68A" }}>
-                      <div style={{ minWidth: "120px", padding: "0.4rem 0.75rem", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontWeight: 800, fontSize: "0.8rem", textAlign: "center" }}>
-                        🟡 $ 10,000.00
-                      </div>
-                      <div>
-                        <strong style={{ color: "#92400E", fontSize: "0.85rem", display: "block" }}>Amarillo / Ámbar — Abono Parcial</strong>
-                        <span style={{ fontSize: "0.78rem", color: "#B45309" }}>
-                          Se registró uno o más abonos bancarios para este mes, pero aún queda un saldo pendiente para liquidar la cuota al 100%.
+                          Significa que <strong>este monto es lo que SE DEBE y ya rebasó la fecha límite</strong> (según el Día de Referencia). El signo negativo representa el déficit exigible en caja y genera cálculo de intereses moratorios automáticos.
                         </span>
                       </div>
                     </div>
@@ -2032,9 +2046,11 @@ export default function PaymentsMatrixView({
                         ⚪ $ 18,333.33
                       </div>
                       <div>
-                        <strong style={{ color: "#334155", fontSize: "0.85rem", display: "block" }}>Gris Neutro — Cuota Futura / Por Vencer</strong>
+                        <strong style={{ color: "#334155", fontSize: "0.85rem", display: "block" }}>
+                          Gris Neutro — Cuota Futura / Por Vencer
+                        </strong>
                         <span style={{ fontSize: "0.78rem", color: "#64748B" }}>
-                          Cuota programada que vencerá en meses o semanas posteriores a la fecha de corte. No presenta mora.
+                          Significa que <strong>este monto es lo que SE PAGARÁ EN EL FUTURO</strong>. Corresponde a mensualidades pactadas para meses venideros que aún no llegan a su fecha límite.
                         </span>
                       </div>
                     </div>
@@ -2045,12 +2061,63 @@ export default function PaymentsMatrixView({
                         —
                       </div>
                       <div>
-                        <strong style={{ color: "#64748B", fontSize: "0.85rem", display: "block" }}>Guión — Sin Cuota en este periodo</strong>
+                        <strong style={{ color: "#64748B", fontSize: "0.85rem", display: "block" }}>
+                          Guión — Sin Cuota
+                        </strong>
                         <span style={{ fontSize: "0.78rem", color: "#94A3B8" }}>
-                          El plan de pago del cliente no contempla ninguna mensualidad ni enganche en este mes/semana específica.
+                          Significa que en ese periodo no existe ningún cobro exigible pactado en el contrato de la unidad.
                         </span>
                       </div>
                     </div>
+                  </div>
+
+                  {/* COMPARATIVE SUMMARY TABLE */}
+                  <div style={{ backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "0.75rem", overflow: "hidden", marginTop: "0.25rem" }}>
+                    <div style={{ padding: "0.6rem 0.85rem", backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", fontSize: "0.75rem", fontWeight: 800, color: "var(--devio-blue-dark)" }}>
+                      📋 Tabla Resumen de Interpretación
+                    </div>
+                    <table style={{ width: "100%", fontSize: "0.76rem", borderCollapse: "collapse", textAlign: "left" }}>
+                      <thead>
+                        <tr style={{ backgroundColor: "#F1F5F9", color: "#475569", borderBottom: "1px solid #E2E8F0" }}>
+                          <th style={{ padding: "0.45rem 0.75rem" }}>Color</th>
+                          <th style={{ padding: "0.45rem 0.75rem" }}>Signo</th>
+                          <th style={{ padding: "0.45rem 0.75rem" }}>¿El monto representa lo pagado o lo que se debe?</th>
+                          <th style={{ padding: "0.45rem 0.75rem" }}>Estatus</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
+                          <td style={{ padding: "0.45rem 0.75rem", fontWeight: 700, color: "#065F46" }}>🟢 Verde</td>
+                          <td style={{ padding: "0.45rem 0.75rem", color: "#065F46" }}>Positivo (+)</td>
+                          <td style={{ padding: "0.45rem 0.75rem" }}><strong>Monto que YA SE PAGÓ</strong></td>
+                          <td style={{ padding: "0.45rem 0.75rem", color: "#059669" }}>Cubierto 100% / Al corriente</td>
+                        </tr>
+                        <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
+                          <td style={{ padding: "0.45rem 0.75rem", fontWeight: 700, color: "#92400E" }}>🟡 Amarillo</td>
+                          <td style={{ padding: "0.45rem 0.75rem", color: "#92400E" }}>Negativo (-)</td>
+                          <td style={{ padding: "0.45rem 0.75rem" }}><strong>Saldo restante que SE DEBE</strong></td>
+                          <td style={{ padding: "0.45rem 0.75rem", color: "#D97706" }}>Abono parcial (falta liquidar)</td>
+                        </tr>
+                        <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
+                          <td style={{ padding: "0.45rem 0.75rem", fontWeight: 700, color: "#991B1B" }}>🔴 Rojo</td>
+                          <td style={{ padding: "0.45rem 0.75rem", color: "#991B1B" }}>Negativo (-)</td>
+                          <td style={{ padding: "0.45rem 0.75rem" }}><strong>Total vencido que SE DEBE</strong></td>
+                          <td style={{ padding: "0.45rem 0.75rem", color: "#DC2626" }}>Vencido / En mora (genera recargo)</td>
+                        </tr>
+                        <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
+                          <td style={{ padding: "0.45rem 0.75rem", fontWeight: 700, color: "#475569" }}>⚪ Gris</td>
+                          <td style={{ padding: "0.45rem 0.75rem", color: "#475569" }}>Positivo (+)</td>
+                          <td style={{ padding: "0.45rem 0.75rem" }}><strong>Monto programado a futuro</strong></td>
+                          <td style={{ padding: "0.45rem 0.75rem", color: "#64748B" }}>Por vencer (aún no exigible)</td>
+                        </tr>
+                        <tr>
+                          <td style={{ padding: "0.45rem 0.75rem", fontWeight: 700, color: "#94A3B8" }}>➖ Guión</td>
+                          <td style={{ padding: "0.45rem 0.75rem", color: "#94A3B8" }}>-</td>
+                          <td style={{ padding: "0.45rem 0.75rem" }}>Sin pago programado</td>
+                          <td style={{ padding: "0.45rem 0.75rem", color: "#94A3B8" }}>Sin cuota</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
