@@ -8,35 +8,48 @@ export function sanitizeProjectForStorage(p: ProjectItem): ProjectItem {
   if (!p) return p;
 
   const rawP = p as any;
+  const MAX_DATA_URI_LEN = 400000; // ~300KB compressed image
 
   return {
     ...p,
     image:
-      typeof p.image === "string" && p.image.startsWith("data:") && p.image.length > 50000
+      typeof p.image === "string" && p.image.startsWith("data:") && p.image.length > MAX_DATA_URI_LEN
         ? "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80"
         : p.image,
     logo:
-      typeof p.logo === "string" && p.logo.startsWith("data:") && p.logo.length > 50000
+      typeof p.logo === "string" && p.logo.startsWith("data:") && p.logo.length > MAX_DATA_URI_LEN
         ? undefined
         : p.logo,
     logoUrl:
-      typeof p.logoUrl === "string" && p.logoUrl.startsWith("data:") && p.logoUrl.length > 50000
+      typeof p.logoUrl === "string" && p.logoUrl.startsWith("data:") && p.logoUrl.length > MAX_DATA_URI_LEN
         ? undefined
         : p.logoUrl,
     floorPlans: Array.isArray(p.floorPlans)
       ? p.floorPlans.map((fp) => ({
           ...fp,
           imageUrl:
-            typeof fp.imageUrl === "string" && fp.imageUrl.startsWith("data:") && fp.imageUrl.length > 50000
+            typeof fp.imageUrl === "string" && fp.imageUrl.startsWith("data:") && fp.imageUrl.length > MAX_DATA_URI_LEN
               ? ""
               : fp.imageUrl,
         }))
       : p.floorPlans,
+    unitsInventory: Array.isArray(p.unitsInventory)
+      ? p.unitsInventory.map((u) => ({
+          ...u,
+          images: Array.isArray(u.images)
+            ? u.images
+                .map((img) =>
+                  typeof img === "string" && img.startsWith("data:") && img.length > MAX_DATA_URI_LEN ? "" : img
+                )
+                .filter(Boolean)
+            : u.images,
+        }))
+      : p.unitsInventory,
     documents: Array.isArray(p.documents)
       ? p.documents.map((d: any) => ({
           ...d,
           url:
-            typeof d.url === "string" && d.url.startsWith("data:") && d.url.length > 50000
+            typeof d.url === "string" && d.url.startsWith("data:") && d.url.length > MAX_DATA_URI_LEN
               ? undefined
               : d.url,
           fileDataUrl: undefined,
@@ -46,13 +59,13 @@ export function sanitizeProjectForStorage(p: ProjectItem): ProjectItem {
       ? p.clientDocuments.map((d: any) => ({
           ...d,
           url:
-            typeof d.url === "string" && d.url.startsWith("data:") && d.url.length > 50000
+            typeof d.url === "string" && d.url.startsWith("data:") && d.url.length > MAX_DATA_URI_LEN
               ? undefined
               : d.url,
           fileDataUrl: undefined,
         }))
       : p.clientDocuments,
-    ...(rawP.coverImagePath && typeof rawP.coverImagePath === "string" && rawP.coverImagePath.length > 50000
+    ...(rawP.coverImagePath && typeof rawP.coverImagePath === "string" && rawP.coverImagePath.length > MAX_DATA_URI_LEN
       ? { coverImagePath: undefined }
       : {}),
   };

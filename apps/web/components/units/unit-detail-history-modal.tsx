@@ -39,6 +39,7 @@ import {
   Eye,
   Package,
   Box,
+  LayoutGrid,
 } from "lucide-react";
 import { UnitItem, UnitPriceHistoryItem, ProjectAdditional, ProjectItem } from "../../data/projects-data";
 import { DevioDatePicker } from "../ui/devio-date-picker";
@@ -72,11 +73,17 @@ export default function UnitDetailHistoryModal({
   const [activeTab, setActiveTab] = useState<"general" | "spaces" | "specs" | "history">("general");
 
   const { projects } = useProject();
-  const currentProject = project || projects.find((p) => (p.unitsInventory || []).some((u) => u.unit === unit?.unit)) || projects[0];
+  const currentProject =
+    project ||
+    projects.find((p) => (p.unitsInventory || []).some((u) => u.unit === unit?.unit)) ||
+    projects.find((p) => p.id === (unit as any)?.projectId) ||
+    projects[0];
+
+  const projectType = (currentProject?.type || "VERTICAL").toUpperCase();
   const availableFloorPlans = currentProject?.floorPlans || [];
 
   const assignedAdditionals = (additionals || []).filter(
-    (a) => a.assignedToUnit && (a.assignedToUnit.toLowerCase() === (unit?.unit || "").toLowerCase())
+    (a) => a.assignedToUnit && a.assignedToUnit.toLowerCase() === (unit?.unit || "").toLowerCase()
   );
 
   // Core fields
@@ -92,6 +99,54 @@ export default function UnitDetailHistoryModal({
   const [floorPlan, setFloorPlan] = useState<string>("");
   const [unitImage, setUnitImage] = useState<string | null>(null);
   const [availableAdvisors, setAvailableAdvisors] = useState<Array<{ name: string; email: string; role: string }>>([]);
+
+  // Distribution & Spaces fields
+  const [parkingSpots, setParkingSpots] = useState<number>(1);
+  const [storageUnits, setStorageUnits] = useState<number>(0);
+  const [terraceArea, setTerraceArea] = useState<string>("");
+  const [viewOrientation, setViewOrientation] = useState<string>("");
+  const [dimensions, setDimensions] = useState<string>("");
+  const [floorLevel, setFloorLevel] = useState<number>(1);
+  const [bedrooms, setBedrooms] = useState<number>(2);
+  const [bathrooms, setBathrooms] = useState<number>(2);
+  const [gardenArea, setGardenArea] = useState<string>("");
+  const [usageType, setUsageType] = useState<string>("Habitacional");
+
+  // Technical Specifications fields
+  const [totalConstructionArea, setTotalConstructionArea] = useState<string>("");
+  const [streetFrontage, setStreetFrontage] = useState<string>("");
+  const [loadingDocks, setLoadingDocks] = useState<string>("");
+  const [roofedArea, setRoofedArea] = useState<string>("");
+  const [clearHeight, setClearHeight] = useState<string>("");
+  const [floorLoadCapacity, setFloorLoadCapacity] = useState<string>("");
+  const [electricCapacity, setElectricCapacity] = useState<string>("");
+  const [maintenanceFee, setMaintenanceFee] = useState<number>(0);
+  const [notesDescription, setNotesDescription] = useState<string>("");
+  const [customAttributesState, setCustomAttributesState] = useState<Record<string, any>>({});
+
+  // Dynamic Custom Field Adders
+  const [showAddSpaceField, setShowAddSpaceField] = useState(false);
+  const [newSpaceFieldName, setNewSpaceFieldName] = useState("");
+  const [newSpaceFieldValue, setNewSpaceFieldValue] = useState("");
+
+  const [showAddSpecField, setShowAddSpecField] = useState(false);
+  const [newSpecFieldName, setNewSpecFieldName] = useState("");
+  const [newSpecFieldValue, setNewSpecFieldValue] = useState("");
+
+  // Price history state
+  const [priceHistoryList, setPriceHistoryList] = useState<UnitPriceHistoryItem[]>([]);
+
+  // Sub-modal: Cambiar precio
+  const [showChangePriceSubModal, setShowChangePriceSubModal] = useState(false);
+  const [newPriceInput, setNewPriceInput] = useState<number>(0);
+  const [priceReasonInput, setPriceReasonInput] = useState<string>("");
+
+  // Sub-modal: Confirmar marcar disponible / liberar
+  const [showMarkAvailableModal, setShowMarkAvailableModal] = useState(false);
+
+  // Saving states
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
     let list: Array<{ name: string; email: string; role: string }> = [];
@@ -118,89 +173,43 @@ export default function UnitDetailHistoryModal({
     setAvailableAdvisors(list);
   }, [currentProject]);
 
-  // Distribution & Spaces fields
-  const [parkingSpots, setParkingSpots] = useState<number>(1);
-  const [storageUnits, setStorageUnits] = useState<number>(0);
-  const [terraceArea, setTerraceArea] = useState<string>("");
-  const [viewOrientation, setViewOrientation] = useState<string>("");
-  const [dimensions, setDimensions] = useState<string>("");
-  const [floorLevel, setFloorLevel] = useState<number>(1);
-  const [bedrooms, setBedrooms] = useState<number>(2);
-  const [bathrooms, setBathrooms] = useState<number>(2);
-  const [gardenArea, setGardenArea] = useState<string>("");
-  const [usageType, setUsageType] = useState<string>("Habitacional");
-
-  // Technical Specifications fields
-  const [totalConstructionArea, setTotalConstructionArea] = useState<string>("");
-  const [streetFrontage, setStreetFrontage] = useState<string>("");
-  const [loadingDocks, setLoadingDocks] = useState<string>("");
-  const [roofedArea, setRoofedArea] = useState<string>("");
-  const [clearHeight, setClearHeight] = useState<string>("");
-  const [floorLoadCapacity, setFloorLoadCapacity] = useState<string>("");
-  const [electricCapacity, setElectricCapacity] = useState<string>("");
-  const [maintenanceFee, setMaintenanceFee] = useState<number>(0);
-  const [notesDescription, setNotesDescription] = useState<string>("");
-  const [customAttributesState, setCustomAttributesState] = useState<Record<string, any>>({});
-
-  // Price history state
-  const [priceHistoryList, setPriceHistoryList] = useState<
-    Array<{
-      date: string;
-      previousPrice: number;
-      newPrice: number;
-      pctChange: number;
-      reason: string;
-      user: string;
-    }>
-  >([]);
-
-  // Sub-modal: Cambiar precio
-  const [showChangePriceSubModal, setShowChangePriceSubModal] = useState(false);
-  const [newPriceInput, setNewPriceInput] = useState<number>(0);
-  const [priceReasonInput, setPriceReasonInput] = useState<string>("");
-
-  // Sub-modal: Confirmar marcar disponible / liberar
-  const [showMarkAvailableModal, setShowMarkAvailableModal] = useState(false);
-
-  // Saving states
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-
   useEffect(() => {
     if (unit) {
       setUnitNumber(unit.unit || "");
-      setUnitType(unit.type || "Departamento");
+      setUnitType(unit.type || (projectType === "HORIZONTAL" ? "Casa" : projectType === "LOTES" ? "Lote" : projectType === "INDUSTRIAL" ? "Bodega" : projectType === "COMERCIAL" ? "Local Comercial" : "Departamento"));
       setAreaM2(unit.areaM2 || 75);
-      setDeliveryDate(unit.deliveryDate || "");
+      setDeliveryDate(unit.deliveryDate || currentProject?.estimatedDeliveryDate || "");
       setUnitStatus(unit.status || "DISPONIBLE");
       setUnitClient(unit.client || "-");
       setAdvisor(unit.advisor || "");
       setCoOwners(unit.coOwners || []);
       setCurrentPrice(unit.price || 0);
-      setFloorLevel(unit.floor || 1);
-      setBedrooms(unit.bedrooms !== undefined ? unit.bedrooms : ((unit.customAttributes?.bedrooms as number) ?? 2));
-      setBathrooms(unit.bathrooms !== undefined ? unit.bathrooms : ((unit.customAttributes?.bathrooms as number) ?? 2));
-      setParkingSpots(unit.parkingSpots !== undefined ? unit.parkingSpots : ((unit.customAttributes?.parkingSpots as number) ?? 1));
-      setStorageUnits(unit.storageUnits !== undefined ? unit.storageUnits : ((unit.customAttributes?.storageUnits as number) ?? 0));
-      setViewOrientation(unit.viewType || unit.orientation || (unit.customAttributes?.viewOrientation as string) || (unit.customAttributes?.vista as string) || "");
-      setTerraceArea(unit.terraceAreaM2 ? String(unit.terraceAreaM2) : (unit.customAttributes?.terraceArea as string) || "");
-      setGardenArea(unit.gardenAreaM2 ? String(unit.gardenAreaM2) : (unit.customAttributes?.gardenArea as string) || "");
+      setFloorLevel(unit.floor !== undefined ? unit.floor : ((unit.customAttributes?.floor as number) ?? (unit.customAttributes?.nivel as number) ?? 1));
+      setBedrooms(unit.bedrooms !== undefined ? unit.bedrooms : ((unit.customAttributes?.bedrooms as number) ?? (unit.customAttributes?.recamaras as number) ?? 2));
+      setBathrooms(unit.bathrooms !== undefined ? unit.bathrooms : ((unit.customAttributes?.bathrooms as number) ?? (unit.customAttributes?.banos as number) ?? 2));
+      setParkingSpots(unit.parkingSpots !== undefined ? unit.parkingSpots : ((unit.customAttributes?.parkingSpots as number) ?? (unit.customAttributes?.estacionamientos as number) ?? (unit.customAttributes?.cajones as number) ?? 1));
+      setStorageUnits(unit.storageUnits !== undefined ? unit.storageUnits : ((unit.customAttributes?.storageUnits as number) ?? (unit.customAttributes?.bodegas as number) ?? 0));
+      setViewOrientation(unit.viewType || unit.orientation || (unit.customAttributes?.viewOrientation as string) || (unit.customAttributes?.vista as string) || (unit.customAttributes?.orientacion as string) || "");
+      setTerraceArea(unit.terraceAreaM2 ? String(unit.terraceAreaM2) : (unit.customAttributes?.terraceArea as string) || (unit.customAttributes?.terrazaM2 as string) || (unit.customAttributes?.terraza as string) || "");
+      setGardenArea(unit.gardenAreaM2 ? String(unit.gardenAreaM2) : (unit.customAttributes?.gardenArea as string) || (unit.customAttributes?.jardin as string) || "");
       setMaintenanceFee(unit.maintenanceFee || (unit.customAttributes?.maintenanceFee as number) || 0);
       setFloorPlan(unit.floorPlan || "");
       setUnitImage(unit.images?.[0] || (unit as any).image || null);
-      setUsageType((unit.customAttributes?.usageType as string) || (unit.customAttributes?.uso as string) || "Habitacional");
-      setDimensions((unit.customAttributes?.dimensions as string) || (unit.customAttributes?.medidas as string) || "");
+      setUsageType((unit.customAttributes?.usageType as string) || (unit.customAttributes?.uso as string) || (unit.customAttributes?.giro as string) || "Habitacional");
+      setDimensions((unit.customAttributes?.dimensions as string) || (unit.customAttributes?.medidas as string) || (unit.customAttributes?.frenteFondo as string) || "");
       setTotalConstructionArea((unit.customAttributes?.totalConstructionArea as string) || (unit.customAttributes?.construccionM2 as string) || "");
-      setStreetFrontage((unit.customAttributes?.streetFrontage as string) || (unit.customAttributes?.frente as string) || "");
+      setStreetFrontage((unit.customAttributes?.streetFrontage as string) || (unit.customAttributes?.frente as string) || (unit.customAttributes?.frenteCalle as string) || "");
       setLoadingDocks((unit.customAttributes?.loadingDocks as string) || (unit.customAttributes?.andenes as string) || "");
-      setRoofedArea((unit.customAttributes?.roofedArea as string) || (unit.customAttributes?.techadaM2 as string) || "");
-      setClearHeight((unit.customAttributes?.clearHeight as string) || (unit.customAttributes?.altura as string) || "");
+      setRoofedArea((unit.customAttributes?.roofedArea as string) || (unit.customAttributes?.techadaM2 as string) || (unit.customAttributes?.areaTechada as string) || "");
+      setClearHeight((unit.customAttributes?.clearHeight as string) || (unit.customAttributes?.altura as string) || (unit.customAttributes?.alturaLibre as string) || "");
       setFloorLoadCapacity((unit.customAttributes?.floorLoadCapacity as string) || (unit.customAttributes?.cargaPiso as string) || "");
-      setElectricCapacity((unit.customAttributes?.electricCapacity as string) || (unit.customAttributes?.electricidad as string) || "");
+      setElectricCapacity((unit.customAttributes?.electricCapacity as string) || (unit.customAttributes?.electricidad as string) || (unit.customAttributes?.energiaKVA as string) || "");
       setNotesDescription((unit.customAttributes?.notesDescription as string) || (unit.customAttributes?.notas as string) || "");
-      setCustomAttributesState(unit.customAttributes || {});
+      
+      const attrs = { ...(unit.customAttributes || {}) };
+      setCustomAttributesState(attrs);
 
-      // Construcción y preservación estricta del historial de precios inicial
+      // Bitácora de precios
       const rawHistory = Array.isArray(unit.priceHistory) && unit.priceHistory.length > 0 ? [...unit.priceHistory] : [];
       const baseInitialEntry: UnitPriceHistoryItem = {
         date: unit.deliveryDate || new Date().toLocaleDateString("es-MX"),
@@ -242,8 +251,10 @@ export default function UnitDetailHistoryModal({
       setActiveTab("general");
       setShowChangePriceSubModal(false);
       setShowMarkAvailableModal(false);
+      setShowAddSpaceField(false);
+      setShowAddSpecField(false);
     }
-  }, [unit]);
+  }, [unit, currentProject, projectType]);
 
   if (!isOpen || !unit) return null;
 
@@ -256,6 +267,42 @@ export default function UnitDetailHistoryModal({
   };
 
   const pricePerM2 = areaM2 > 0 ? Math.round(currentPrice / areaM2) : 0;
+
+  // Optimized image compression to keep base64 lightweight and persist properly
+  const handleCompressAndSetImage = (file: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1200;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL("image/jpeg", 0.75);
+          setUnitImage(compressed);
+        } else {
+          setUnitImage(e.target?.result as string);
+        }
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Guardar nuevo precio individual desde el submodal
   const handleSaveIndividualPriceChange = (e: React.FormEvent) => {
@@ -276,7 +323,7 @@ export default function UnitDetailHistoryModal({
       year: "2-digit",
     });
 
-    const newHistoryEntry = {
+    const newHistoryEntry: UnitPriceHistoryItem = {
       date: nowStr,
       previousPrice: currentPrice,
       newPrice: newPriceInput,
@@ -334,7 +381,6 @@ export default function UnitDetailHistoryModal({
     }
   };
 
-  // Confirmar acción de marcar como disponible / liberar unidad
   const handleConfirmMarkAvailable = () => {
     setUnitStatus("DISPONIBLE");
     setUnitClient("-");
@@ -342,7 +388,6 @@ export default function UnitDetailHistoryModal({
     setShowMarkAvailableModal(false);
   };
 
-  // Bloquear / Desbloquear
   const handleToggleBlock = () => {
     if (unitStatus === "BLOQUEADA") {
       setUnitStatus("DISPONIBLE");
@@ -402,11 +447,42 @@ export default function UnitDetailHistoryModal({
       setTimeout(() => {
         setSaveSuccess(false);
         onClose();
-      }, 600);
-    }, 400);
+      }, 500);
+    }, 350);
   };
 
-  // Status visual badge styling
+  const handleAddSpaceCustomField = () => {
+    if (!newSpaceFieldName.trim()) return;
+    const cleanKey = newSpaceFieldName.trim();
+    setCustomAttributesState((prev) => ({
+      ...prev,
+      [cleanKey]: newSpaceFieldValue.trim(),
+    }));
+    setNewSpaceFieldName("");
+    setNewSpaceFieldValue("");
+    setShowAddSpaceField(false);
+  };
+
+  const handleAddSpecCustomField = () => {
+    if (!newSpecFieldName.trim()) return;
+    const cleanKey = newSpecFieldName.trim();
+    setCustomAttributesState((prev) => ({
+      ...prev,
+      [cleanKey]: newSpecFieldValue.trim(),
+    }));
+    setNewSpecFieldName("");
+    setNewSpecFieldValue("");
+    setShowAddSpecField(false);
+  };
+
+  const handleRemoveCustomField = (key: string) => {
+    setCustomAttributesState((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
   const getStatusBadge = () => {
     switch (unitStatus) {
       case "VENDIDA":
@@ -446,6 +522,21 @@ export default function UnitDetailHistoryModal({
 
   const statusBadge = getStatusBadge();
 
+  // Known system reserved keys
+  const reservedKeys = [
+    "usageType", "uso", "giro", "dimensions", "medidas", "frenteFondo", "totalConstructionArea",
+    "construccionM2", "streetFrontage", "frente", "frenteCalle", "loadingDocks", "andenes",
+    "roofedArea", "techadaM2", "areaTechada", "clearHeight", "altura", "alturaLibre", "floorLoadCapacity",
+    "cargaPiso", "electricCapacity", "electricidad", "energiaKVA", "notesDescription",
+    "notas", "bedrooms", "recamaras", "bathrooms", "banos", "parkingSpots", "estacionamientos", "cajones",
+    "storageUnits", "bodegas", "viewOrientation", "vista", "orientacion", "terraceArea", "terraza", "terrazaM2",
+    "gardenArea", "jardin", "maintenanceFee", "priceHistory", "deliveryDate", "floor", "nivel", "piso"
+  ];
+
+  const dynamicCustomKeys = Object.keys(customAttributesState).filter(
+    (k) => !reservedKeys.includes(k) && customAttributesState[k] !== undefined
+  );
+
   return (
     <div
       style={{
@@ -465,7 +556,7 @@ export default function UnitDetailHistoryModal({
           backgroundColor: "#FFFFFF",
           borderRadius: "1.25rem",
           width: "100%",
-          maxWidth: "1040px",
+          maxWidth: "1060px",
           maxHeight: "92vh",
           display: "flex",
           flexDirection: "column",
@@ -527,7 +618,7 @@ export default function UnitDetailHistoryModal({
                 </span>
               </div>
               <p style={{ fontSize: "0.8rem", color: "var(--devio-neutral-3)", margin: "0.15rem 0 0 0" }}>
-                {unitType} • Nivel {floorLevel} • {areaM2} m² totales
+                {unitType} • {currentProject?.name || "Proyecto"} • {areaM2} m² totales
               </p>
             </div>
           </div>
@@ -569,7 +660,6 @@ export default function UnitDetailHistoryModal({
             gap: "0.75rem",
           }}
         >
-          {/* Status info preview */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
               Acciones Comerciales Rápidas:
@@ -594,7 +684,6 @@ export default function UnitDetailHistoryModal({
             )}
           </div>
 
-          {/* Action Buttons */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
             {unitStatus === "DISPONIBLE" && (
               <>
@@ -748,7 +837,7 @@ export default function UnitDetailHistoryModal({
         {/* ------------------------------------------------------------------ */}
         {/* BODY - 2-COLUMN STRUCTURE */}
         {/* ------------------------------------------------------------------ */}
-        <div style={{ flex: 1, overflowY: "auto", display: "grid", gridTemplateColumns: "340px 1fr" }}>
+        <div style={{ flex: 1, overflowY: "auto", display: "grid", gridTemplateColumns: "330px 1fr" }}>
           
           {/* LEFT PANEL: MEDIA, PLANTA Y VALUACIÓN */}
           <div
@@ -812,11 +901,7 @@ export default function UnitDetailHistoryModal({
                   style={{ display: "none" }}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onload = () => setUnitImage(reader.result as string);
-                      reader.readAsDataURL(file);
-                    }
+                    if (file) handleCompressAndSetImage(file);
                   }}
                 />
                 {unitImage ? (
@@ -848,12 +933,12 @@ export default function UnitDetailHistoryModal({
                   <Layers size={14} style={{ color: "var(--devio-blue)" }} /> Planta de Conjunto
                 </span>
                 <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", fontWeight: 600 }}>
-                  Nivel {floorLevel}
+                  {availableFloorPlans.length} disponibles
                 </span>
               </div>
 
               {(() => {
-                const matchedPlan = availableFloorPlans.find((fp) => fp.name === floorPlan);
+                const matchedPlan = availableFloorPlans.find((fp) => fp.name === floorPlan || fp.id === floorPlan);
                 if (matchedPlan && matchedPlan.imageUrl) {
                   return (
                     <div
@@ -871,8 +956,8 @@ export default function UnitDetailHistoryModal({
                     >
                       <img
                         src={matchedPlan.imageUrl}
-                        alt={floorPlan}
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        alt={matchedPlan.name}
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
                       />
                     </div>
                   );
@@ -926,6 +1011,9 @@ export default function UnitDetailHistoryModal({
                       {fp.name}
                     </option>
                   ))}
+                  {floorPlan && !availableFloorPlans.some((fp) => fp.name === floorPlan || fp.id === floorPlan) && (
+                    <option value={floorPlan}>{floorPlan}</option>
+                  )}
                 </select>
               </div>
             </div>
@@ -966,6 +1054,7 @@ export default function UnitDetailHistoryModal({
                 borderBottom: "1px solid var(--devio-neutral-1)",
                 paddingBottom: "0.75rem",
                 marginBottom: "1.25rem",
+                overflowX: "auto",
               }}
             >
               {[
@@ -993,6 +1082,7 @@ export default function UnitDetailHistoryModal({
                       border: "none",
                       cursor: "pointer",
                       transition: "all 0.15s ease",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {tab.icon}
@@ -1033,9 +1123,12 @@ export default function UnitDetailHistoryModal({
                     <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
                       Tipo de Unidad *
                     </label>
-                    <select
+                    <input
+                      type="text"
+                      required
                       value={unitType}
                       onChange={(e) => setUnitType(e.target.value)}
+                      placeholder="Ej. Departamento, Casa, Penthouse..."
                       style={{
                         width: "100%",
                         padding: "0.65rem 0.85rem",
@@ -1044,19 +1137,8 @@ export default function UnitDetailHistoryModal({
                         fontSize: "0.85rem",
                         fontWeight: 600,
                         color: "var(--devio-blue-dark)",
-                        backgroundColor: "var(--devio-white)",
-                        outline: "none",
                       }}
-                    >
-                      <option value="Departamento">Departamento</option>
-                      <option value="Penthouse">Penthouse</option>
-                      <option value="Loft">Loft</option>
-                      <option value="Casa">Casa</option>
-                      <option value="Local Comercial">Local Comercial</option>
-                      <option value="Oficina">Oficina</option>
-                      <option value="Bodega">Bodega</option>
-                      <option value="Terreno">Terreno</option>
-                    </select>
+                    />
                   </div>
 
                   <div>
@@ -1144,27 +1226,6 @@ export default function UnitDetailHistoryModal({
 
                   <div>
                     <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Nivel / Piso
-                    </label>
-                    <input
-                      type="number"
-                      value={floorLevel}
-                      onChange={(e) => setFloorLevel(Number(e.target.value))}
-                      placeholder="1"
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
                       Fecha Estimada de Entrega
                     </label>
                     <DevioDatePicker
@@ -1172,33 +1233,6 @@ export default function UnitDetailHistoryModal({
                       onChange={(val) => setDeliveryDate(val)}
                       placeholder="YYYY-MM-DD"
                     />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Tipo de Uso
-                    </label>
-                    <select
-                      value={usageType}
-                      onChange={(e) => setUsageType(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        color: "var(--devio-blue-dark)",
-                        backgroundColor: "var(--devio-white)",
-                        outline: "none",
-                      }}
-                    >
-                      <option value="Habitacional">Habitacional</option>
-                      <option value="Comercial">Comercial</option>
-                      <option value="Mixto">Mixto</option>
-                      <option value="Industrial">Industrial</option>
-                      <option value="Corporativo">Corporativo</option>
-                    </select>
                   </div>
 
                   <div>
@@ -1234,7 +1268,6 @@ export default function UnitDetailHistoryModal({
                     <div
                       style={{
                         gridColumn: "1 / -1",
-                        marginTop: "0.5rem",
                         backgroundColor: "rgba(31, 54, 82, 0.03)",
                         borderRadius: "0.75rem",
                         padding: "1rem",
@@ -1272,7 +1305,6 @@ export default function UnitDetailHistoryModal({
                     <div
                       style={{
                         gridColumn: "1 / -1",
-                        marginTop: "0.5rem",
                         backgroundColor: "rgba(47, 128, 237, 0.03)",
                         borderRadius: "0.75rem",
                         padding: "1rem",
@@ -1341,434 +1373,373 @@ export default function UnitDetailHistoryModal({
 
               {/* TAB 2: DISTRIBUCIÓN Y ESPACIOS */}
               {activeTab === "spaces" && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.1rem" }}>
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Recámaras
-                    </label>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setBedrooms(Math.max(0, bedrooms - 1))}
-                        style={{
-                          width: "36px",
-                          height: "36px",
-                          borderRadius: "0.5rem",
-                          border: "1px solid var(--devio-neutral-2)",
-                          backgroundColor: "#FFFFFF",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <input
-                        type="number"
-                        value={bedrooms}
-                        onChange={(e) => setBedrooms(Number(e.target.value))}
-                        style={{
-                          width: "60px",
-                          textAlign: "center",
-                          padding: "0.5rem",
-                          borderRadius: "0.5rem",
-                          border: "1.5px solid var(--devio-neutral-2)",
-                          fontWeight: 700,
-                          fontSize: "0.9rem",
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setBedrooms(bedrooms + 1)}
-                        style={{
-                          width: "36px",
-                          height: "36px",
-                          borderRadius: "0.5rem",
-                          border: "1px solid var(--devio-neutral-2)",
-                          backgroundColor: "#FFFFFF",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.1rem" }}>
+                    {/* Typology Specific Fields */}
+                    {projectType !== "LOTES" && (
+                      <div>
+                        <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                          {projectType === "HORIZONTAL" ? "Niveles de la Casa" : "Nivel / Piso"}
+                        </label>
+                        <input
+                          type="number"
+                          value={floorLevel}
+                          onChange={(e) => setFloorLevel(Number(e.target.value))}
+                          placeholder="1"
+                          style={{
+                            width: "100%",
+                            padding: "0.65rem 0.85rem",
+                            borderRadius: "0.6rem",
+                            border: "1.5px solid var(--devio-neutral-2)",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                            color: "var(--devio-blue-dark)",
+                          }}
+                        />
+                      </div>
+                    )}
 
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Baños
-                    </label>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setBathrooms(Math.max(0, bathrooms - 1))}
-                        style={{
-                          width: "36px",
-                          height: "36px",
-                          borderRadius: "0.5rem",
-                          border: "1px solid var(--devio-neutral-2)",
-                          backgroundColor: "#FFFFFF",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <input
-                        type="number"
-                        value={bathrooms}
-                        onChange={(e) => setBathrooms(Number(e.target.value))}
-                        style={{
-                          width: "60px",
-                          textAlign: "center",
-                          padding: "0.5rem",
-                          borderRadius: "0.5rem",
-                          border: "1.5px solid var(--devio-neutral-2)",
-                          fontWeight: 700,
-                          fontSize: "0.9rem",
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setBathrooms(bathrooms + 1)}
-                        style={{
-                          width: "36px",
-                          height: "36px",
-                          borderRadius: "0.5rem",
-                          border: "1px solid var(--devio-neutral-2)",
-                          backgroundColor: "#FFFFFF",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  </div>
+                    {(projectType === "VERTICAL" || projectType === "HORIZONTAL" || projectType === "MIXED") && (
+                      <>
+                        <div>
+                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                            Recámaras
+                          </label>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => setBedrooms(Math.max(0, bedrooms - 1))}
+                              style={{
+                                width: "36px",
+                                height: "36px",
+                                borderRadius: "0.5rem",
+                                border: "1px solid var(--devio-neutral-2)",
+                                backgroundColor: "#FFFFFF",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <input
+                              type="number"
+                              value={bedrooms}
+                              onChange={(e) => setBedrooms(Number(e.target.value))}
+                              style={{
+                                width: "60px",
+                                textAlign: "center",
+                                padding: "0.5rem",
+                                borderRadius: "0.5rem",
+                                border: "1.5px solid var(--devio-neutral-2)",
+                                fontWeight: 700,
+                                fontSize: "0.9rem",
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setBedrooms(bedrooms + 1)}
+                              style={{
+                                width: "36px",
+                                height: "36px",
+                                borderRadius: "0.5rem",
+                                border: "1px solid var(--devio-neutral-2)",
+                                backgroundColor: "#FFFFFF",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        </div>
 
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Cajones de Estacionamiento
-                    </label>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setParkingSpots(Math.max(0, parkingSpots - 1))}
-                        style={{
-                          width: "36px",
-                          height: "36px",
-                          borderRadius: "0.5rem",
-                          border: "1px solid var(--devio-neutral-2)",
-                          backgroundColor: "#FFFFFF",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <input
-                        type="number"
-                        value={parkingSpots}
-                        onChange={(e) => setParkingSpots(Number(e.target.value))}
-                        style={{
-                          width: "60px",
-                          textAlign: "center",
-                          padding: "0.5rem",
-                          borderRadius: "0.5rem",
-                          border: "1.5px solid var(--devio-neutral-2)",
-                          fontWeight: 700,
-                          fontSize: "0.9rem",
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setParkingSpots(parkingSpots + 1)}
-                        style={{
-                          width: "36px",
-                          height: "36px",
-                          borderRadius: "0.5rem",
-                          border: "1px solid var(--devio-neutral-2)",
-                          backgroundColor: "#FFFFFF",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  </div>
+                        <div>
+                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                            Baños
+                          </label>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => setBathrooms(Math.max(0, bathrooms - 1))}
+                              style={{
+                                width: "36px",
+                                height: "36px",
+                                borderRadius: "0.5rem",
+                                border: "1px solid var(--devio-neutral-2)",
+                                backgroundColor: "#FFFFFF",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <input
+                              type="number"
+                              value={bathrooms}
+                              onChange={(e) => setBathrooms(Number(e.target.value))}
+                              style={{
+                                width: "60px",
+                                textAlign: "center",
+                                padding: "0.5rem",
+                                borderRadius: "0.5rem",
+                                border: "1.5px solid var(--devio-neutral-2)",
+                                fontWeight: 700,
+                                fontSize: "0.9rem",
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setBathrooms(bathrooms + 1)}
+                              style={{
+                                width: "36px",
+                                height: "36px",
+                                borderRadius: "0.5rem",
+                                border: "1px solid var(--devio-neutral-2)",
+                                backgroundColor: "#FFFFFF",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
 
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Bodegas / Almacén
-                    </label>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setStorageUnits(Math.max(0, storageUnits - 1))}
-                        style={{
-                          width: "36px",
-                          height: "36px",
-                          borderRadius: "0.5rem",
-                          border: "1px solid var(--devio-neutral-2)",
-                          backgroundColor: "#FFFFFF",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <input
-                        type="number"
-                        value={storageUnits}
-                        onChange={(e) => setStorageUnits(Number(e.target.value))}
-                        style={{
-                          width: "60px",
-                          textAlign: "center",
-                          padding: "0.5rem",
-                          borderRadius: "0.5rem",
-                          border: "1.5px solid var(--devio-neutral-2)",
-                          fontWeight: 700,
-                          fontSize: "0.9rem",
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setStorageUnits(storageUnits + 1)}
-                        style={{
-                          width: "36px",
-                          height: "36px",
-                          borderRadius: "0.5rem",
-                          border: "1px solid var(--devio-neutral-2)",
-                          backgroundColor: "#FFFFFF",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  </div>
+                    {projectType !== "LOTES" && (
+                      <div>
+                        <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                          Cajones de Estacionamiento
+                        </label>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => setParkingSpots(Math.max(0, parkingSpots - 1))}
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "0.5rem",
+                              border: "1px solid var(--devio-neutral-2)",
+                              backgroundColor: "#FFFFFF",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <input
+                            type="number"
+                            value={parkingSpots}
+                            onChange={(e) => setParkingSpots(Number(e.target.value))}
+                            style={{
+                              width: "60px",
+                              textAlign: "center",
+                              padding: "0.5rem",
+                              borderRadius: "0.5rem",
+                              border: "1.5px solid var(--devio-neutral-2)",
+                              fontWeight: 700,
+                              fontSize: "0.9rem",
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setParkingSpots(parkingSpots + 1)}
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "0.5rem",
+                              border: "1px solid var(--devio-neutral-2)",
+                              backgroundColor: "#FFFFFF",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Terraza / Balcón (m²)
-                    </label>
-                    <input
-                      type="text"
-                      value={terraceArea}
-                      onChange={(e) => setTerraceArea(e.target.value)}
-                      placeholder="Ej. 12.5 m²"
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    />
-                  </div>
+                    {(projectType === "VERTICAL" || projectType === "MIXED") && (
+                      <div>
+                        <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                          Bodegas / Almacén (#)
+                        </label>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => setStorageUnits(Math.max(0, storageUnits - 1))}
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "0.5rem",
+                              border: "1px solid var(--devio-neutral-2)",
+                              backgroundColor: "#FFFFFF",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <input
+                            type="number"
+                            value={storageUnits}
+                            onChange={(e) => setStorageUnits(Number(e.target.value))}
+                            style={{
+                              width: "60px",
+                              textAlign: "center",
+                              padding: "0.5rem",
+                              borderRadius: "0.5rem",
+                              border: "1.5px solid var(--devio-neutral-2)",
+                              fontWeight: 700,
+                              fontSize: "0.9rem",
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setStorageUnits(storageUnits + 1)}
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "0.5rem",
+                              border: "1px solid var(--devio-neutral-2)",
+                              backgroundColor: "#FFFFFF",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Jardín Privado (m²)
-                    </label>
-                    <input
-                      type="text"
-                      value={gardenArea}
-                      onChange={(e) => setGardenArea(e.target.value)}
-                      placeholder="Ej. No o 25 m²"
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Dimensiones (Frente x Fondo)
-                    </label>
-                    <input
-                      type="text"
-                      value={dimensions}
-                      onChange={(e) => setDimensions(e.target.value)}
-                      placeholder="Ej. 8.5m x 11.2m"
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 3: ESPECIFICACIONES TÉCNICAS */}
-              {activeTab === "specs" && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.1rem" }}>
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Orientación / Vista
-                    </label>
-                    <input
-                      type="text"
-                      value={viewOrientation}
-                      onChange={(e) => setViewOrientation(e.target.value)}
-                      placeholder="Ej. Panorámica Norte / Frente a alberca"
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Altura Libre (m)
-                    </label>
-                    <input
-                      type="text"
-                      value={clearHeight}
-                      onChange={(e) => setClearHeight(e.target.value)}
-                      placeholder="Ej. 2.80 m"
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Frente a Calle (metros lineales)
-                    </label>
-                    <input
-                      type="text"
-                      value={streetFrontage}
-                      onChange={(e) => setStreetFrontage(e.target.value)}
-                      placeholder="Ej. 10 m"
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Capacidad Eléctrica (kVA)
-                    </label>
-                    <input
-                      type="text"
-                      value={electricCapacity}
-                      onChange={(e) => setElectricCapacity(e.target.value)}
-                      placeholder="Ej. 15 kVA"
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Capacidad de Carga de Piso (ton/m²)
-                    </label>
-                    <input
-                      type="text"
-                      value={floorLoadCapacity}
-                      onChange={(e) => setFloorLoadCapacity(e.target.value)}
-                      placeholder="Ej. 5 ton/m²"
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Cuota de Mantenimiento Estimada
-                    </label>
-                    <CurrencyInput
-                      value={maintenanceFee}
-                      onChange={(val) => setMaintenanceFee(val)}
-                      currencySymbol="$"
-                    />
-                  </div>
-
-                  {/* Dynamic Custom Attributes from Onboarding / Custom Columns */}
-                  {Object.entries(customAttributesState)
-                    .filter(([key]) => ![
-                      "usageType", "uso", "dimensions", "medidas", "totalConstructionArea",
-                      "construccionM2", "streetFrontage", "frente", "loadingDocks", "andenes",
-                      "roofedArea", "techadaM2", "clearHeight", "altura", "floorLoadCapacity",
-                      "cargaPiso", "electricCapacity", "electricidad", "notesDescription",
-                      "notas", "bedrooms", "bathrooms", "parkingSpots", "storageUnits",
-                      "viewOrientation", "vista", "terraceArea", "gardenArea", "maintenanceFee",
-                      "priceHistory", "deliveryDate"
-                    ].includes(key))
-                    .map(([key, value]) => (
-                      <div key={key}>
-                        <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem", textTransform: "capitalize" }}>
-                          {key}
+                    {(projectType === "VERTICAL" || projectType === "HORIZONTAL") && (
+                      <div>
+                        <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                          Terraza / Balcón (m²)
                         </label>
                         <input
                           type="text"
-                          value={value !== undefined && value !== null ? String(value) : ""}
+                          value={terraceArea}
+                          onChange={(e) => setTerraceArea(e.target.value)}
+                          placeholder="Ej. 12.5 m²"
+                          style={{
+                            width: "100%",
+                            padding: "0.65rem 0.85rem",
+                            borderRadius: "0.6rem",
+                            border: "1.5px solid var(--devio-neutral-2)",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                            color: "var(--devio-blue-dark)",
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {(projectType === "HORIZONTAL" || projectType === "VERTICAL") && (
+                      <div>
+                        <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                          Jardín Privado (m²)
+                        </label>
+                        <input
+                          type="text"
+                          value={gardenArea}
+                          onChange={(e) => setGardenArea(e.target.value)}
+                          placeholder="Ej. 25 m²"
+                          style={{
+                            width: "100%",
+                            padding: "0.65rem 0.85rem",
+                            borderRadius: "0.6rem",
+                            border: "1.5px solid var(--devio-neutral-2)",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                            color: "var(--devio-blue-dark)",
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                        Dimensiones (Frente x Fondo)
+                      </label>
+                      <input
+                        type="text"
+                        value={dimensions}
+                        onChange={(e) => setDimensions(e.target.value)}
+                        placeholder="Ej. 8.5m x 11.2m"
+                        style={{
+                          width: "100%",
+                          padding: "0.65rem 0.85rem",
+                          borderRadius: "0.6rem",
+                          border: "1.5px solid var(--devio-neutral-2)",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          color: "var(--devio-blue-dark)",
+                        }}
+                      />
+                    </div>
+
+                    {(projectType === "COMERCIAL" || projectType === "MIXED" || projectType === "LOTES") && (
+                      <div>
+                        <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                          Giro / Tipo de Uso
+                        </label>
+                        <input
+                          type="text"
+                          value={usageType}
+                          onChange={(e) => setUsageType(e.target.value)}
+                          placeholder="Ej. Comercial, Mixto, Habitacional..."
+                          style={{
+                            width: "100%",
+                            padding: "0.65rem 0.85rem",
+                            borderRadius: "0.6rem",
+                            border: "1.5px solid var(--devio-neutral-2)",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                            color: "var(--devio-blue-dark)",
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Dynamic Custom Attributes in Spaces */}
+                    {dynamicCustomKeys.map((key) => (
+                      <div key={key} style={{ position: "relative" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", textTransform: "capitalize" }}>
+                            {key}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCustomField(key)}
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--devio-red)", padding: 0 }}
+                            title="Eliminar campo"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={customAttributesState[key] !== undefined && customAttributesState[key] !== null ? String(customAttributesState[key]) : ""}
                           onChange={(e) => setCustomAttributesState((prev) => ({ ...prev, [key]: e.target.value }))}
                           style={{
                             width: "100%",
@@ -1782,30 +1753,409 @@ export default function UnitDetailHistoryModal({
                         />
                       </div>
                     ))}
-
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                      Notas u Observaciones Internas
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={notesDescription}
-                      onChange={(e) => setNotesDescription(e.target.value)}
-                      placeholder="Detalles sobre acabados, amenidades incluidas o condiciones especiales..."
-                      style={{
-                        width: "100%",
-                        padding: "0.65rem 0.85rem",
-                        borderRadius: "0.6rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        fontWeight: 500,
-                        color: "var(--devio-blue-dark)",
-                        outline: "none",
-                        fontFamily: "inherit",
-                        resize: "vertical",
-                      }}
-                    />
                   </div>
+
+                  {/* Add Dynamic Field Button & Drawer */}
+                  {!showAddSpaceField ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddSpaceField(true)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        padding: "0.6rem 1rem",
+                        borderRadius: "0.6rem",
+                        backgroundColor: "rgba(31, 54, 82, 0.05)",
+                        border: "1px dashed var(--devio-neutral-2)",
+                        color: "var(--devio-blue-dark)",
+                        fontSize: "0.82rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        alignSelf: "flex-start",
+                        transition: "all 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(31, 54, 82, 0.1)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "rgba(31, 54, 82, 0.05)")}
+                    >
+                      <Plus size={15} /> Agregar Campo / Atributo Personalizado
+                    </button>
+                  ) : (
+                    <div
+                      style={{
+                        backgroundColor: "#F8FAFC",
+                        borderRadius: "0.75rem",
+                        padding: "1rem",
+                        border: "1px solid var(--devio-neutral-2)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.75rem",
+                      }}
+                    >
+                      <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                        Nuevo Campo de Espacio / Distribución
+                      </span>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", fontWeight: 600, display: "block", marginBottom: "0.25rem" }}>
+                            Nombre del Campo *
+                          </label>
+                          <input
+                            type="text"
+                            value={newSpaceFieldName}
+                            onChange={(e) => setNewSpaceFieldName(e.target.value)}
+                            placeholder="Ej. Roof Garden, Bodega M2..."
+                            style={{
+                              width: "100%",
+                              padding: "0.55rem 0.75rem",
+                              borderRadius: "0.5rem",
+                              border: "1px solid var(--devio-neutral-2)",
+                              fontSize: "0.82rem",
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", fontWeight: 600, display: "block", marginBottom: "0.25rem" }}>
+                            Valor Inicial
+                          </label>
+                          <input
+                            type="text"
+                            value={newSpaceFieldValue}
+                            onChange={(e) => setNewSpaceFieldValue(e.target.value)}
+                            placeholder="Ej. 18 m², Sí, etc."
+                            style={{
+                              width: "100%",
+                              padding: "0.55rem 0.75rem",
+                              borderRadius: "0.5rem",
+                              border: "1px solid var(--devio-neutral-2)",
+                              fontSize: "0.82rem",
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddSpaceField(false)}
+                          style={{
+                            padding: "0.45rem 0.85rem",
+                            borderRadius: "0.5rem",
+                            border: "1px solid var(--devio-neutral-2)",
+                            backgroundColor: "#FFFFFF",
+                            color: "var(--devio-neutral-3)",
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAddSpaceCustomField}
+                          style={{
+                            padding: "0.45rem 1rem",
+                            borderRadius: "0.5rem",
+                            border: "none",
+                            backgroundColor: "var(--devio-blue-dark)",
+                            color: "#FFFFFF",
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Agregar Campo
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 3: ESPECIFICACIONES TÉCNICAS */}
+              {activeTab === "specs" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.1rem" }}>
+                    <div>
+                      <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                        Orientación / Vista
+                      </label>
+                      <input
+                        type="text"
+                        value={viewOrientation}
+                        onChange={(e) => setViewOrientation(e.target.value)}
+                        placeholder="Ej. Panorámica Norte / Frente a parque"
+                        style={{
+                          width: "100%",
+                          padding: "0.65rem 0.85rem",
+                          borderRadius: "0.6rem",
+                          border: "1.5px solid var(--devio-neutral-2)",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          color: "var(--devio-blue-dark)",
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                        Altura Libre (m)
+                      </label>
+                      <input
+                        type="text"
+                        value={clearHeight}
+                        onChange={(e) => setClearHeight(e.target.value)}
+                        placeholder="Ej. 2.80 m"
+                        style={{
+                          width: "100%",
+                          padding: "0.65rem 0.85rem",
+                          borderRadius: "0.6rem",
+                          border: "1.5px solid var(--devio-neutral-2)",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          color: "var(--devio-blue-dark)",
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                        Frente a Calle (metros lineales)
+                      </label>
+                      <input
+                        type="text"
+                        value={streetFrontage}
+                        onChange={(e) => setStreetFrontage(e.target.value)}
+                        placeholder="Ej. 10 m"
+                        style={{
+                          width: "100%",
+                          padding: "0.65rem 0.85rem",
+                          borderRadius: "0.6rem",
+                          border: "1.5px solid var(--devio-neutral-2)",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          color: "var(--devio-blue-dark)",
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                        Cuota de Mantenimiento Estimada
+                      </label>
+                      <CurrencyInput
+                        value={maintenanceFee}
+                        onChange={(val) => setMaintenanceFee(val)}
+                        currencySymbol="$"
+                      />
+                    </div>
+
+                    {projectType === "INDUSTRIAL" && (
+                      <>
+                        <div>
+                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                            Capacidad Eléctrica (kVA)
+                          </label>
+                          <input
+                            type="text"
+                            value={electricCapacity}
+                            onChange={(e) => setElectricCapacity(e.target.value)}
+                            placeholder="Ej. 15 kVA"
+                            style={{
+                              width: "100%",
+                              padding: "0.65rem 0.85rem",
+                              borderRadius: "0.6rem",
+                              border: "1.5px solid var(--devio-neutral-2)",
+                              fontSize: "0.85rem",
+                              fontWeight: 600,
+                              color: "var(--devio-blue-dark)",
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                            Capacidad de Carga de Piso (ton/m²)
+                          </label>
+                          <input
+                            type="text"
+                            value={floorLoadCapacity}
+                            onChange={(e) => setFloorLoadCapacity(e.target.value)}
+                            placeholder="Ej. 5 ton/m²"
+                            style={{
+                              width: "100%",
+                              padding: "0.65rem 0.85rem",
+                              borderRadius: "0.6rem",
+                              border: "1.5px solid var(--devio-neutral-2)",
+                              fontSize: "0.85rem",
+                              fontWeight: 600,
+                              color: "var(--devio-blue-dark)",
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                            Andenes de Carga (#)
+                          </label>
+                          <input
+                            type="text"
+                            value={loadingDocks}
+                            onChange={(e) => setLoadingDocks(e.target.value)}
+                            placeholder="Ej. 2 andenes"
+                            style={{
+                              width: "100%",
+                              padding: "0.65rem 0.85rem",
+                              borderRadius: "0.6rem",
+                              border: "1.5px solid var(--devio-neutral-2)",
+                              fontSize: "0.85rem",
+                              fontWeight: 600,
+                              color: "var(--devio-blue-dark)",
+                            }}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
+                        Notas u Observaciones Internas
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={notesDescription}
+                        onChange={(e) => setNotesDescription(e.target.value)}
+                        placeholder="Detalles sobre acabados, amenidades incluidas o condiciones especiales..."
+                        style={{
+                          width: "100%",
+                          padding: "0.65rem 0.85rem",
+                          borderRadius: "0.6rem",
+                          border: "1.5px solid var(--devio-neutral-2)",
+                          fontSize: "0.85rem",
+                          fontWeight: 500,
+                          color: "var(--devio-blue-dark)",
+                          outline: "none",
+                          fontFamily: "inherit",
+                          resize: "vertical",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Add Spec Custom Field Button & Drawer */}
+                  {!showAddSpecField ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddSpecField(true)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        padding: "0.6rem 1rem",
+                        borderRadius: "0.6rem",
+                        backgroundColor: "rgba(31, 54, 82, 0.05)",
+                        border: "1px dashed var(--devio-neutral-2)",
+                        color: "var(--devio-blue-dark)",
+                        fontSize: "0.82rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        alignSelf: "flex-start",
+                        transition: "all 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(31, 54, 82, 0.1)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "rgba(31, 54, 82, 0.05)")}
+                    >
+                      <Plus size={15} /> Agregar Especificación Técnica Adicional
+                    </button>
+                  ) : (
+                    <div
+                      style={{
+                        backgroundColor: "#F8FAFC",
+                        borderRadius: "0.75rem",
+                        padding: "1rem",
+                        border: "1px solid var(--devio-neutral-2)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.75rem",
+                      }}
+                    >
+                      <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                        Nueva Especificación Técnica
+                      </span>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", fontWeight: 600, display: "block", marginBottom: "0.25rem" }}>
+                            Nombre del Parámetro *
+                          </label>
+                          <input
+                            type="text"
+                            value={newSpecFieldName}
+                            onChange={(e) => setNewSpecFieldName(e.target.value)}
+                            placeholder="Ej. Aislamiento acústico, Iluminación LED..."
+                            style={{
+                              width: "100%",
+                              padding: "0.55rem 0.75rem",
+                              borderRadius: "0.5rem",
+                              border: "1px solid var(--devio-neutral-2)",
+                              fontSize: "0.82rem",
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", fontWeight: 600, display: "block", marginBottom: "0.25rem" }}>
+                            Valor
+                          </label>
+                          <input
+                            type="text"
+                            value={newSpecFieldValue}
+                            onChange={(e) => setNewSpecFieldValue(e.target.value)}
+                            placeholder="Ej. Doble vidrio, 100% LED, etc."
+                            style={{
+                              width: "100%",
+                              padding: "0.55rem 0.75rem",
+                              borderRadius: "0.5rem",
+                              border: "1px solid var(--devio-neutral-2)",
+                              fontSize: "0.82rem",
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddSpecField(false)}
+                          style={{
+                            padding: "0.45rem 0.85rem",
+                            borderRadius: "0.5rem",
+                            border: "1px solid var(--devio-neutral-2)",
+                            backgroundColor: "#FFFFFF",
+                            color: "var(--devio-neutral-3)",
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAddSpecCustomField}
+                          style={{
+                            padding: "0.45rem 1rem",
+                            borderRadius: "0.5rem",
+                            border: "none",
+                            backgroundColor: "var(--devio-blue-dark)",
+                            color: "#FFFFFF",
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Agregar Especificación
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2115,65 +2465,65 @@ export default function UnitDetailHistoryModal({
           >
             <div
               style={{
-              width: "50px",
-              height: "50px",
-              borderRadius: "50%",
-              backgroundColor: "rgba(224, 83, 69, 0.12)",
-              color: "var(--devio-red)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 1rem auto",
-            }}
-          >
-            <AlertTriangle size={26} />
-          </div>
-
-          <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.5rem" }}>
-            ¿Marcar la unidad {unitNumber} como disponible?
-          </h3>
-
-          <p style={{ fontSize: "0.82rem", color: "var(--devio-neutral-3)", lineHeight: 1.5, marginBottom: "1.5rem" }}>
-            Al marcar esta unidad como disponible se liberará en el inventario comercial activo y se desvinculará el cliente asociado.
-          </p>
-
-          <div style={{ display: "flex", justifyContent: "center", gap: "0.75rem" }}>
-            <button
-              type="button"
-              onClick={() => setShowMarkAvailableModal(false)}
-              style={{
-                padding: "0.6rem 1.25rem",
-                borderRadius: "0.5rem",
-                border: "1px solid var(--devio-neutral-2)",
-                backgroundColor: "var(--devio-white)",
-                color: "var(--devio-blue-dark)",
-                fontSize: "0.85rem",
-                fontWeight: 700,
-                cursor: "pointer",
+                width: "50px",
+                height: "50px",
+                borderRadius: "50%",
+                backgroundColor: "rgba(224, 83, 69, 0.12)",
+                color: "var(--devio-red)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 1rem auto",
               }}
             >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmMarkAvailable}
-              style={{
-                padding: "0.6rem 1.25rem",
-                borderRadius: "0.5rem",
-                border: "none",
-                backgroundColor: "var(--devio-red)",
-                color: "var(--devio-white)",
-                fontSize: "0.85rem",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              Sí, Marcar como Disponible
-            </button>
+              <AlertTriangle size={26} />
+            </div>
+
+            <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--devio-blue-dark)", marginBottom: "0.5rem" }}>
+              ¿Marcar la unidad {unitNumber} como disponible?
+            </h3>
+
+            <p style={{ fontSize: "0.82rem", color: "var(--devio-neutral-3)", lineHeight: 1.5, marginBottom: "1.5rem" }}>
+              Al marcar esta unidad como disponible se liberará en el inventario comercial activo y se desvinculará el cliente asociado.
+            </p>
+
+            <div style={{ display: "flex", justifyContent: "center", gap: "0.75rem" }}>
+              <button
+                type="button"
+                onClick={() => setShowMarkAvailableModal(false)}
+                style={{
+                  padding: "0.6rem 1.25rem",
+                  borderRadius: "0.5rem",
+                  border: "1px solid var(--devio-neutral-2)",
+                  backgroundColor: "var(--devio-white)",
+                  color: "var(--devio-blue-dark)",
+                  fontSize: "0.85rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmMarkAvailable}
+                style={{
+                  padding: "0.6rem 1.25rem",
+                  borderRadius: "0.5rem",
+                  border: "none",
+                  backgroundColor: "var(--devio-red)",
+                  color: "var(--devio-white)",
+                  fontSize: "0.85rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                Sí, Marcar como Disponible
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
     </div>
   );
 }

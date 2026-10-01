@@ -1059,32 +1059,44 @@ export default function ProjectOnboardingPage() {
     setIsSubmitting(true);
 
     let newProjectId = `proj-${Date.now()}`;
-    const mappedUnits: UnitItem[] = units.map((u, idx) => ({
-      id: u.id || `u-${idx + 1}`,
-      unit: u.unitNumber,
-      type: u.type || "Tipo A",
-      price: u.price || 3500000,
-      areaM2: u.surfaceM2 || 85,
-      floor: parseInt(u.unitNumber.replace(/\D/g, "") || "1", 10) || 1,
-      status: (u.status === "Disponible" ? "DISPONIBLE" : u.status === "Vendida" ? "VENDIDA" : u.status === "Apartada" ? "APARTADA" : "BLOQUEADA") as any,
-      client: u.status === "Vendida" ? "Cliente Propietario" : "-",
-      deliveryDate: u.deliveryDate || projectGeneralData.estimatedDeliveryDate,
-      floorPlan: u.floorPlan,
-      bedrooms: u.extraFields?.bedrooms || 2,
-      bathrooms: u.extraFields?.bathrooms || 2,
-      parkingSpots: u.extraFields?.parkingSpaces || 1,
-      storageUnits: u.extraFields?.storageUnits || 0,
-      priceHistory: [
-        {
-          date: new Date().toLocaleDateString("es-MX"),
-          previousPrice: u.price,
-          newPrice: u.price,
-          pctChange: 0,
-          reason: "Precio inicial de lista",
-          user: "Administrador",
+    const mappedUnits: UnitItem[] = units.map((u, idx) => {
+      const extra = u.extraFields || {};
+      const numBed = extra.bedrooms ?? extra.recamaras ?? extra.cuartos ?? 2;
+      const numBath = extra.bathrooms ?? extra.banos ?? extra.baños ?? 2;
+      const numPark = extra.parkingSpaces ?? extra.parkingSpots ?? extra.estacionamientos ?? extra.cajones ?? 1;
+      const numStor = extra.storageUnits ?? extra.bodegas ?? 0;
+      const numFloor = extra.floor ?? extra.piso ?? extra.nivel ?? (parseInt(u.unitNumber.replace(/\D/g, "") || "1", 10) || 1);
+
+      return {
+        id: u.id || `u-${idx + 1}`,
+        unit: u.unitNumber,
+        type: u.type || "Departamento",
+        price: u.price || 3500000,
+        areaM2: u.surfaceM2 || 85,
+        floor: Number(numFloor) || 1,
+        status: (u.status === "Disponible" ? "DISPONIBLE" : u.status === "Vendida" ? "VENDIDA" : u.status === "Apartada" ? "APARTADA" : "BLOQUEADA") as any,
+        client: u.status === "Vendida" ? "Cliente Propietario" : "-",
+        deliveryDate: u.deliveryDate || projectGeneralData.estimatedDeliveryDate,
+        floorPlan: u.floorPlan || undefined,
+        bedrooms: Number(numBed),
+        bathrooms: Number(numBath),
+        parkingSpots: Number(numPark),
+        storageUnits: Number(numStor),
+        priceHistory: [
+          {
+            date: new Date().toLocaleDateString("es-MX"),
+            previousPrice: u.price,
+            newPrice: u.price,
+            pctChange: 0,
+            reason: "Precio inicial de lista",
+            user: "Administrador",
+          },
+        ],
+        customAttributes: {
+          ...extra,
         },
-      ],
-    }));
+      };
+    });
 
     const totalVal = mappedUnits.reduce((acc, u) => acc + (u.price || 0), 0);
 

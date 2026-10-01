@@ -501,7 +501,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         u.client ||
         "-";
 
-      const customAttrs = (u.customAttributes as Record<string, any>) || {};
+      const customAttrs = (u.customAttributes as Record<string, any>) || (u.extraFields as Record<string, any>) || {};
       const unitConstructionPct =
         u.constructionPct != null
           ? Number(u.constructionPct)
@@ -539,13 +539,19 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         };
       });
 
+      const bedVal = u.bedrooms != null ? Number(u.bedrooms) : customAttrs.bedrooms != null ? Number(customAttrs.bedrooms) : customAttrs.recamaras != null ? Number(customAttrs.recamaras) : undefined;
+      const bathVal = u.bathrooms != null ? Number(u.bathrooms) : customAttrs.bathrooms != null ? Number(customAttrs.bathrooms) : customAttrs.banos != null ? Number(customAttrs.banos) : customAttrs.baños != null ? Number(customAttrs.baños) : undefined;
+      const parkVal = u.parkingSpaces != null ? Number(u.parkingSpaces) : u.parkingSpots != null ? Number(u.parkingSpots) : customAttrs.parkingSpots != null ? Number(customAttrs.parkingSpots) : customAttrs.estacionamientos != null ? Number(customAttrs.estacionamientos) : customAttrs.cajones != null ? Number(customAttrs.cajones) : 0;
+      const storVal = u.storageRooms != null ? Number(u.storageRooms) : u.storageUnits != null ? Number(u.storageUnits) : customAttrs.storageUnits != null ? Number(customAttrs.storageUnits) : customAttrs.bodegas != null ? Number(customAttrs.bodegas) : 0;
+      const floorVal = Number(u.level ?? u.floor ?? customAttrs.piso ?? customAttrs.nivel ?? 1) || 1;
+
       return {
         id: u.id || `u-${idx + 1}`,
         unit: uNum,
-        type,
+        type: u.type || type,
         price: Number(associatedSale?.totalPrice ?? u.basePrice ?? u.price) || 0,
         areaM2: Number(u.totalAreaM2 ?? u.areaM2 ?? u.surfaceM2) || 0,
-        floor: Number(u.level ?? u.floor) || 1,
+        floor: floorVal,
         status,
         client,
         coOwners: associatedSale?.coOwners || u.coOwners,
@@ -555,10 +561,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         salePaidAmount: associatedSale?.paidAmount ?? u.salePaidAmount,
         salePendingAmount: associatedSale?.pendingAmount ?? u.salePendingAmount,
         deliveryDate: u.deliveryDate || customAttrs.deliveryDate || dbProj.estimatedDeliveryDate || "",
-        bedrooms: u.bedrooms != null ? Number(u.bedrooms) : customAttrs.bedrooms != null ? Number(customAttrs.bedrooms) : undefined,
-        bathrooms: u.bathrooms != null ? Number(u.bathrooms) : customAttrs.bathrooms != null ? Number(customAttrs.bathrooms) : undefined,
-        parkingSpots: u.parkingSpaces != null ? Number(u.parkingSpaces) : u.parkingSpots != null ? Number(u.parkingSpots) : 0,
-        storageUnits: u.storageRooms != null ? Number(u.storageRooms) : u.storageUnits != null ? Number(u.storageUnits) : 0,
+        bedrooms: bedVal,
+        bathrooms: bathVal,
+        parkingSpots: parkVal,
+        storageUnits: storVal,
         floorPlan: u.floorPlan || undefined,
         images: Array.isArray(u.renderUrls) ? u.renderUrls : Array.isArray(u.images) ? u.images : [],
         priceHistory: mappedPriceHistory,
@@ -968,7 +974,39 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (candidateProjects.length > 0) {
-          const mapped = candidateProjects.map(mapDbProjectToProjectItem);
+          let currentLocal: ProjectItem[] = [];
+          try {
+            const rawStored = localStorage.getItem("devio_projects_state") || sessionStorage.getItem("devio_projects_state");
+            if (rawStored) currentLocal = JSON.parse(rawStored);
+          } catch (_) {}
+
+          const mapped = candidateProjects.map((cp: any) => {
+            const localProj = currentLocal.find((lp) => lp.id === cp.id || lp.name === cp.name);
+            const mappedItem = mapDbProjectToProjectItem(cp);
+            if (localProj) {
+              return {
+                ...mappedItem,
+                floorPlans: (mappedItem.floorPlans && mappedItem.floorPlans.length > 0) ? mappedItem.floorPlans : (localProj.floorPlans || []),
+                unitsInventory: mappedItem.unitsInventory.map((u) => {
+                  const localUnit = (localProj.unitsInventory || []).find((lu) => lu.unit === u.unit);
+                  if (localUnit) {
+                    return {
+                      ...localUnit,
+                      ...u,
+                      floorPlan: u.floorPlan || localUnit.floorPlan,
+                      images: (u.images && u.images.length > 0) ? u.images : (localUnit.images || []),
+                      customAttributes: {
+                        ...(localUnit.customAttributes || {}),
+                        ...(u.customAttributes || {}),
+                      },
+                    };
+                  }
+                  return u;
+                }),
+              };
+            }
+            return mappedItem;
+          });
           setProjects(mapped);
           safeSaveProjectsState(mapped);
         }
