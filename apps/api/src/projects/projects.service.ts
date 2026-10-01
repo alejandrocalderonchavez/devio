@@ -357,7 +357,10 @@ export class ProjectsService {
             paymentPlan: true,
             coOwners: { include: { client: true } },
             scheduledObligations: { orderBy: { obligationNumber: "asc" } },
-            paymentReceipts: { orderBy: { paymentDate: "desc" } },
+            paymentReceipts: {
+              include: { payerClient: true },
+              orderBy: { paymentDate: "desc" },
+            },
           },
         },
         documents: {
@@ -398,7 +401,10 @@ export class ProjectsService {
             paymentPlan: true,
             coOwners: { include: { client: true } },
             scheduledObligations: { orderBy: { obligationNumber: "asc" } },
-            paymentReceipts: { orderBy: { paymentDate: "desc" } },
+            paymentReceipts: {
+              include: { payerClient: true },
+              orderBy: { paymentDate: "desc" },
+            },
           },
         },
         documents: {

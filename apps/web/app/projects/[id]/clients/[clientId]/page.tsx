@@ -234,8 +234,56 @@ export default function ClientDetailPage() {
         };
       });
 
-      const totalPaid = matchingSales.reduce((acc, s) => acc + (s.paidAmount || 0), 0);
-      const totalPending = matchingSales.reduce((acc, s) => acc + (s.pendingAmount || 0), 0);
+      const totalPaid = matchingSales.reduce((acc, s) => {
+        const coMatch = s.coOwners?.find(
+          (co) =>
+            co.name.toLowerCase() === clientName.toLowerCase() ||
+            (co.email && clientEmail && co.email.toLowerCase() === clientEmail.toLowerCase())
+        );
+        const hasActualCoOwners = Boolean(
+          s.isCoOwnership === true ||
+          (Array.isArray(s.coOwners) && s.coOwners.length > 0 && (s as any).isCoOwnership !== false)
+        );
+        const ownershipPct = hasActualCoOwners
+          ? (coMatch ? Number(coMatch.ownershipPct) : (s.coOwners && s.coOwners.length > 0 ? (Number(s.coOwners[0]?.ownershipPct) || 100) : 100))
+          : 100;
+        const ratio = (isNaN(ownershipPct) || ownershipPct <= 0 ? 100 : ownershipPct) / 100;
+
+        const clientReceipts = (s.payments || []).filter((p: any) => {
+          const pId = p.payerClientId || p.clientId || p.ownerId;
+          const pEmail = (p.payerClientEmail || p.clientEmail || p.ownerEmail || "").toLowerCase().trim();
+          const pName = (p.payerClientName || p.clientName || p.ownerName || "").toLowerCase().trim();
+          if (pId && (pId === clientId || pId === (coMatch?.id ?? ""))) return true;
+          if (pEmail && clientEmail && pEmail === clientEmail.toLowerCase().trim()) return true;
+          if (pName && clientName && pName === clientName.toLowerCase().trim()) return true;
+          return false;
+        });
+
+        const sPaid = clientReceipts.length > 0
+          ? clientReceipts.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0)
+          : Math.round((s.paidAmount || 0) * ratio);
+
+        return acc + sPaid;
+      }, 0);
+
+      const totalPriceForClient = matchingSales.reduce((acc, s) => {
+        const coMatch = s.coOwners?.find(
+          (co) =>
+            co.name.toLowerCase() === clientName.toLowerCase() ||
+            (co.email && clientEmail && co.email.toLowerCase() === clientEmail.toLowerCase())
+        );
+        const hasActualCoOwners = Boolean(
+          s.isCoOwnership === true ||
+          (Array.isArray(s.coOwners) && s.coOwners.length > 0 && (s as any).isCoOwnership !== false)
+        );
+        const ownershipPct = hasActualCoOwners
+          ? (coMatch ? Number(coMatch.ownershipPct) : (s.coOwners && s.coOwners.length > 0 ? (Number(s.coOwners[0]?.ownershipPct) || 100) : 100))
+          : 100;
+        const ratio = (isNaN(ownershipPct) || ownershipPct <= 0 ? 100 : ownershipPct) / 100;
+        return acc + Math.round((s.totalPrice || 0) * ratio);
+      }, 0);
+
+      const totalPending = Math.max(0, totalPriceForClient - totalPaid);
 
       return {
         id: clientId,
@@ -463,14 +511,23 @@ export default function ClientDetailPage() {
     if (currentSale?.payments && currentSale.payments.length > 0) {
       let filteredPayments = currentSale.payments;
       if (isCoOwned && coOwnershipViewMode === "proportional") {
-        const hasOwnerTagged = currentSale.payments.some((p: any) => p.ownerId || p.clientId || p.clientEmail || p.ownerEmail);
+        const hasOwnerTagged = currentSale.payments.some((p: any) =>
+          p.payerClientId || p.payerClientEmail || p.payerClientName ||
+          p.ownerId || p.clientId || p.clientEmail || p.ownerEmail || p.clientName || p.ownerName
+        );
         if (hasOwnerTagged) {
-          filteredPayments = currentSale.payments.filter((p: any) =>
-            (p.ownerId && (p.ownerId === rawClient.id || p.ownerId === clientId)) ||
-            (p.clientId && (p.clientId === rawClient.id || p.clientId === clientId)) ||
-            (p.ownerEmail && rawClient.email && p.ownerEmail.toLowerCase() === rawClient.email.toLowerCase()) ||
-            (p.clientEmail && rawClient.email && p.clientEmail.toLowerCase() === rawClient.email.toLowerCase())
-          );
+          filteredPayments = currentSale.payments.filter((p: any) => {
+            const pId = p.payerClientId || p.clientId || p.ownerId;
+            const pEmail = (p.payerClientEmail || p.clientEmail || p.ownerEmail || "").toLowerCase().trim();
+            const pName = (p.payerClientName || p.clientName || p.ownerName || "").toLowerCase().trim();
+            const clientNameNorm = (rawClient?.name || "").toLowerCase().trim();
+            const clientEmailNorm = (rawClient?.email || "").toLowerCase().trim();
+
+            if (pId && (pId === rawClient?.id || pId === clientId)) return true;
+            if (pEmail && clientEmailNorm && (pEmail === clientEmailNorm || pEmail.includes(clientEmailNorm) || clientEmailNorm.includes(pEmail))) return true;
+            if (pName && clientNameNorm && (pName === clientNameNorm || pName.includes(clientNameNorm) || clientNameNorm.includes(pName))) return true;
+            return false;
+          });
         }
       }
       return filteredPayments.map((p: any) => ({
@@ -492,11 +549,18 @@ export default function ClientDetailPage() {
 
     // 2. Check if coOwnerPayments exists for co-ownership sales
     if (currentSale?.coOwnerPayments && currentSale.coOwnerPayments.length > 0 && isCoOwned && coOwnershipViewMode === "proportional") {
-      const myCoPayment = currentSale.coOwnerPayments.find((cp: any) =>
-        (cp.ownerId && (cp.ownerId === rawClient.id || cp.ownerId === clientId)) ||
-        (cp.ownerEmail && rawClient.email && cp.ownerEmail.toLowerCase() === rawClient.email.toLowerCase()) ||
-        (cp.ownerName && rawClient.name && cp.ownerName.toLowerCase() === rawClient.name.toLowerCase())
-      );
+      const myCoPayment = currentSale.coOwnerPayments.find((cp: any) => {
+        const cpId = cp.clientId || cp.ownerId || cp.id;
+        const cpEmail = (cp.email || cp.clientEmail || cp.ownerEmail || "").toLowerCase().trim();
+        const cpName = (cp.name || cp.clientName || cp.ownerName || "").toLowerCase().trim();
+        const clientNameNorm = (rawClient?.name || "").toLowerCase().trim();
+        const clientEmailNorm = (rawClient?.email || "").toLowerCase().trim();
+
+        if (cpId && (cpId === rawClient?.id || cpId === clientId)) return true;
+        if (cpEmail && clientEmailNorm && (cpEmail === clientEmailNorm || cpEmail.includes(clientEmailNorm) || clientEmailNorm.includes(cpEmail))) return true;
+        if (cpName && clientNameNorm && (cpName === clientNameNorm || cpName.includes(clientNameNorm) || clientNameNorm.includes(cpName))) return true;
+        return false;
+      });
       if (myCoPayment) {
         const coPaidAmt = Number(myCoPayment.amount) || 0;
         if (coPaidAmt > 0) {
@@ -506,7 +570,7 @@ export default function ClientDetailPage() {
             : new Date().toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
           return [
             {
-              id: `pay-${selectedUnit}-${rawClient.id || "init"}`,
+              id: `pay-${selectedUnit}-${rawClient?.id || "init"}`,
               fechaPago: formattedDate,
               metodoPago: formatPaymentMethodFriendly(myCoPayment.method),
               monto: coPaidAmt,

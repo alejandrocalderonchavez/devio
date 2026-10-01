@@ -260,6 +260,15 @@ export interface SalePaymentReceipt {
   moratoryAmount?: number;
   moratoryAction?: string;
   waiveReason?: string;
+  payerClientId?: string;
+  payerClientEmail?: string;
+  payerClientName?: string;
+  clientId?: string;
+  clientEmail?: string;
+  clientName?: string;
+  ownerId?: string;
+  ownerEmail?: string;
+  ownerName?: string;
   createdAt?: string;
 }
 

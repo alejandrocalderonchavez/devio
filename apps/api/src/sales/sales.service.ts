@@ -380,19 +380,32 @@ export class SalesService {
         if (amt > 0) {
           const copEmail = (cop.email || "").toLowerCase().trim();
           const copName = (cop.name || "").trim();
-          let payerId = cop.clientId;
+          let payerId: string | null = null;
+
+          if (cop.clientId && cop.clientId.length === 36 && cop.clientId.includes("-") && !cop.clientId.startsWith("cli-") && !cop.clientId.startsWith("co-") && !cop.clientId.startsWith("primary-")) {
+            payerId = cop.clientId;
+          }
+
           if (!payerId) {
             if (copEmail && primaryEmail && copEmail === primaryEmail) {
               payerId = primaryClient.id;
             } else if (copEmail) {
-              const matched = createdCoClients.find((c) => c.email?.toLowerCase() === copEmail);
-              payerId = matched?.clientId || primaryClient.id;
-            } else if (copName) {
-              const matched = createdCoClients.find((c) => c.name?.toLowerCase() === copName.toLowerCase());
-              payerId = matched?.clientId || primaryClient.id;
-            } else {
-              payerId = primaryClient.id;
+              const matched = createdCoClients.find((c) => (c.email || c.client?.email || "").toLowerCase() === copEmail);
+              payerId = matched?.clientId || matched?.client?.id || null;
             }
+          }
+
+          if (!payerId && copName) {
+            if (primaryName && copName.toLowerCase() === primaryName.toLowerCase()) {
+              payerId = primaryClient.id;
+            } else {
+              const matched = createdCoClients.find((c) => (c.name || c.client?.fullName || "").toLowerCase() === copName.toLowerCase());
+              payerId = matched?.clientId || matched?.client?.id || null;
+            }
+          }
+
+          if (!payerId) {
+            payerId = primaryClient.id;
           }
           const payerFolio = cop.folio || `REC-INI-${Date.now().toString().slice(-6)}`;
           await this.prisma.paymentReceipt.create({

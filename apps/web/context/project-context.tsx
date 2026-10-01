@@ -359,6 +359,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         const amt = Number(r.amount) || 0;
         const rawDate = r.paymentDate || r.createdAt;
         const pDate = rawDate ? formatDateMX(rawDate, "dd/mm/yyyy") : formatDateMX(getMexicoNow(), "dd/mm/yyyy");
+        const payerId = r.payerClientId || r.payerClient?.id || r.clientId || r.ownerId;
+        const payerEmail = r.payerClient?.email || r.payerClientEmail || r.clientEmail || r.ownerEmail;
+        const payerName = r.payerClient?.fullName || r.payerClientName || r.clientName || r.ownerName;
 
         return {
           id: r.id || `pay-rec-${sIdx}-${rIdx + 1}`,
@@ -372,6 +375,15 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           scheduledAmount: amt,
           scheduledDate: pDate,
           sendReceiptEmail: Boolean(r.sendReceiptEmail),
+          payerClientId: payerId,
+          payerClientEmail: payerEmail,
+          payerClientName: payerName,
+          clientId: payerId,
+          clientEmail: payerEmail,
+          clientName: payerName,
+          ownerId: payerId,
+          ownerEmail: payerEmail,
+          ownerName: payerName,
           createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
         };
       });
@@ -1734,7 +1746,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         .filter((cp: any) => (Number(cp.amount) || 0) > 0)
         .map((cp: any, idx: number) => {
           const cpAmount = Number(cp.amount) || 0;
-          const cpName = cp.name || cp.clientName || primaryName;
+          const cpName = cp.name || cp.clientName || cp.ownerName || primaryName;
+          const cpId = cp.clientId || cp.ownerId || cp.id;
+          const cpEmail = cp.email || cp.clientEmail || cp.ownerEmail || "";
           return {
             id: `pay-rec-${Date.now()}-${idx}`,
             receiptFolio: `REC-${new Date().getFullYear()}-${String(idx + 1).padStart(3, "0")}`,
@@ -1744,7 +1758,15 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
             unit: unitNum,
             reference: cp.reference || `ENGANCHE-${cpName.replace(/\s+/g, "").toUpperCase().slice(0, 10)}`,
             notes: `Pago de enganche inicial (${cp.paymentMode === "PARTIAL" ? "Parcial" : "Total"}) - ${cpName}`,
-            payerClientId: cp.clientId,
+            payerClientId: cpId,
+            payerClientEmail: cpEmail,
+            payerClientName: cpName,
+            clientId: cpId,
+            clientEmail: cpEmail,
+            clientName: cpName,
+            ownerId: cpId,
+            ownerEmail: cpEmail,
+            ownerName: cpName,
             scheduledAmount: cpAmount,
             scheduledDate: saleDateIso,
             sendReceiptEmail: Boolean(cp.sendReceiptEmail),
