@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   X,
   Package,
@@ -11,15 +11,15 @@ import {
   Layers,
   Edit2,
   Trash2,
-  CheckCircle2,
-  Tag,
-  DollarSign,
   Search,
-  SlidersHorizontal,
-  Home,
-  Save,
-  Lock
+  Lock,
+  Download,
+  FileSpreadsheet,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
+import * as XLSX from "xlsx";
+import { generateAdditionalsExcelTemplate } from "@/lib/excel-utils";
 
 export interface ProjectAdditional {
   id: string;
@@ -48,18 +48,28 @@ export default function ManageAdditionalsModal({
   onSaveAdditionals,
 }: ManageAdditionalsModalProps) {
   const [additionals, setAdditionals] = useState<ProjectAdditional[]>(initialAdditionals);
-
   const [activeCategory, setActiveCategory] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
-  const [showAddForm, setShowAddForm] = useState(false);
+
+  // Individual modal states
+  const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ProjectAdditional | null>(null);
 
-  // New item form
-  const [newItemName, setNewItemName] = useState("");
-  const [newItemCategory, setNewItemCategory] = useState<ProjectAdditional["category"]>("bodega");
-  const [newItemPrice, setNewItemPrice] = useState<number>(0);
-  const [newItemArea, setNewItemArea] = useState<number>(0);
-  const [newItemNotes, setNewItemNotes] = useState("");
+  // Form fields
+  const [itemName, setItemName] = useState("");
+  const [itemCategory, setItemCategory] = useState<ProjectAdditional["category"]>("bodega");
+  const [itemPrice, setItemPrice] = useState<number>(150000);
+  const [itemArea, setItemArea] = useState<number>(0);
+  const [itemStatus, setItemStatus] = useState<ProjectAdditional["status"]>("DISPONIBLE");
+  const [itemNotes, setItemNotes] = useState("");
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialAdditionals) {
+      setAdditionals(initialAdditionals);
+    }
+  }, [initialAdditionals, isOpen]);
 
   if (!isOpen) return null;
 
@@ -71,69 +81,78 @@ export default function ManageAdditionalsModal({
     }).format(val || 0);
   };
 
-  const filteredItems = additionals.filter((item) => {
-    const matchesCat = activeCategory === "ALL" || item.category === activeCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || (item.assignedToUnit && item.assignedToUnit.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesCat && matchesSearch;
-  });
+  const handleOpenAddModal = () => {
+    setEditingItem(null);
+    setItemName(`Adicional ${additionals.length + 1}`);
+    setItemCategory("estacionamiento");
+    setItemPrice(150000);
+    setItemArea(0);
+    setItemStatus("DISPONIBLE");
+    setItemNotes("");
+    setIsItemModalOpen(true);
+  };
 
-  const totalValue = additionals.reduce((sum, item) => sum + item.price, 0);
-  const availableCount = additionals.filter((i) => i.status === "DISPONIBLE").length;
-  const assignedCount = additionals.filter((i) => i.status !== "DISPONIBLE").length;
-
-  useEffect(() => {
-    if (initialAdditionals) {
-      setAdditionals(initialAdditionals);
+  const handleOpenEditModal = (item: ProjectAdditional) => {
+    if (item.status !== "DISPONIBLE") {
+      alert(`Solo se pueden editar adicionales con estatus Disponible. Este adicional está: ${item.status}.`);
+      return;
     }
-  }, [initialAdditionals]);
+    setEditingItem(item);
+    setItemName(item.name);
+    setItemCategory(item.category);
+    setItemPrice(item.price);
+    setItemArea(item.areaM2 || 0);
+    setItemStatus(item.status);
+    setItemNotes(item.notes || "");
+    setIsItemModalOpen(true);
+  };
 
-  const handleAddNewItem = (e: React.FormEvent) => {
+  const handleSaveItemModal = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newItemName.trim()) return;
+    if (!itemName.trim()) return;
 
     let updatedList: ProjectAdditional[] = [];
     if (editingItem) {
-      if (editingItem.status !== "DISPONIBLE") {
-        alert(`No se puede modificar '${editingItem.name}' porque no está disponible (estatus: ${editingItem.status}).`);
-        return;
-      }
       updatedList = additionals.map((item) =>
         item.id === editingItem.id
           ? {
               ...item,
-              name: newItemName.trim(),
-              category: newItemCategory,
-              price: newItemPrice,
-              areaM2: newItemArea,
-              notes: newItemNotes.trim(),
+              name: itemName.trim(),
+              category: itemCategory,
+              price: itemPrice,
+              areaM2: itemArea,
+              status: itemStatus,
+              notes: itemNotes.trim(),
             }
           : item
       );
-      setEditingItem(null);
     } else {
       const newItem: ProjectAdditional = {
-        id: `add-${Date.now()}`,
-        name: newItemName.trim(),
-        category: newItemCategory,
-        price: newItemPrice,
-        areaM2: newItemArea,
-        status: "DISPONIBLE",
-        notes: newItemNotes.trim(),
+        id: `add-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        name: itemName.trim(),
+        category: itemCategory,
+        price: itemPrice,
+        areaM2: itemArea,
+        status: itemStatus,
+        notes: itemNotes.trim(),
       };
       updatedList = [...additionals, newItem];
     }
 
     setAdditionals(updatedList);
     onSaveAdditionals?.(updatedList);
-    setNewItemName("");
-    setNewItemNotes("");
-    setShowAddForm(false);
+    setIsItemModalOpen(false);
+    setEditingItem(null);
   };
 
   const handleDeleteItem = (id: string) => {
     const target = additionals.find((i) => i.id === id);
     if (target && target.status !== "DISPONIBLE") {
-      alert(`No se puede eliminar ${target.name} porque ya está asignado a la unidad ${target.assignedToUnit || ""} o no está disponible.`);
+      alert(
+        `No se puede eliminar ${target.name} porque ya está asignado a la unidad ${
+          target.assignedToUnit || ""
+        } o no está disponible.`
+      );
       return;
     }
     const updatedList = additionals.filter((i) => i.id !== id);
@@ -141,19 +160,129 @@ export default function ManageAdditionalsModal({
     onSaveAdditionals?.(updatedList);
   };
 
-  const handleEditClick = (item: ProjectAdditional) => {
-    if (item.status !== "DISPONIBLE") {
-      alert(`Solo se pueden editar adicionales con estatus Disponible. Este adicional está: ${item.status}.`);
-      return;
+  const handleBulkUploadAdditionals = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      let rawRows: any[][] = [];
+      const isCsv = file.name.endsWith(".csv") || file.type.includes("csv") || file.type.includes("text");
+      if (isCsv) {
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+        rawRows = lines.map((line) =>
+          line.split(",").map((c) => c.replace(/^["']|["']$/g, "").trim())
+        );
+      } else {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheetName =
+          workbook.SheetNames.find((s) => s.toLowerCase().includes("adicional")) ||
+          workbook.SheetNames[0];
+        if (sheetName) {
+          const worksheet = workbook.Sheets[sheetName];
+          if (worksheet) {
+            const rawJson = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
+            rawRows = rawJson.filter(
+              (r) => Array.isArray(r) && r.some((c) => c !== undefined && c !== null && String(c).trim() !== "")
+            );
+          }
+        }
+      }
+
+      if (rawRows.length === 0) {
+        alert("El archivo está vacío o no contiene filas válidas.");
+        return;
+      }
+
+      // Check header
+      const firstRow = rawRows[0] || [];
+      const isHeader = firstRow.some((h) =>
+        /nombre|identificador|tipo|categoria|precio|estado|status|notas/i.test(String(h))
+      );
+      const dataRows = isHeader ? rawRows.slice(1) : rawRows;
+
+      const newAdditions: ProjectAdditional[] = [];
+      const existingNamesMap = new Map<string, number>();
+      additionals.forEach((a, idx) => existingNamesMap.set(a.name.toLowerCase().trim(), idx));
+
+      const updatedList = [...additionals];
+
+      dataRows.forEach((row, rIdx) => {
+        const rawName = String(row[0] || `Adicional ${additionals.length + rIdx + 1}`).trim();
+        const rawCat = String(row[1] || "").toLowerCase().trim();
+        let cat: ProjectAdditional["category"] = "otro";
+        if (
+          rawCat.includes("estacionamiento") ||
+          rawCat.includes("cajon") ||
+          rawCat.includes("cajón") ||
+          rawCat.includes("auto") ||
+          rawCat.includes("parking")
+        ) {
+          cat = "estacionamiento";
+        } else if (rawCat.includes("bodega") || rawCat.includes("storage")) {
+          cat = "bodega";
+        } else if (rawCat.includes("acabado") || rawCat.includes("paquete")) {
+          cat = "acabados";
+        } else if (rawCat.includes("terraza") || rawCat.includes("balcon") || rawCat.includes("balcón") || rawCat.includes("roof")) {
+          cat = "terraza";
+        }
+
+        const price = parseFloat(String(row[2] || "").replace(/[^0-9.-]+/g, "")) || 150000;
+        const rawStatus = String(row[3] || "").toLowerCase().trim();
+        let status: ProjectAdditional["status"] = "DISPONIBLE";
+        if (rawStatus.includes("vend") || rawStatus.includes("sold")) status = "VENDIDO";
+        else if (rawStatus.includes("asig") || rawStatus.includes("apart") || rawStatus.includes("reserv")) status = "ASIGNADO";
+
+        const notes = String(row[4] || "").trim();
+        const area = parseFloat(String(row[5] || "").replace(/[^0-9.-]+/g, "")) || 0;
+
+        const itemObj: ProjectAdditional = {
+          id: `add-imp-${Date.now()}-${rIdx}`,
+          name: rawName,
+          category: cat,
+          price,
+          areaM2: area > 0 ? area : undefined,
+          status,
+          notes,
+        };
+
+        const key = rawName.toLowerCase();
+        if (existingNamesMap.has(key)) {
+          const idx = existingNamesMap.get(key)!;
+          const target = updatedList[idx];
+          if (target && target.status === "DISPONIBLE") {
+            updatedList[idx] = { ...target, ...itemObj, id: target.id };
+          }
+        } else {
+          updatedList.push(itemObj);
+          existingNamesMap.set(key, updatedList.length - 1);
+        }
+      });
+
+      setAdditionals(updatedList);
+      onSaveAdditionals?.(updatedList);
+      alert(`Se procesaron ${dataRows.length} adicionales exitosamente.`);
+    } catch (err) {
+      console.error("Error al procesar archivo de adicionales:", err);
+      alert("Hubo un error al procesar el archivo. Por favor verifica que el formato sea válido.");
+    } finally {
+      if (e.target) e.target.value = "";
     }
-    setEditingItem(item);
-    setNewItemName(item.name);
-    setNewItemCategory(item.category);
-    setNewItemPrice(item.price);
-    setNewItemArea(item.areaM2 || 0);
-    setNewItemNotes(item.notes || "");
-    setShowAddForm(true);
   };
+
+  const filteredItems = additionals.filter((item) => {
+    const matchesCat = activeCategory === "ALL" || item.category === activeCategory;
+    const matchesSearch =
+      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.assignedToUnit && item.assignedToUnit.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesCat && matchesSearch;
+  });
+
+  const totalValue = additionals.reduce((sum, item) => sum + item.price, 0);
+  const availableCount = additionals.filter((i) => i.status === "DISPONIBLE").length;
+  const assignedCount = additionals.filter((i) => i.status !== "DISPONIBLE").length;
 
   return (
     <div
@@ -169,12 +298,20 @@ export default function ManageAdditionalsModal({
         padding: "1rem",
       }}
     >
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept=".xlsx,.xls,.csv"
+        style={{ display: "none" }}
+        onChange={handleBulkUploadAdditionals}
+      />
+
       <div
         style={{
           backgroundColor: "var(--devio-white)",
           borderRadius: "1.25rem",
           width: "100%",
-          maxWidth: "880px",
+          maxWidth: "960px",
           maxHeight: "92vh",
           display: "flex",
           flexDirection: "column",
@@ -198,8 +335,8 @@ export default function ManageAdditionalsModal({
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <div
               style={{
-                width: "36px",
-                height: "36px",
+                width: "38px",
+                height: "38px",
                 borderRadius: "10px",
                 backgroundColor: "rgba(31, 54, 82, 0.08)",
                 display: "flex",
@@ -208,11 +345,19 @@ export default function ManageAdditionalsModal({
                 color: "var(--devio-blue)",
               }}
             >
-              <Package size={20} />
+              <Package size={22} />
             </div>
             <div>
-              <h3 style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0, letterSpacing: "-0.02em" }}>
-                Catálogo de Adicionales
+              <h3
+                style={{
+                  fontSize: "1.35rem",
+                  fontWeight: 800,
+                  color: "var(--devio-blue-dark)",
+                  margin: 0,
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                Catálogo de Adicionales (Add-ons)
               </h3>
               <span style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)" }}>
                 Administra bodegas, cajones de estacionamiento, terrazas y paquetes de acabados
@@ -237,24 +382,66 @@ export default function ManageAdditionalsModal({
         </div>
 
         {/* 3 Metric Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", padding: "1rem 1.75rem", backgroundColor: "#F8FAFC", borderBottom: "1px solid var(--devio-neutral-1)" }}>
-          <div style={{ backgroundColor: "var(--devio-white)", padding: "0.75rem 1rem", borderRadius: "0.6rem", border: "1px solid var(--devio-neutral-1)" }}>
-            <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)", display: "block" }}>Total de Adicionales</span>
-            <strong style={{ fontSize: "1.25rem", color: "var(--devio-blue-dark)" }}>{additionals.length} ítems</strong>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: "1rem",
+            padding: "1rem 1.75rem",
+            backgroundColor: "#F8FAFC",
+            borderBottom: "1px solid var(--devio-neutral-1)",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--devio-white)",
+              padding: "0.75rem 1rem",
+              borderRadius: "0.6rem",
+              border: "1px solid var(--devio-neutral-1)",
+            }}
+          >
+            <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)", display: "block" }}>
+              Total de Adicionales
+            </span>
+            <strong style={{ fontSize: "1.25rem", color: "var(--devio-blue-dark)" }}>
+              {additionals.length} ítems
+            </strong>
           </div>
 
-          <div style={{ backgroundColor: "var(--devio-white)", padding: "0.75rem 1rem", borderRadius: "0.6rem", border: "1px solid var(--devio-neutral-1)" }}>
-            <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)", display: "block" }}>Disponibles para Venta</span>
-            <strong style={{ fontSize: "1.25rem", color: "var(--devio-green)" }}>{availableCount} disponibles</strong>
+          <div
+            style={{
+              backgroundColor: "var(--devio-white)",
+              padding: "0.75rem 1rem",
+              borderRadius: "0.6rem",
+              border: "1px solid var(--devio-neutral-1)",
+            }}
+          >
+            <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)", display: "block" }}>
+              Disponibles para Venta
+            </span>
+            <strong style={{ fontSize: "1.25rem", color: "var(--devio-green)" }}>
+              {availableCount} disponibles
+            </strong>
           </div>
 
-          <div style={{ backgroundColor: "var(--devio-white)", padding: "0.75rem 1rem", borderRadius: "0.6rem", border: "1px solid var(--devio-neutral-1)" }}>
-            <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)", display: "block" }}>Valor Total del Inventario</span>
-            <strong style={{ fontSize: "1.25rem", color: "var(--devio-blue)" }}>{formatMoney(totalValue)}</strong>
+          <div
+            style={{
+              backgroundColor: "var(--devio-white)",
+              padding: "0.75rem 1rem",
+              borderRadius: "0.6rem",
+              border: "1px solid var(--devio-neutral-1)",
+            }}
+          >
+            <span style={{ fontSize: "0.75rem", color: "var(--devio-neutral-3)", display: "block" }}>
+              Valor Total del Inventario
+            </span>
+            <strong style={{ fontSize: "1.25rem", color: "var(--devio-blue)" }}>
+              {formatMoney(totalValue)}
+            </strong>
           </div>
         </div>
 
-        {/* Search, Filter & Add Toolbar */}
+        {/* Search, Filter & Action Buttons Toolbar */}
         <div
           style={{
             padding: "0.75rem 1.75rem",
@@ -262,18 +449,20 @@ export default function ManageAdditionalsModal({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            gap: "1rem",
+            gap: "0.75rem",
             flexWrap: "wrap",
+            backgroundColor: "#FAFBFD",
           }}
         >
           {/* Category Filter Pills */}
-          <div style={{ display: "flex", gap: "0.4rem" }}>
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
             {[
               { id: "ALL", label: "Todos", icon: Package },
-              { id: "bodega", label: "Bodegas", icon: Archive },
               { id: "estacionamiento", label: "Estacionamiento", icon: Car },
+              { id: "bodega", label: "Bodegas", icon: Archive },
               { id: "acabados", label: "Acabados", icon: Sparkles },
               { id: "terraza", label: "Terrazas", icon: Layers },
+              { id: "otro", label: "Otros", icon: Package },
             ].map((cat) => {
               const Icon = cat.icon;
               const isSelected = activeCategory === cat.id;
@@ -286,9 +475,9 @@ export default function ManageAdditionalsModal({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "0.35rem",
-                    padding: "0.4rem 0.75rem",
+                    padding: "0.35rem 0.75rem",
                     borderRadius: "9999px",
-                    border: isSelected ? "1px solid var(--devio-blue)" : "1px solid var(--devio-neutral-1)",
+                    border: isSelected ? "1px solid var(--devio-blue)" : "1px solid var(--devio-neutral-2)",
                     backgroundColor: isSelected ? "var(--devio-blue)" : "var(--devio-white)",
                     color: isSelected ? "var(--devio-white)" : "var(--devio-neutral-4)",
                     fontSize: "0.78rem",
@@ -304,163 +493,104 @@ export default function ManageAdditionalsModal({
             })}
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
             <div style={{ position: "relative" }}>
-              <Search size={14} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--devio-neutral-3)" }} />
+              <Search
+                size={14}
+                style={{
+                  position: "absolute",
+                  left: "10px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "var(--devio-neutral-3)",
+                }}
+              />
               <input
                 type="text"
                 placeholder="Buscar adicional..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
-                  padding: "0.45rem 0.75rem 0.45rem 2rem",
+                  padding: "0.4rem 0.75rem 0.4rem 2rem",
                   borderRadius: "9999px",
                   border: "1px solid var(--devio-neutral-2)",
-                  fontSize: "0.8rem",
+                  fontSize: "0.78rem",
                   outline: "none",
-                  width: "180px",
+                  width: "160px",
                 }}
               />
             </div>
 
             <button
               type="button"
-              onClick={() => {
-                setEditingItem(null);
-                setNewItemName("");
-                setNewItemNotes("");
-                setShowAddForm(!showAddForm);
-              }}
+              onClick={generateAdditionalsExcelTemplate}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "0.35rem",
-                padding: "0.45rem 1rem",
+                padding: "0.45rem 0.85rem",
+                borderRadius: "9999px",
+                backgroundColor: "var(--devio-white)",
+                color: "var(--devio-blue-dark)",
+                border: "1px solid var(--devio-neutral-2)",
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+              title="Descargar plantilla de Excel (.xlsx)"
+            >
+              <Download size={13} /> Plantilla Excel
+            </button>
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                padding: "0.45rem 0.85rem",
+                borderRadius: "9999px",
+                backgroundColor: "var(--devio-blue)",
+                color: "var(--devio-white)",
+                border: "none",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              <FileSpreadsheet size={13} /> Subir Excel / CSV
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenAddModal}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                padding: "0.45rem 0.95rem",
                 borderRadius: "9999px",
                 backgroundColor: "var(--devio-blue-dark)",
                 color: "var(--devio-white)",
-                fontSize: "0.82rem",
+                fontSize: "0.78rem",
                 fontWeight: 700,
                 border: "none",
                 cursor: "pointer",
               }}
             >
-              <Plus size={14} /> {showAddForm ? "Cerrar" : "Nuevo Adicional"}
+              <Plus size={14} /> Agregar Adicional
             </button>
           </div>
         </div>
-
-        {/* Add / Edit Form Drawer */}
-        {showAddForm && (
-          <form
-            onSubmit={handleAddNewItem}
-            style={{
-              padding: "1rem 1.75rem",
-              backgroundColor: "rgba(31, 54, 82, 0.04)",
-              borderBottom: "1px solid var(--devio-neutral-1)",
-              display: "grid",
-              gridTemplateColumns: "1.4fr 1fr 1fr 0.8fr 1.5fr auto",
-              gap: "0.75rem",
-              alignItems: "flex-end",
-              animation: "fadeIn 0.2s ease",
-            }}
-          >
-            <div>
-              <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.2rem" }}>
-                Nombre del Adicional *
-              </label>
-              <input
-                type="text"
-                placeholder="Ej. Bodega 09 (Sótano 1)"
-                value={newItemName}
-                onChange={(e) => setNewItemName(e.target.value)}
-                style={{ width: "100%", padding: "0.45rem 0.65rem", borderRadius: "0.4rem", border: "1px solid var(--devio-neutral-2)", fontSize: "0.82rem" }}
-                required
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.2rem" }}>
-                Categoría
-              </label>
-              <select
-                value={newItemCategory}
-                onChange={(e) => setNewItemCategory(e.target.value as any)}
-                style={{ width: "100%", padding: "0.45rem 0.65rem", borderRadius: "0.4rem", border: "1px solid var(--devio-neutral-2)", fontSize: "0.82rem", backgroundColor: "#FFF" }}
-              >
-                <option value="bodega">Bodega</option>
-                <option value="estacionamiento">Estacionamiento</option>
-                <option value="acabados">Acabados</option>
-                <option value="terraza">Terraza</option>
-                <option value="otro">Otro</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.2rem" }}>
-                Precio ($) *
-              </label>
-              <input
-                type="number"
-                value={newItemPrice}
-                onChange={(e) => setNewItemPrice(parseFloat(e.target.value) || 0)}
-                style={{ width: "100%", padding: "0.45rem 0.65rem", borderRadius: "0.4rem", border: "1px solid var(--devio-neutral-2)", fontSize: "0.82rem", fontWeight: 700 }}
-                required
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.2rem" }}>
-                Área (m²)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={newItemArea}
-                onChange={(e) => setNewItemArea(parseFloat(e.target.value) || 0)}
-                style={{ width: "100%", padding: "0.45rem 0.65rem", borderRadius: "0.4rem", border: "1px solid var(--devio-neutral-2)", fontSize: "0.82rem" }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.2rem" }}>
-                Notas / Ubicación
-              </label>
-              <input
-                type="text"
-                placeholder="Frente a elevador..."
-                value={newItemNotes}
-                onChange={(e) => setNewItemNotes(e.target.value)}
-                style={{ width: "100%", padding: "0.45rem 0.65rem", borderRadius: "0.4rem", border: "1px solid var(--devio-neutral-2)", fontSize: "0.82rem" }}
-              />
-            </div>
-
-            <button
-              type="submit"
-              style={{
-                padding: "0.45rem 1rem",
-                borderRadius: "0.4rem",
-                backgroundColor: "var(--devio-green)",
-                color: "#FFF",
-                border: "none",
-                fontSize: "0.82rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                height: "32px",
-              }}
-            >
-              {editingItem ? "Actualizar" : "Guardar"}
-            </button>
-          </form>
-        )}
 
         {/* Additionals Table List */}
         <div style={{ flex: 1, overflowY: "auto", padding: "1rem 1.75rem" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem", textAlign: "left" }}>
             <thead>
-              <tr style={{ color: "var(--devio-neutral-3)", borderBottom: "1px solid var(--devio-neutral-1)" }}>
-                <th style={{ padding: "0.6rem 0.75rem" }}>Adicional</th>
-                <th style={{ padding: "0.6rem 0.75rem" }}>Categoría</th>
+              <tr style={{ color: "var(--devio-neutral-3)", borderBottom: "1.5px solid var(--devio-neutral-1)" }}>
+                <th style={{ padding: "0.6rem 0.75rem" }}>Nombre / Identificador</th>
+                <th style={{ padding: "0.6rem 0.75rem" }}>Tipo</th>
                 <th style={{ padding: "0.6rem 0.75rem" }}>Área</th>
                 <th style={{ padding: "0.6rem 0.75rem" }}>Precio</th>
                 <th style={{ padding: "0.6rem 0.75rem" }}>Estatus</th>
@@ -473,42 +603,62 @@ export default function ManageAdditionalsModal({
                 <tr>
                   <td colSpan={7} style={{ textAlign: "center", padding: "3rem 1.5rem" }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
-                      <Archive size={36} style={{ color: "var(--devio-neutral-2)", opacity: 0.6 }} />
-                      <p style={{ margin: 0, fontWeight: 700, color: "var(--devio-blue-dark)", fontSize: "0.95rem" }}>
-                        No hay adicionales registrados
+                      <Archive size={40} style={{ color: "var(--devio-neutral-2)", opacity: 0.6 }} />
+                      <p style={{ margin: 0, fontWeight: 700, color: "var(--devio-blue-dark)", fontSize: "1rem" }}>
+                        Sin adicionales registrados
                       </p>
-                      <p style={{ margin: 0, color: "var(--devio-neutral-3)", fontSize: "0.8rem", maxWidth: "340px" }}>
+                      <p
+                        style={{
+                          margin: 0,
+                          color: "var(--devio-neutral-3)",
+                          fontSize: "0.8125rem",
+                          maxWidth: "420px",
+                        }}
+                      >
                         {searchQuery || activeCategory !== "ALL"
                           ? "No se encontraron adicionales con los filtros aplicados."
-                          : "Agrega cajones, bodegas, acabados o paquetes usando el botón '+ Nuevo Adicional'."}
+                          : "Los adicionales son opcionales. Puedes agregar cajones de estacionamiento o bodegas ahora o gestionarlos más adelante."}
                       </p>
-                      {!showAddForm && (
+                      <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.5rem" }}>
                         <button
                           type="button"
-                          onClick={() => {
-                            setEditingItem(null);
-                            setNewItemName("");
-                            setNewItemNotes("");
-                            setShowAddForm(true);
-                          }}
+                          onClick={handleOpenAddModal}
                           style={{
-                            marginTop: "0.5rem",
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "0.35rem",
-                            padding: "0.45rem 0.9rem",
+                            padding: "0.5rem 1rem",
                             borderRadius: "8px",
-                            backgroundColor: "var(--devio-blue)",
+                            backgroundColor: "var(--devio-blue-dark)",
                             color: "#FFF",
-                            fontSize: "0.8rem",
+                            fontSize: "0.8125rem",
                             fontWeight: 700,
                             border: "none",
                             cursor: "pointer",
                           }}
                         >
-                          <Plus size={14} /> + Nuevo Adicional
+                          <Plus size={14} /> Agregar Adicional
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            padding: "0.5rem 1rem",
+                            borderRadius: "8px",
+                            backgroundColor: "var(--devio-white)",
+                            color: "var(--devio-blue-dark)",
+                            border: "1px solid var(--devio-neutral-2)",
+                            fontSize: "0.8125rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <FileSpreadsheet size={14} /> Importar Excel Adicionales
+                        </button>
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -517,11 +667,24 @@ export default function ManageAdditionalsModal({
                   const isAvailable = item.status === "DISPONIBLE";
 
                   return (
-                    <tr key={item.id} style={{ borderBottom: "1px solid var(--devio-neutral-1)", backgroundColor: idx % 2 === 0 ? "#FFF" : "#FAFBFD" }}>
+                    <tr
+                      key={item.id}
+                      style={{
+                        borderBottom: "1px solid var(--devio-neutral-1)",
+                        backgroundColor: idx % 2 === 0 ? "#FFF" : "#FAFBFD",
+                      }}
+                    >
                       <td style={{ padding: "0.65rem 0.75rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
                         {item.name}
                         {item.notes && (
-                          <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", display: "block", fontWeight: 400 }}>
+                          <span
+                            style={{
+                              fontSize: "0.72rem",
+                              color: "var(--devio-neutral-3)",
+                              display: "block",
+                              fontWeight: 400,
+                            }}
+                          >
                             {item.notes}
                           </span>
                         )}
@@ -559,7 +722,9 @@ export default function ManageAdditionalsModal({
                             borderRadius: "9999px",
                             fontSize: "0.72rem",
                             fontWeight: 700,
-                            backgroundColor: isAvailable ? "rgba(111, 172, 156, 0.15)" : "rgba(31, 54, 82, 0.12)",
+                            backgroundColor: isAvailable
+                              ? "rgba(111, 172, 156, 0.15)"
+                              : "rgba(31, 54, 82, 0.12)",
                             color: isAvailable ? "var(--devio-green)" : "var(--devio-blue-dark)",
                           }}
                         >
@@ -572,12 +737,19 @@ export default function ManageAdditionalsModal({
                       </td>
 
                       <td style={{ padding: "0.65rem 0.75rem", textAlign: "right" }}>
-                        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.4rem" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "flex-end",
+                            alignItems: "center",
+                            gap: "0.4rem",
+                          }}
+                        >
                           {isAvailable ? (
                             <>
                               <button
                                 type="button"
-                                onClick={() => handleEditClick(item)}
+                                onClick={() => handleOpenEditModal(item)}
                                 style={{
                                   background: "none",
                                   border: "none",
@@ -634,7 +806,20 @@ export default function ManageAdditionalsModal({
         </div>
 
         {/* Modal Footer */}
-        <div style={{ padding: "1rem 1.75rem", borderTop: "1px solid var(--devio-neutral-1)", backgroundColor: "#FAFBFD", display: "flex", justifyContent: "flex-end" }}>
+        <div
+          style={{
+            padding: "1rem 1.75rem",
+            borderTop: "1px solid var(--devio-neutral-1)",
+            backgroundColor: "#FAFBFD",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <span style={{ fontSize: "0.82rem", color: "var(--devio-neutral-3)" }}>
+            Total registrados: <strong>{additionals.length} adicionales</strong> ({availableCount} disponibles)
+          </span>
+
           <button
             type="button"
             onClick={onClose}
@@ -653,6 +838,295 @@ export default function ManageAdditionalsModal({
           </button>
         </div>
       </div>
+
+      {/* SUBMODAL: AGREGAR / EDITAR ADICIONAL INDIVIDUAL */}
+      {isItemModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(10, 25, 47, 0.78)",
+            backdropFilter: "blur(5px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--devio-white)",
+              borderRadius: "1rem",
+              width: "100%",
+              maxWidth: "520px",
+              boxShadow: "0 25px 60px rgba(0, 0, 0, 0.35)",
+              border: "1px solid var(--devio-neutral-1)",
+              overflow: "hidden",
+              animation: "fadeIn 0.2s ease-out",
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: "1.25rem 1.5rem",
+                borderBottom: "1px solid var(--devio-neutral-1)",
+                backgroundColor: "#FAFBFD",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <h4 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
+                  {editingItem ? "Editar Adicional" : "Agregar Adicional Individual"}
+                </h4>
+                <p style={{ fontSize: "0.78rem", color: "var(--devio-neutral-3)", margin: "2px 0 0 0" }}>
+                  Define los detalles y precio del elemento adicional para el proyecto.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsItemModalOpen(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--devio-neutral-3)",
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSaveItemModal} style={{ padding: "1.25rem 1.5rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <div>
+                  <label
+                    style={{
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: "var(--devio-blue-dark)",
+                      display: "block",
+                      marginBottom: "0.35rem",
+                    }}
+                  >
+                    Nombre / Identificador *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Cajón E-101 (Sótano 1) / Bodega B-04"
+                    value={itemName}
+                    onChange={(e) => setItemName(e.target.value)}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "0.55rem 0.75rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid var(--devio-neutral-2)",
+                      fontSize: "0.85rem",
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        color: "var(--devio-blue-dark)",
+                        display: "block",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Tipo / Categoría *
+                    </label>
+                    <select
+                      value={itemCategory}
+                      onChange={(e) => setItemCategory(e.target.value as any)}
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid var(--devio-neutral-2)",
+                        fontSize: "0.85rem",
+                        backgroundColor: "#FFF",
+                      }}
+                    >
+                      <option value="estacionamiento">Estacionamiento</option>
+                      <option value="bodega">Bodega</option>
+                      <option value="acabados">Acabados</option>
+                      <option value="terraza">Terraza</option>
+                      <option value="otro">Otro Adicional</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        color: "var(--devio-blue-dark)",
+                        display: "block",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Precio ({currency}) *
+                    </label>
+                    <input
+                      type="number"
+                      value={itemPrice}
+                      onChange={(e) => setItemPrice(parseFloat(e.target.value) || 0)}
+                      required
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid var(--devio-neutral-2)",
+                        fontSize: "0.85rem",
+                        fontWeight: 700,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        color: "var(--devio-blue-dark)",
+                        display: "block",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Estado
+                    </label>
+                    <select
+                      value={itemStatus}
+                      onChange={(e) => setItemStatus(e.target.value as any)}
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid var(--devio-neutral-2)",
+                        fontSize: "0.85rem",
+                        backgroundColor: "#FFF",
+                      }}
+                    >
+                      <option value="DISPONIBLE">Disponible</option>
+                      <option value="ASIGNADO">Asignado</option>
+                      <option value="VENDIDO">Vendido</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        color: "var(--devio-blue-dark)",
+                        display: "block",
+                        marginBottom: "0.35rem",
+                      }}
+                    >
+                      Superficie (m² opcional)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={itemArea || ""}
+                      placeholder="Ej. 12.5"
+                      onChange={(e) => setItemArea(parseFloat(e.target.value) || 0)}
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid var(--devio-neutral-2)",
+                        fontSize: "0.85rem",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: "var(--devio-blue-dark)",
+                      display: "block",
+                      marginBottom: "0.35rem",
+                    }}
+                  >
+                    Notas / Ubicación (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Sótano 2, frente a elevador principal"
+                    value={itemNotes}
+                    onChange={(e) => setItemNotes(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.55rem 0.75rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid var(--devio-neutral-2)",
+                      fontSize: "0.85rem",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "0.75rem",
+                  marginTop: "1.5rem",
+                  paddingTop: "1rem",
+                  borderTop: "1px solid var(--devio-neutral-1)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsItemModalOpen(false)}
+                  style={{
+                    padding: "0.55rem 1.25rem",
+                    borderRadius: "9999px",
+                    border: "1px solid var(--devio-neutral-2)",
+                    backgroundColor: "transparent",
+                    color: "var(--devio-neutral-4)",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    padding: "0.55rem 1.4rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "var(--devio-blue-dark)",
+                    color: "var(--devio-white)",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {editingItem ? "Guardar Cambios" : "Agregar Adicional"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
