@@ -230,16 +230,13 @@ export default function CreateSaleWizardModal({
     return Object.values(clientsMap).sort((a, b) => a.name.localeCompare(b.name, "es"));
   }, [dbClients, projects]);
 
-  // Primary client email/name lookup & autofill
-  useEffect(() => {
-    const trimmedEmail = (primaryClient.email || "").trim().toLowerCase();
-    const trimmedName = (primaryClient.name || "").trim().toLowerCase();
-    if (!trimmedEmail && !trimmedName) {
-      setIsPrimaryFound(false);
-      return;
-    }
-    
-    let found = existingClients.find(
+  // Centralized client lookup helper
+  const findExistingClient = (email?: string, name?: string): ClientData | null => {
+    const trimmedEmail = (email || "").trim().toLowerCase();
+    const trimmedName = (name || "").trim().toLowerCase();
+    if (!trimmedEmail && !trimmedName) return null;
+
+    let found = (existingClients || []).find(
       (c) =>
         (trimmedEmail && c.email && c.email.toLowerCase() === trimmedEmail) ||
         (!trimmedEmail && trimmedName && c.name && c.name.toLowerCase() === trimmedName)
@@ -275,6 +272,20 @@ export default function CreateSaleWizardModal({
       }
     }
 
+    return found || null;
+  };
+
+  // Primary client email/name lookup & autofill
+  useEffect(() => {
+    const trimmedEmail = (primaryClient.email || "").trim().toLowerCase();
+    const trimmedName = (primaryClient.name || "").trim().toLowerCase();
+    if (!trimmedEmail && !trimmedName) {
+      setIsPrimaryFound(false);
+      return;
+    }
+
+    const found = findExistingClient(primaryClient.email, primaryClient.name);
+
     if (found) {
       setIsPrimaryFound(true);
       setPrimaryClient((prev) => ({
@@ -290,42 +301,7 @@ export default function CreateSaleWizardModal({
   }, [primaryClient.email, primaryClient.name, existingClients]);
 
   const isClientInCatalog = (email?: string, name?: string) => {
-    const trimmedEmail = (email || "").trim().toLowerCase();
-    const trimmedName = (name || "").trim().toLowerCase();
-    if (!trimmedEmail && !trimmedName) return false;
-
-    // 1. Check existingClients from projects & dbClients (Strictly by email if provided)
-    const inProjects = (existingClients || []).some(
-      (c) =>
-        (trimmedEmail && c.email && c.email.toLowerCase() === trimmedEmail) ||
-        (!trimmedEmail && trimmedName && c.name && c.name.toLowerCase() === trimmedName)
-    );
-    if (inProjects) return true;
-
-    // 2. Check storage (client portal users and system users)
-    if (typeof window !== "undefined") {
-      try {
-        const storedClients = localStorage.getItem("devio_client_portal_users") || sessionStorage.getItem("devio_client_portal_users");
-        const storedSys = localStorage.getItem("devio_system_users") || sessionStorage.getItem("devio_system_users");
-        const combined = [
-          ...(storedClients ? JSON.parse(storedClients) : []),
-          ...(storedSys ? JSON.parse(storedSys) : []),
-        ];
-
-        if (Array.isArray(combined)) {
-          const inUsers = combined.some(
-            (u: any) =>
-              (trimmedEmail && u.email && u.email.toLowerCase() === trimmedEmail) ||
-              (!trimmedEmail && trimmedName && u.name && u.name.toLowerCase() === trimmedName)
-          );
-          if (inUsers) return true;
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    return false;
+    return !!findExistingClient(email, name);
   };
 
   const hasAnyNewBuyer = useMemo(() => {
@@ -399,7 +375,27 @@ export default function CreateSaleWizardModal({
     setCoOwnersList((prev) =>
       prev.map((co) => {
         if (co.id !== id) return co;
-        const updated = { ...co, [field]: val };
+        const updated: any = { ...co, [field]: val };
+
+        if (field === "email" || field === "name") {
+          const checkEmail = field === "email" ? val : co.email;
+          const checkName = field === "name" ? val : co.name;
+          const found = findExistingClient(checkEmail, checkName);
+          if (found) {
+            if (field === "email") {
+              if (found.name) updated.name = found.name;
+              if (found.phone) updated.phone = found.phone;
+              if (found.rfc) updated.rfc = found.rfc;
+            } else if (field === "name" && !co.email && found.email) {
+              updated.email = found.email;
+              if (found.phone) updated.phone = found.phone;
+              if (found.rfc) updated.rfc = found.rfc;
+            }
+            updated.isFound = true;
+          } else {
+            updated.isFound = false;
+          }
+        }
         return updated;
       })
     );
@@ -2034,6 +2030,28 @@ export default function CreateSaleWizardModal({
                       );
                     })}
                   </div>
+
+                  {!isOwnershipBalanced && (
+                    <div
+                      style={{
+                        backgroundColor: "rgba(224, 83, 69, 0.08)",
+                        border: "1.5px solid rgba(224, 83, 69, 0.35)",
+                        borderRadius: "0.65rem",
+                        padding: "0.65rem 0.85rem",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.78rem",
+                        color: "var(--devio-red)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                      <span>
+                        La suma de las participaciones debe ser exactamente <strong>100%</strong> para avanzar. (Suma actual: <strong>{totalOwnershipPct}%</strong>)
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2259,166 +2277,247 @@ export default function CreateSaleWizardModal({
               {/* Co-Owners Cards (If Co-Ownership is active) */}
               {isCoOwnership && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  {coOwnersList.map((co, index) => (
-                    <div
-                      key={co.id}
-                      style={{
-                        backgroundColor: "#FAFBFD",
-                        padding: "1.25rem",
-                        borderRadius: "1rem",
-                        border: "1px solid var(--devio-neutral-2)",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.85rem",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <span
-                            style={{
-                              fontSize: "0.72rem",
-                              fontWeight: 800,
-                              textTransform: "uppercase",
-                              backgroundColor: "var(--devio-blue)",
-                              color: "#FFFFFF",
-                              padding: "0.2rem 0.55rem",
-                              borderRadius: "0.35rem",
-                            }}
-                          >
-                            Copropietario #{index + 1}
-                          </span>
-                          <input
-                            type="text"
-                            placeholder="Relación (ej. Cónyuge, Socio)"
-                            value={co.relationship || ""}
-                            onChange={(e) => handleUpdateCoOwner(co.id, "relationship", e.target.value)}
-                            style={{
-                              border: "none",
-                              backgroundColor: "transparent",
-                              fontSize: "0.78rem",
-                              color: "var(--devio-neutral-3)",
-                              outline: "none",
-                            }}
-                          />
-                        </div>
-
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                            <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
-                              % Participación:
-                            </label>
-                            <input
-                              type="number"
-                              min={1}
-                              max={100}
-                              value={co.ownershipPct}
-                              onChange={(e) => handleUpdateCoOwner(co.id, "ownershipPct", Number(e.target.value))}
+                  {coOwnersList.map((co, index) => {
+                    const coIsFound = (co as any).isFound || isClientInCatalog(co.email, co.name);
+                    return (
+                      <div
+                        key={co.id}
+                        style={{
+                          backgroundColor: "#FAFBFD",
+                          padding: "1.25rem",
+                          borderRadius: "1rem",
+                          border: coIsFound ? "1.5px solid var(--devio-green)" : "1px solid var(--devio-neutral-2)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.85rem",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span
                               style={{
-                                width: "65px",
-                                padding: "0.3rem 0.5rem",
-                                borderRadius: "0.4rem",
-                                border: "1.5px solid var(--devio-blue)",
+                                fontSize: "0.72rem",
                                 fontWeight: 800,
-                                textAlign: "center",
-                                fontSize: "0.85rem",
+                                textTransform: "uppercase",
+                                backgroundColor: "var(--devio-blue)",
+                                color: "#FFFFFF",
+                                padding: "0.2rem 0.55rem",
+                                borderRadius: "0.35rem",
+                              }}
+                            >
+                              Copropietario #{index + 1}
+                            </span>
+                            {coIsFound ? (
+                              <span
+                                style={{
+                                  fontSize: "0.7rem",
+                                  fontWeight: 800,
+                                  backgroundColor: "rgba(0, 196, 140, 0.12)",
+                                  color: "var(--devio-green)",
+                                  padding: "0.15rem 0.5rem",
+                                  borderRadius: "9999px",
+                                  border: "1px solid rgba(0, 196, 140, 0.3)",
+                                }}
+                              >
+                                ✓ Cliente Existente
+                              </span>
+                            ) : co.email?.trim() ? (
+                              <span
+                                style={{
+                                  fontSize: "0.7rem",
+                                  fontWeight: 800,
+                                  backgroundColor: "rgba(47, 128, 237, 0.1)",
+                                  color: "var(--devio-blue)",
+                                  padding: "0.15rem 0.5rem",
+                                  borderRadius: "9999px",
+                                  border: "1px solid rgba(47, 128, 237, 0.25)",
+                                }}
+                              >
+                                + Nuevo Comprador
+                              </span>
+                            ) : null}
+                            <input
+                              type="text"
+                              placeholder="Relación (ej. Cónyuge, Socio)"
+                              value={co.relationship || ""}
+                              onChange={(e) => handleUpdateCoOwner(co.id, "relationship", e.target.value)}
+                              style={{
+                                border: "none",
+                                backgroundColor: "transparent",
+                                fontSize: "0.78rem",
+                                color: "var(--devio-neutral-3)",
+                                outline: "none",
                               }}
                             />
-                            <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>%</span>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveCoOwner(co.id)}
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                              <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                                % Participación:
+                              </label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={100}
+                                value={co.ownershipPct}
+                                onChange={(e) => handleUpdateCoOwner(co.id, "ownershipPct", Number(e.target.value))}
+                                style={{
+                                  width: "65px",
+                                  padding: "0.3rem 0.5rem",
+                                  borderRadius: "0.4rem",
+                                  border: "1.5px solid var(--devio-blue)",
+                                  fontWeight: 800,
+                                  textAlign: "center",
+                                  fontSize: "0.85rem",
+                                }}
+                              />
+                              <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>%</span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCoOwner(co.id)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "var(--devio-red)",
+                                cursor: "pointer",
+                                padding: "0.25rem",
+                              }}
+                              title="Eliminar copropietario"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Status Notice (Existing Client Isolation vs New Client Creation) */}
+                        {coIsFound ? (
+                          <div
                             style={{
-                              background: "none",
-                              border: "none",
-                              color: "var(--devio-red)",
-                              cursor: "pointer",
-                              padding: "0.25rem",
+                              backgroundColor: "rgba(47, 128, 237, 0.05)",
+                              border: "1px solid rgba(47, 128, 237, 0.2)",
+                              borderRadius: "0.6rem",
+                              padding: "0.65rem 0.85rem",
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: "0.5rem",
+                              fontSize: "0.76rem",
+                              color: "var(--devio-blue-dark)",
+                              lineHeight: 1.4,
                             }}
-                            title="Eliminar copropietario"
                           >
-                            <Trash2 size={16} />
-                          </button>
+                            <Info size={16} style={{ color: "var(--devio-blue)", flexShrink: 0, marginTop: "1px" }} />
+                            <div>
+                              <strong>Información precargada:</strong> Puedes modificar el nombre, teléfono o RFC para este contrato/proyecto.
+                              <div style={{ color: "var(--devio-neutral-3)", marginTop: "2px" }}>
+                                * Los cambios realizados aquí se guardarán exclusivamente para este proyecto sin alterar el perfil global del cliente ni registros en otros desarrollos.
+                              </div>
+                            </div>
+                          </div>
+                        ) : co.email?.trim() ? (
+                          <div
+                            style={{
+                              backgroundColor: "rgba(0, 196, 140, 0.06)",
+                              border: "1px solid rgba(0, 196, 140, 0.25)",
+                              borderRadius: "0.6rem",
+                              padding: "0.65rem 0.85rem",
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: "0.5rem",
+                              fontSize: "0.76rem",
+                              color: "var(--devio-blue-dark)",
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            <Sparkles size={16} style={{ color: "var(--devio-green)", flexShrink: 0, marginTop: "1px" }} />
+                            <div>
+                              <strong>Nuevo Cliente en Devio:</strong> Al crear la venta se generará su cuenta de usuario y se le enviarán sus accesos para ingresar a Devio (Portal Web y App Móvil).
+                              <div style={{ color: "var(--devio-neutral-3)", marginTop: "2px" }}>
+                                * La información que captures quedará resguardada para tu desarrolladora; si el cliente actualiza su nombre en su portal, tu expediente conservará tus registros.
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+                          <div style={{ gridColumn: "span 2" }}>
+                            <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.25rem" }}>
+                              <Mail size={13} style={{ color: "var(--devio-blue)" }} /> Correo Electrónico (Acceso propio) *
+                            </label>
+                            <input
+                              type="email"
+                              value={co.email}
+                              onChange={(e) => handleUpdateCoOwner(co.id, "email", e.target.value)}
+                              placeholder="copropietario@ejemplo.com"
+                              style={{
+                                width: "100%",
+                                padding: "0.65rem 0.85rem",
+                                borderRadius: "0.5rem",
+                                border: coIsFound ? "1.5px solid var(--devio-green)" : "1px solid var(--devio-neutral-2)",
+                                fontSize: "0.9rem",
+                                backgroundColor: "#FFFFFF",
+                              }}
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                              Nombre Completo *
+                            </label>
+                            <input
+                              type="text"
+                              value={co.name}
+                              onChange={(e) => handleUpdateCoOwner(co.id, "name", e.target.value)}
+                              placeholder="Nombre del Copropietario"
+                              style={{
+                                width: "100%",
+                                padding: "0.65rem 0.85rem",
+                                borderRadius: "0.5rem",
+                                border: "1px solid var(--devio-neutral-2)",
+                                fontSize: "0.88rem",
+                                backgroundColor: "#FFFFFF",
+                              }}
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                              Teléfono
+                            </label>
+                            <PhoneInput
+                              value={co.phone}
+                              onChange={(fullVal) => handleUpdateCoOwner(co.id, "phone", fullVal)}
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
+                              RFC / Identificación
+                            </label>
+                            <input
+                              type="text"
+                              value={co.rfc}
+                              onChange={(e) => handleUpdateCoOwner(co.id, "rfc", e.target.value.toUpperCase())}
+                              placeholder="RFC Copropietario"
+                              style={{
+                                width: "100%",
+                                padding: "0.65rem 0.85rem",
+                                borderRadius: "0.5rem",
+                                border: "1px solid var(--devio-neutral-2)",
+                                fontSize: "0.88rem",
+                                backgroundColor: "#FFFFFF",
+                                textTransform: "uppercase",
+                              }}
+                            />
+                          </div>
                         </div>
                       </div>
-
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
-                        <div style={{ gridColumn: "span 2" }}>
-                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                            Correo Electrónico (Acceso propio) *
-                          </label>
-                          <input
-                            type="email"
-                            value={co.email}
-                            onChange={(e) => handleUpdateCoOwner(co.id, "email", e.target.value)}
-                            placeholder="copropietario@ejemplo.com"
-                            style={{
-                              width: "100%",
-                              padding: "0.65rem 0.85rem",
-                              borderRadius: "0.5rem",
-                              border: "1px solid var(--devio-neutral-2)",
-                              fontSize: "0.9rem",
-                              backgroundColor: "#FFFFFF",
-                            }}
-                            required
-                          />
-                        </div>
-
-                        <div>
-                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                            Nombre Completo *
-                          </label>
-                          <input
-                            type="text"
-                            value={co.name}
-                            onChange={(e) => handleUpdateCoOwner(co.id, "name", e.target.value)}
-                            placeholder="Nombre del Copropietario"
-                            style={{
-                              width: "100%",
-                              padding: "0.65rem 0.85rem",
-                              borderRadius: "0.5rem",
-                              border: "1px solid var(--devio-neutral-2)",
-                              fontSize: "0.88rem",
-                              backgroundColor: "#FFFFFF",
-                            }}
-                            required
-                          />
-                        </div>
-
-                        <div>
-                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                            Teléfono
-                          </label>
-                          <PhoneInput
-                            value={co.phone}
-                            onChange={(fullVal) => handleUpdateCoOwner(co.id, "phone", fullVal)}
-                          />
-                        </div>
-
-                        <div>
-                          <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.25rem" }}>
-                            RFC / Identificación
-                          </label>
-                          <input
-                            type="text"
-                            value={co.rfc}
-                            onChange={(e) => handleUpdateCoOwner(co.id, "rfc", e.target.value.toUpperCase())}
-                            placeholder="RFC Copropietario"
-                            style={{
-                              width: "100%",
-                              padding: "0.65rem 0.85rem",
-                              borderRadius: "0.5rem",
-                              border: "1px solid var(--devio-neutral-2)",
-                              fontSize: "0.88rem",
-                              backgroundColor: "#FFFFFF",
-                              textTransform: "uppercase",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {/* Add Co-Owner Button */}
                   <button
@@ -4199,15 +4298,23 @@ export default function CreateSaleWizardModal({
           {currentStep < 5 ? (
             <button
               type="button"
+              disabled={currentStep === 1 && isCoOwnership && !isOwnershipBalanced}
               onClick={() => {
                 if (currentStep === 1) {
                   if (!primaryClient.email.trim() || !primaryClient.name.trim()) {
                     alert("Por favor completa los datos del titular principal.");
                     return;
                   }
-                  if (isCoOwnership && !isOwnershipBalanced) {
-                    alert(`El porcentaje total de copropiedad debe sumar 100%. Actualmente suma ${totalOwnershipPct}%.`);
-                    return;
+                  if (isCoOwnership) {
+                    const incompleteCoOwner = coOwnersList.find((co) => !co.email?.trim() || !co.name?.trim());
+                    if (incompleteCoOwner) {
+                      alert("Por favor completa el correo y nombre de todos los copropietarios.");
+                      return;
+                    }
+                    if (!isOwnershipBalanced) {
+                      alert(`El porcentaje total de copropiedad debe sumar exactamente 100%. Actualmente suma ${totalOwnershipPct}%.`);
+                      return;
+                    }
                   }
                 }
                 if (currentStep === 3) {
@@ -4224,12 +4331,14 @@ export default function CreateSaleWizardModal({
                 gap: "0.4rem",
                 padding: "0.65rem 1.5rem",
                 borderRadius: "9999px",
-                backgroundColor: "var(--devio-blue-dark)",
-                color: "var(--devio-white)",
+                backgroundColor: (currentStep === 1 && isCoOwnership && !isOwnershipBalanced) ? "var(--devio-neutral-2)" : "var(--devio-blue-dark)",
+                color: (currentStep === 1 && isCoOwnership && !isOwnershipBalanced) ? "var(--devio-neutral-3)" : "var(--devio-white)",
                 fontSize: "0.875rem",
                 fontWeight: 700,
                 border: "none",
-                cursor: "pointer",
+                cursor: (currentStep === 1 && isCoOwnership && !isOwnershipBalanced) ? "not-allowed" : "pointer",
+                opacity: (currentStep === 1 && isCoOwnership && !isOwnershipBalanced) ? 0.6 : 1,
+                transition: "all 0.15s ease",
               }}
             >
               Siguiente <ChevronRight size={16} />
