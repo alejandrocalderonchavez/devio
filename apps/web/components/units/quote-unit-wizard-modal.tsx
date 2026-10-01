@@ -277,12 +277,13 @@ export default function QuoteUnitWizardModal({
 
   const distributeEqually = (prim: CoOwner, coList: CoOwner[]) => {
     const totalPeople = 1 + coList.length;
-    const basePct = Math.floor(100 / totalPeople);
-    const remainder = 100 - basePct * totalPeople;
+    if (totalPeople <= 0) return;
+    const precisePct = Math.round((100 / totalPeople) * 100) / 100;
+    const primaryPct = Math.round((100 - precisePct * (totalPeople - 1)) * 100) / 100;
 
-    setPrimaryClient((prev) => ({ ...prev, ownershipPct: basePct + remainder }));
+    setPrimaryClient((prev) => ({ ...prev, ownershipPct: primaryPct }));
     setCoOwnersList((prev) =>
-      prev.map((co) => ({ ...co, ownershipPct: basePct }))
+      prev.map((co) => ({ ...co, ownershipPct: precisePct }))
     );
   };
 
@@ -369,9 +370,9 @@ export default function QuoteUnitWizardModal({
     const down = Number(downPaymentPct) || 0;
     const settlement = Number(balloonLiquidationPct) || 0;
     const plazos = Number(installmentsCount) || 0;
-    const sumDownSettlement = down + settlement;
-    const remainingPct = 100 - sumDownSettlement;
-    const totalPct = down + (plazos > 0 ? Math.max(0, remainingPct) : 0) + settlement;
+    const sumDownSettlement = Math.round((down + settlement) * 100) / 100;
+    const remainingPct = Math.round((100 - sumDownSettlement) * 100) / 100;
+    const totalPct = Math.round((down + (plazos > 0 ? Math.max(0, remainingPct) : 0) + settlement) * 100) / 100;
 
     if (down <= 0) {
       return {
@@ -396,25 +397,25 @@ export default function QuoteUnitWizardModal({
       };
     }
 
-    if (sumDownSettlement > 100) {
-      const excess = sumDownSettlement - 100;
+    if (sumDownSettlement > 100.001) {
+      const excess = Math.round((sumDownSettlement - 100) * 100) / 100;
       return {
         isValid: false,
         errorTitle: "Porcentajes excedidos (>100%)",
         errorMessage: `El Enganche (${down}%) y la Liquidación (${settlement}%) suman ${sumDownSettlement}%, excediendo el 100% total por ${excess}%.`,
         fixes: [
           {
-            label: `Ajustar Liquidación a ${Math.max(0, 100 - down)}%`,
+            label: `Ajustar Liquidación a ${Math.max(0, Math.round((100 - down) * 100) / 100)}%`,
             action: () => {
-              setBalloonLiquidationPct(Math.max(0, 100 - down));
+              setBalloonLiquidationPct(Math.max(0, Math.round((100 - down) * 100) / 100));
               setSelectedPlanId("custom");
               setCustomPlanName("Plan Personalizado");
             },
           },
           {
-            label: `Ajustar Enganche a ${Math.max(0, 100 - settlement)}%`,
+            label: `Ajustar Enganche a ${Math.max(0, Math.round((100 - settlement) * 100) / 100)}%`,
             action: () => {
-              setDownPaymentPct(Math.max(0, 100 - settlement));
+              setDownPaymentPct(Math.max(0, Math.round((100 - settlement) * 100) / 100));
               setSelectedPlanId("custom");
               setCustomPlanName("Plan Personalizado");
             },
@@ -437,7 +438,7 @@ export default function QuoteUnitWizardModal({
       };
     }
 
-    if (sumDownSettlement === 100 && plazos > 0) {
+    if (Math.abs(sumDownSettlement - 100) < 0.001 && plazos > 0) {
       return {
         isValid: false,
         errorTitle: "Plazos sin porcentaje asignado (0%)",
@@ -467,7 +468,7 @@ export default function QuoteUnitWizardModal({
       };
     }
 
-    if (sumDownSettlement < 100 && plazos === 0) {
+    if (sumDownSettlement < 99.999 && plazos === 0) {
       return {
         isValid: false,
         errorTitle: "Porcentaje flotante sin mensualidades",
@@ -510,10 +511,10 @@ export default function QuoteUnitWizardModal({
   }, [downPaymentPct, balloonLiquidationPct, installmentsCount]);
 
   const generateSchedule = () => {
-    const downPayment = Math.round(netTotalQuoteAmount * (downPaymentPct / 100));
-    const liquidation = Math.round(netTotalQuoteAmount * (balloonLiquidationPct / 100));
-    const remainingForInstallments = Math.max(0, netTotalQuoteAmount - downPayment - liquidation);
-    const monthlyAmount = installmentsCount > 0 ? remainingForInstallments / installmentsCount : 0;
+    const downPayment = Math.round(netTotalQuoteAmount * (downPaymentPct / 100) * 100) / 100;
+    const liquidation = Math.round(netTotalQuoteAmount * (balloonLiquidationPct / 100) * 100) / 100;
+    const remainingForInstallments = Math.max(0, Math.round((netTotalQuoteAmount - downPayment - liquidation) * 100) / 100);
+    const baseInstallmentAmount = installmentsCount > 0 ? Math.floor((remainingForInstallments / installmentsCount) * 100) / 100 : 0;
 
     const rows: PaymentRow[] = [];
     const baseDate = new Date(quoteDate || "2026-09-17");
@@ -525,27 +526,38 @@ export default function QuoteUnitWizardModal({
       amount: downPayment,
     });
 
+    let sumInstallments = 0;
     for (let i = 1; i <= installmentsCount; i++) {
       const monthDate = new Date(baseDate);
       monthDate.setMonth(baseDate.getMonth() + i);
       const formattedDate = monthDate.toISOString().slice(0, 10);
+      let amt = baseInstallmentAmount;
+      if (i === installmentsCount) {
+        amt = Math.max(0, Math.round((remainingForInstallments - sumInstallments) * 100) / 100);
+      } else {
+        sumInstallments = Math.round((sumInstallments + amt) * 100) / 100;
+      }
 
       rows.push({
         id: `row-mensual-${i}`,
         concept: `Mensual`,
         date: formattedDate,
-        amount: Math.round(monthlyAmount * 100) / 100,
+        amount: amt,
       });
     }
 
     if (balloonLiquidationPct > 0) {
       const deliveryDate = new Date(baseDate);
       deliveryDate.setMonth(baseDate.getMonth() + installmentsCount + 2);
+      let finalLiquidation = liquidation;
+      if (installmentsCount === 0) {
+        finalLiquidation = Math.max(0, Math.round((netTotalQuoteAmount - downPayment) * 100) / 100);
+      }
       rows.push({
         id: "row-liquidacion",
         concept: "Liquidación",
         date: deliveryDate.toISOString().slice(0, 10),
-        amount: liquidation,
+        amount: finalLiquidation,
       });
     }
 
@@ -1300,17 +1312,18 @@ export default function QuoteUnitWizardModal({
                       </label>
                       <input
                         type="number"
-                        min={1}
+                        min={0.01}
                         max={100}
+                        step="any"
                         value={primaryClient.ownershipPct}
                         onChange={(e) =>
                           setPrimaryClient((prev) => ({
                             ...prev,
-                            ownershipPct: Number(e.target.value),
+                            ownershipPct: parseFloat(e.target.value) || 0,
                           }))
                         }
                         style={{
-                          width: "65px",
+                          width: "75px",
                           padding: "0.3rem 0.5rem",
                           borderRadius: "0.4rem",
                           border: "1.5px solid var(--devio-blue)",
@@ -1478,12 +1491,13 @@ export default function QuoteUnitWizardModal({
                             </label>
                             <input
                               type="number"
-                              min={1}
+                              min={0.01}
                               max={100}
+                              step="any"
                               value={co.ownershipPct}
-                              onChange={(e) => handleUpdateCoOwner(co.id, "ownershipPct", Number(e.target.value))}
+                              onChange={(e) => handleUpdateCoOwner(co.id, "ownershipPct", parseFloat(e.target.value) || 0)}
                               style={{
-                                width: "65px",
+                                width: "75px",
                                 padding: "0.3rem 0.5rem",
                                 borderRadius: "0.4rem",
                                 border: "1.5px solid var(--devio-blue)",
@@ -1864,9 +1878,12 @@ export default function QuoteUnitWizardModal({
                     </label>
                     <input
                       type="number"
+                      min="0"
+                      max="100"
+                      step="any"
                       value={downPaymentPct}
                       onChange={(e) => {
-                        setDownPaymentPct(Number(e.target.value));
+                        setDownPaymentPct(parseFloat(e.target.value) || 0);
                         setSelectedPlanId("custom");
                         setCustomPlanName("Plan Personalizado");
                       }}
@@ -1886,9 +1903,11 @@ export default function QuoteUnitWizardModal({
                     </label>
                     <input
                       type="number"
+                      min="0"
+                      max="120"
                       value={installmentsCount}
                       onChange={(e) => {
-                        setInstallmentsCount(Number(e.target.value));
+                        setInstallmentsCount(parseInt(e.target.value) || 0);
                         setSelectedPlanId("custom");
                         setCustomPlanName("Plan Personalizado");
                       }}
@@ -1908,9 +1927,12 @@ export default function QuoteUnitWizardModal({
                     </label>
                     <input
                       type="number"
+                      min="0"
+                      max="100"
+                      step="any"
                       value={balloonLiquidationPct}
                       onChange={(e) => {
-                        setBalloonLiquidationPct(Number(e.target.value));
+                        setBalloonLiquidationPct(parseFloat(e.target.value) || 0);
                         setSelectedPlanId("custom");
                         setCustomPlanName("Plan Personalizado");
                       }}
@@ -1930,9 +1952,12 @@ export default function QuoteUnitWizardModal({
                     </label>
                     <input
                       type="number"
+                      min="0"
+                      max="100"
+                      step="any"
                       value={discountPct}
                       onChange={(e) => {
-                        setDiscountPct(Number(e.target.value));
+                        setDiscountPct(parseFloat(e.target.value) || 0);
                         setSelectedPlanId("custom");
                         setCustomPlanName("Plan Personalizado");
                       }}
