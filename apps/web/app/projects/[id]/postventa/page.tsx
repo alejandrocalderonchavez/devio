@@ -23,6 +23,7 @@ import {
   ShieldAlert,
   MessageSquare,
   AlertCircle,
+  Home,
 } from "lucide-react";
 import {
   PostventaIncident,
@@ -80,7 +81,7 @@ export default function ProjectPostventaPage() {
     return postventaIncidents.filter((i) => i.projectId === projectId);
   }, [postventaIncidents, projectId]);
 
-  // Project Sold Units
+  // Project ONLY SOLD Units (status === "VENDIDA" or status === "ENTREGADA")
   const projectSoldUnits = useMemo(() => {
     if (!project || !Array.isArray(project.unitsInventory)) return [];
     const list: Array<DeliveryUnitData & {
@@ -91,7 +92,9 @@ export default function ProjectPostventaPage() {
     }> = [];
 
     project.unitsInventory.forEach((u: any) => {
-      if (u.status === "VENDIDA" || u.status === "ENTREGADA" || u.client) {
+      // ONLY sold units
+      const isSold = u.status === "VENDIDA" || u.status === "ENTREGADA";
+      if (isSold) {
         const unitIncidents = projectIncidents.filter(
           (inc) => inc.unit.toLowerCase().trim() === (u.unit || "").toLowerCase().trim()
         );
@@ -104,9 +107,9 @@ export default function ProjectPostventaPage() {
           projectName: project.name,
           unitNumber: u.unit,
           unitType: u.type || "Unidad",
-          clientName: u.client || "Cliente sin asignar",
+          clientName: u.client && u.client !== "-" ? u.client : "Cliente Propietario",
           price: u.price || 0,
-          saleDate: u.saleDate ? formatDateMX(u.saleDate, "short") : "-",
+          saleDate: u.saleDate && u.saleDate !== "-" ? formatDateMX(u.saleDate, "short") : "Fecha registrada",
           isDelivered: Boolean(u.isDelivered || u.status === "ENTREGADA"),
           deliveredAt: u.deliveredAt ? formatDateMX(u.deliveredAt, "short") : undefined,
           deliveryActUrl: u.deliveryActUrl,
@@ -145,7 +148,7 @@ export default function ProjectPostventaPage() {
     });
   }, [projectSoldUnits, deliveryStatusFilter, deliverySearch]);
 
-  // KPI calculations
+  // KPI calculations for Incidents
   const kpis = useMemo(() => {
     const total = projectIncidents.length;
     const openCases = projectIncidents.filter(
@@ -237,39 +240,38 @@ export default function ProjectPostventaPage() {
     setSelectedIncident(updated);
   };
 
-  const getStatusPill = (status: PostventaStatus) => {
+  const getStatusBadge = (status: PostventaStatus) => {
     switch (status) {
       case "Reportada":
-        return { bg: "rgba(47, 128, 237, 0.08)", color: "#2F80ED", border: "rgba(47, 128, 237, 0.25)" };
+        return { bg: "#0F2942", color: "#FFFFFF" };
       case "En revisión":
-        return { bg: "rgba(245, 158, 11, 0.08)", color: "#D97706", border: "rgba(245, 158, 11, 0.25)" };
+        return { bg: "#F59E0B", color: "#FFFFFF" };
       case "Asignada":
-        return { bg: "rgba(31, 54, 82, 0.08)", color: "#1F3652", border: "rgba(31, 54, 82, 0.25)" };
+        return { bg: "#1B3047", color: "#FFFFFF" };
       case "Visita programada":
-        return { bg: "rgba(47, 128, 237, 0.12)", color: "#1B3047", border: "rgba(47, 128, 237, 0.3)" };
+        return { bg: "#2F80ED", color: "#FFFFFF" };
       case "En reparación":
-        return { bg: "rgba(234, 88, 12, 0.08)", color: "#EA580C", border: "rgba(234, 88, 12, 0.25)" };
+        return { bg: "#EA580C", color: "#FFFFFF" };
       case "Esperando cliente":
-        return { bg: "rgba(202, 138, 4, 0.08)", color: "#CA8A04", border: "rgba(202, 138, 4, 0.25)" };
+        return { bg: "#D97706", color: "#FFFFFF" };
       case "Resuelta":
-        return { bg: "rgba(0, 196, 140, 0.1)", color: "#059669", border: "rgba(0, 196, 140, 0.3)" };
       case "Cerrada":
-        return { bg: "rgba(100, 116, 139, 0.08)", color: "#475569", border: "rgba(100, 116, 139, 0.25)" };
+        return { bg: "#10B981", color: "#FFFFFF" };
       case "Reabierta":
-        return { bg: "rgba(239, 68, 68, 0.08)", color: "#DC2626", border: "rgba(239, 68, 68, 0.25)" };
+        return { bg: "#EF4444", color: "#FFFFFF" };
     }
   };
 
-  const getPriorityPill = (p: PostventaPriority) => {
+  const getPriorityBadge = (p: PostventaPriority) => {
     switch (p) {
       case "Urgente":
-        return { bg: "rgba(239, 68, 68, 0.1)", color: "#DC2626", text: "🔴 Urgente" };
+        return { bg: "#EF4444", color: "#FFFFFF", text: "Urgente" };
       case "Alta":
-        return { bg: "rgba(245, 158, 11, 0.12)", color: "#D97706", text: "🟠 Alta" };
+        return { bg: "#F59E0B", color: "#FFFFFF", text: "Alta" };
       case "Media":
-        return { bg: "rgba(47, 128, 237, 0.1)", color: "#2F80ED", text: "🔵 Media" };
+        return { bg: "#2F80ED", color: "#FFFFFF", text: "Media" };
       default:
-        return { bg: "rgba(0, 196, 140, 0.1)", color: "#059669", text: "🟢 Baja" };
+        return { bg: "#10B981", color: "#FFFFFF", text: "Baja" };
     }
   };
 
@@ -342,12 +344,12 @@ export default function ProjectPostventaPage() {
           <div
             style={{
               backgroundColor: "#FFFFFF",
-              borderRadius: "1.25rem",
+              borderRadius: "1.1rem",
               padding: "3rem",
               textAlign: "center",
               maxWidth: "480px",
-              border: "1px solid #EAEFF5",
-              boxShadow: "0 4px 12px rgba(31, 54, 82, 0.04)",
+              border: "1px solid rgba(22, 43, 63, 0.05)",
+              boxShadow: "0 4px 15px rgba(0,0,0,0.03)",
             }}
           >
             <div
@@ -388,13 +390,11 @@ export default function ProjectPostventaPage() {
     <AppLayout activeProjectId={projectId} projectSubTab="postventa">
       <main
         style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-          minHeight: 0,
           padding: "1.25rem 2rem 2.5rem 2rem",
-          gap: "1.25rem",
+          flex: "1 1 0%",
+          overflowY: "auto",
+          height: "calc(100vh - 65px)",
+          minHeight: 0,
         }}
       >
         {/* Top Header & Action Buttons */}
@@ -402,9 +402,10 @@ export default function ProjectPostventaPage() {
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "flex-start",
+            alignItems: "center",
             flexWrap: "wrap",
             gap: "1rem",
+            marginBottom: "1.25rem",
           }}
         >
           <div>
@@ -419,7 +420,7 @@ export default function ProjectPostventaPage() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  boxShadow: "0 4px 10px rgba(27, 48, 71, 0.15)",
+                  boxShadow: "0 2px 6px rgba(27, 48, 71, 0.15)",
                 }}
               >
                 <Wrench size={20} />
@@ -453,11 +454,11 @@ export default function ProjectPostventaPage() {
                     gap: "0.45rem",
                     backgroundColor: "#FFFFFF",
                     color: "#1F3652",
-                    padding: "0.55rem 1.15rem",
+                    padding: "0.5rem 1.1rem",
                     borderRadius: "9999px",
                     border: "1px solid #CBD5E1",
                     fontSize: "0.82rem",
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: "pointer",
                     boxShadow: "0 1px 3px rgba(31, 54, 82, 0.04)",
                   }}
@@ -474,16 +475,16 @@ export default function ProjectPostventaPage() {
                     gap: "0.45rem",
                     backgroundColor: "#FFFFFF",
                     color: "#1F3652",
-                    padding: "0.55rem 1.15rem",
+                    padding: "0.5rem 1.1rem",
                     borderRadius: "9999px",
                     border: "1px solid #CBD5E1",
                     fontSize: "0.82rem",
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: "pointer",
                     boxShadow: "0 1px 3px rgba(31, 54, 82, 0.04)",
                   }}
                 >
-                  <Printer size={15} color="#2F80ED" /> Exportar PDF
+                  <Printer size={15} color="#1B3047" /> Exportar PDF
                 </button>
               </>
             )}
@@ -501,13 +502,13 @@ export default function ProjectPostventaPage() {
                   gap: "0.45rem",
                   backgroundColor: "#1B3047",
                   color: "#FFFFFF",
-                  padding: "0.55rem 1.35rem",
+                  padding: "0.5rem 1.35rem",
                   borderRadius: "9999px",
                   border: "none",
                   fontSize: "0.82rem",
                   fontWeight: 700,
                   cursor: "pointer",
-                  boxShadow: "0 4px 12px rgba(27, 48, 71, 0.2)",
+                  boxShadow: "0 2px 6px rgba(27, 48, 71, 0.15)",
                 }}
               >
                 <Plus size={16} /> Nueva Incidencia
@@ -523,6 +524,7 @@ export default function ProjectPostventaPage() {
             gap: "0.5rem",
             borderBottom: "2px solid #EAEFF5",
             paddingBottom: "0.15rem",
+            marginBottom: "1.25rem",
           }}
         >
           <button
@@ -569,44 +571,42 @@ export default function ProjectPostventaPage() {
         {/* TAB 1: INCIDENCIAS */}
         {mainTab === "incidents" && (
           <>
-            {/* KPI Cards (matching units/page.tsx standard) */}
+            {/* 4 KPI CARDS (Matching units/page.tsx standard) */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gridTemplateColumns: "repeat(4, 1fr)",
                 gap: "1rem",
+                marginBottom: "1.25rem",
               }}
             >
               <div
                 style={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: "1.1rem",
-                  padding: "1.15rem 1.25rem",
-                  border: "1px solid #EAEFF5",
-                  boxShadow: "0 2px 8px rgba(31, 54, 82, 0.04)",
+                  padding: "1.1rem 1.25rem",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+                  border: "1px solid rgba(22, 43, 63, 0.05)",
                   display: "flex",
-                  alignItems: "center",
                   justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
                 <div>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#64748B", display: "block", marginBottom: "0.35rem" }}>
                     Incidencias Abiertas
                   </span>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.25rem" }}>
-                    <span style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652" }}>
-                      {kpis.openCases}
-                    </span>
-                    <span style={{ fontSize: "0.72rem", color: "#64748B" }}>en proceso</span>
-                  </div>
+                  <h3 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652", margin: 0, lineHeight: 1 }}>
+                    {kpis.openCases}
+                  </h3>
                 </div>
                 <div
                   style={{
                     width: "42px",
                     height: "42px",
-                    borderRadius: "10px",
-                    backgroundColor: "rgba(47, 128, 237, 0.1)",
-                    color: "#2F80ED",
+                    borderRadius: "0.75rem",
+                    backgroundColor: "rgba(31, 54, 82, 0.06)",
+                    color: "#1F3652",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -620,31 +620,29 @@ export default function ProjectPostventaPage() {
                 style={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: "1.1rem",
-                  padding: "1.15rem 1.25rem",
-                  border: "1px solid #EAEFF5",
-                  boxShadow: "0 2px 8px rgba(31, 54, 82, 0.04)",
+                  padding: "1.1rem 1.25rem",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+                  border: "1px solid rgba(22, 43, 63, 0.05)",
                   display: "flex",
-                  alignItems: "center",
                   justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
                 <div>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#64748B", display: "block", marginBottom: "0.35rem" }}>
                     1ra Respuesta Promedio
                   </span>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.25rem" }}>
-                    <span style={{ fontSize: "1.6rem", fontWeight: 800, color: "#2F80ED" }}>
-                      {kpis.firstResponseTime}
-                    </span>
-                  </div>
+                  <h3 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652", margin: 0, lineHeight: 1 }}>
+                    {kpis.firstResponseTime}
+                  </h3>
                 </div>
                 <div
                   style={{
                     width: "42px",
                     height: "42px",
-                    borderRadius: "10px",
-                    backgroundColor: "rgba(47, 128, 237, 0.1)",
-                    color: "#2F80ED",
+                    borderRadius: "0.75rem",
+                    backgroundColor: "rgba(31, 54, 82, 0.06)",
+                    color: "#1F3652",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -658,31 +656,29 @@ export default function ProjectPostventaPage() {
                 style={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: "1.1rem",
-                  padding: "1.15rem 1.25rem",
-                  border: "1px solid #EAEFF5",
-                  boxShadow: "0 2px 8px rgba(31, 54, 82, 0.04)",
+                  padding: "1.1rem 1.25rem",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+                  border: "1px solid rgba(22, 43, 63, 0.05)",
                   display: "flex",
-                  alignItems: "center",
                   justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
                 <div>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#64748B", display: "block", marginBottom: "0.35rem" }}>
                     Tiempo de Resolución
                   </span>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.25rem" }}>
-                    <span style={{ fontSize: "1.6rem", fontWeight: 800, color: "#00C48C" }}>
-                      {kpis.avgResolutionTime}
-                    </span>
-                  </div>
+                  <h3 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#10B981", margin: 0, lineHeight: 1 }}>
+                    {kpis.avgResolutionTime}
+                  </h3>
                 </div>
                 <div
                   style={{
                     width: "42px",
                     height: "42px",
-                    borderRadius: "10px",
-                    backgroundColor: "rgba(0, 196, 140, 0.1)",
-                    color: "#00C48C",
+                    borderRadius: "0.75rem",
+                    backgroundColor: "rgba(16, 185, 129, 0.1)",
+                    color: "#10B981",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -696,37 +692,37 @@ export default function ProjectPostventaPage() {
                 style={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: "1.1rem",
-                  padding: "1.15rem 1.25rem",
-                  border: "1px solid #EAEFF5",
-                  boxShadow: "0 2px 8px rgba(31, 54, 82, 0.04)",
+                  padding: "1.1rem 1.25rem",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+                  border: "1px solid rgba(22, 43, 63, 0.05)",
                   display: "flex",
-                  alignItems: "center",
                   justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
                 <div>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#64748B", display: "block", marginBottom: "0.35rem" }}>
                     Casos Vencidos (SLA)
                   </span>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.25rem" }}>
-                    <span
-                      style={{
-                        fontSize: "1.6rem",
-                        fontWeight: 800,
-                        color: kpis.expiredCases > 0 ? "#EF4444" : "#00C48C",
-                      }}
-                    >
-                      {kpis.expiredCases}
-                    </span>
-                  </div>
+                  <h3
+                    style={{
+                      fontSize: "1.6rem",
+                      fontWeight: 800,
+                      color: kpis.expiredCases > 0 ? "#EF4444" : "#10B981",
+                      margin: 0,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {kpis.expiredCases}
+                  </h3>
                 </div>
                 <div
                   style={{
                     width: "42px",
                     height: "42px",
-                    borderRadius: "10px",
-                    backgroundColor: kpis.expiredCases > 0 ? "rgba(239, 68, 68, 0.1)" : "rgba(0, 196, 140, 0.1)",
-                    color: kpis.expiredCases > 0 ? "#EF4444" : "#00C48C",
+                    borderRadius: "0.75rem",
+                    backgroundColor: kpis.expiredCases > 0 ? "rgba(239, 68, 68, 0.1)" : "rgba(16, 185, 129, 0.1)",
+                    color: kpis.expiredCases > 0 ? "#EF4444" : "#10B981",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -737,35 +733,32 @@ export default function ProjectPostventaPage() {
               </div>
             </div>
 
-            {/* Filter Bar */}
+            {/* Filter Bar (matching units/page.tsx standard) */}
             <div
               style={{
-                backgroundColor: "#FFFFFF",
-                padding: "0.85rem 1.15rem",
-                borderRadius: "1rem",
-                border: "1px solid #EAEFF5",
                 display: "flex",
-                flexWrap: "wrap",
-                gap: "0.75rem",
-                alignItems: "center",
                 justifyContent: "space-between",
-                boxShadow: "0 2px 6px rgba(31, 54, 82, 0.02)",
+                alignItems: "center",
+                gap: "1rem",
+                marginBottom: "1rem",
+                flexWrap: "wrap",
               }}
             >
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.5rem",
-                  backgroundColor: "#FAFBFD",
-                  border: "1px solid #CBD5E1",
-                  borderRadius: "0.6rem",
-                  padding: "0.45rem 0.85rem",
-                  minWidth: "280px",
+                  gap: "0.6rem",
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "9999px",
+                  padding: "0.5rem 1rem",
+                  border: "1px solid #EAEFF5",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+                  minWidth: "320px",
                   flex: 1,
                 }}
               >
-                <Search size={16} style={{ color: "#94A3B8" }} />
+                <Search size={16} color="#94A3B8" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -775,24 +768,27 @@ export default function ProjectPostventaPage() {
                     border: "none",
                     backgroundColor: "transparent",
                     outline: "none",
-                    fontSize: "0.82rem",
+                    fontSize: "0.85rem",
                     width: "100%",
                     color: "#1F3652",
                   }}
                 />
               </div>
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                 <select
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
                   style={{
-                    padding: "0.45rem 0.75rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid #CBD5E1",
-                    fontSize: "0.8rem",
-                    color: "#1F3652",
+                    padding: "0.5rem 1rem",
+                    borderRadius: "9999px",
+                    border: "1px solid #EAEFF5",
                     backgroundColor: "#FFFFFF",
+                    color: "#1F3652",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
                     outline: "none",
                   }}
                 >
@@ -811,12 +807,15 @@ export default function ProjectPostventaPage() {
                   value={selectedPriority}
                   onChange={(e) => setSelectedPriority(e.target.value)}
                   style={{
-                    padding: "0.45rem 0.75rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid #CBD5E1",
-                    fontSize: "0.8rem",
-                    color: "#1F3652",
+                    padding: "0.5rem 1rem",
+                    borderRadius: "9999px",
+                    border: "1px solid #EAEFF5",
                     backgroundColor: "#FFFFFF",
+                    color: "#1F3652",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
                     outline: "none",
                   }}
                 >
@@ -829,187 +828,177 @@ export default function ProjectPostventaPage() {
               </div>
             </div>
 
-            {/* Table */}
+            {/* Table (matching units/page.tsx standard) */}
             <div
               style={{
                 backgroundColor: "#FFFFFF",
                 borderRadius: "1rem",
-                border: "1px solid #EAEFF5",
-                boxShadow: "0 2px 8px rgba(31, 54, 82, 0.04)",
                 overflow: "hidden",
+                boxShadow: "0 4px 15px rgba(0,0,0,0.03)",
+                border: "1px solid rgba(22, 43, 63, 0.05)",
               }}
             >
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                  <thead>
-                    <tr
-                      style={{
-                        backgroundColor: "#F8FAFC",
-                        borderBottom: "1px solid #EAEFF5",
-                        fontSize: "0.75rem",
-                        color: "#1F3652",
-                        fontWeight: 800,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.03em",
-                      }}
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #EAEFF5" }}>
+                    <th
+                      style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652", cursor: "pointer", userSelect: "none" }}
+                      onClick={() => handleSort("folio")}
                     >
-                      <th
-                        style={{ padding: "0.85rem 1rem", cursor: "pointer" }}
-                        onClick={() => handleSort("folio")}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                          Folio <ArrowUpDown size={12} />
-                        </div>
-                      </th>
-                      <th style={{ padding: "0.85rem 1rem" }}>Unidad</th>
-                      <th style={{ padding: "0.85rem 1rem" }}>Cliente</th>
-                      <th style={{ padding: "0.85rem 1rem" }}>Categoría & Asunto</th>
-                      <th style={{ padding: "0.85rem 1rem" }}>Prioridad</th>
-                      <th style={{ padding: "0.85rem 1rem" }}>Estado</th>
-                      <th style={{ padding: "0.85rem 1rem" }}>Fecha Reporte</th>
-                      <th style={{ padding: "0.85rem 1rem" }}>Responsable</th>
-                      <th style={{ padding: "0.85rem 1rem", textAlign: "right" }}>Acciones</th>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                        Folio <ArrowUpDown size={12} color="#1B3047" />
+                      </div>
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Unidad</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Cliente</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Categoría & Asunto</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Prioridad</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Estado</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Fecha Reporte</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Responsable</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652", textAlign: "right" }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredIncidents.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} style={{ padding: "3.5rem 1rem", textAlign: "center", color: "#64748B" }}>
+                        <Wrench size={36} color="#94A3B8" style={{ margin: "0 auto 0.75rem auto", display: "block" }} />
+                        <strong style={{ fontSize: "0.95rem", color: "#1F3652", display: "block", marginBottom: "0.25rem" }}>
+                          No hay incidencias registradas en este proyecto
+                        </strong>
+                        <span style={{ fontSize: "0.82rem", color: "#94A3B8" }}>
+                          Utiliza el botón superior "+ Nueva Incidencia" para levantar un nuevo ticket de garantía.
+                        </span>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filteredIncidents.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} style={{ padding: "3rem", textAlign: "center", color: "#94A3B8" }}>
-                          <Wrench size={36} style={{ margin: "0 auto 0.5rem auto", opacity: 0.5 }} />
-                          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#1F3652" }}>
-                            No hay incidencias registradas en este proyecto
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredIncidents.map((inc, idx) => {
-                        const statusPill = getStatusPill(inc.status);
-                        const priorityPill = getPriorityPill(inc.priority);
-                        const commentsCount = (inc.comments || []).length;
-                        const rowBg = idx % 2 === 0 ? "#FFFFFF" : "#FAFBFD";
+                  ) : (
+                    filteredIncidents.map((inc, i) => {
+                      const statusBadge = getStatusBadge(inc.status);
+                      const priorityBadge = getPriorityBadge(inc.priority);
+                      const commentsCount = (inc.comments || []).length;
 
-                        return (
-                          <tr
-                            key={inc.id}
-                            style={{
-                              backgroundColor: rowBg,
-                              borderBottom: "1px solid #EAEFF5",
-                              fontSize: "0.82rem",
-                              transition: "background 0.12s",
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F1F5F9")}
-                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = rowBg)}
-                          >
-                            <td style={{ padding: "0.85rem 1rem", fontWeight: 800, color: "#1F3652" }}>
-                              {inc.folio}
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem", fontWeight: 800, color: "#2F80ED" }}>
-                              {inc.unit}
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem" }}>
-                              <div style={{ fontWeight: 700, color: "#1F3652" }}>{inc.clientName}</div>
-                              {inc.clientPhone && (
-                                <div style={{ fontSize: "0.72rem", color: "#64748B" }}>{inc.clientPhone}</div>
-                              )}
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem", maxWidth: "260px" }}>
-                              <div style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 600 }}>
-                                {inc.category}
-                              </div>
+                      return (
+                        <tr
+                          key={inc.id}
+                          style={{
+                            borderBottom: "1px solid #EAEFF5",
+                            backgroundColor: i % 2 === 0 ? "#FFFFFF" : "#FAFBFD",
+                            transition: "background-color 0.15s ease",
+                          }}
+                        >
+                          <td style={{ padding: "0.85rem 1rem", fontWeight: 800, color: "#1F3652" }}>
+                            {inc.folio}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", fontWeight: 800, color: "#1F3652" }}>
+                            Unidad {inc.unit}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <div style={{ fontWeight: 600, color: "#1F3652" }}>{inc.clientName}</div>
+                            {inc.clientPhone && (
+                              <div style={{ fontSize: "0.72rem", color: "#64748B" }}>{inc.clientPhone}</div>
+                            )}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", maxWidth: "260px" }}>
+                            <div style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 600 }}>
+                              {inc.category}
+                            </div>
+                            <div
+                              style={{
+                                fontWeight: 600,
+                                color: "#1F3652",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {inc.title}
+                            </div>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "0.25rem 0.75rem",
+                                borderRadius: "9999px",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                backgroundColor: priorityBadge.bg,
+                                color: priorityBadge.color,
+                              }}
+                            >
+                              {priorityBadge.text}
+                            </span>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "0.25rem 0.75rem",
+                                borderRadius: "9999px",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                backgroundColor: statusBadge.bg,
+                                color: statusBadge.color,
+                              }}
+                            >
+                              {inc.status}
+                            </span>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", color: "#64748B", fontWeight: 500 }}>
+                            {formatDateMX(inc.createdAt, "short")}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "#1F3652" }}>
+                              {inc.assignedTo?.name || "Sin asignar"}
+                            </div>
+                            {commentsCount > 0 && (
                               <div
                                 style={{
-                                  fontWeight: 600,
-                                  color: "#1F3652",
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}
-                              >
-                                {inc.title}
-                              </div>
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem" }}>
-                              <span
-                                style={{
-                                  fontSize: "0.72rem",
-                                  fontWeight: 700,
-                                  padding: "0.2rem 0.55rem",
-                                  borderRadius: "999px",
-                                  backgroundColor: priorityPill.bg,
-                                  color: priorityPill.color,
-                                }}
-                              >
-                                {priorityPill.text}
-                              </span>
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem" }}>
-                              <span
-                                style={{
-                                  fontSize: "0.72rem",
-                                  fontWeight: 700,
-                                  padding: "0.2rem 0.55rem",
-                                  borderRadius: "999px",
-                                  backgroundColor: statusPill.bg,
-                                  color: statusPill.color,
-                                  border: `1px solid ${statusPill.border}`,
-                                }}
-                              >
-                                {inc.status}
-                              </span>
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem", color: "#64748B", fontSize: "0.78rem" }}>
-                              {formatDateMX(inc.createdAt, "short")}
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem" }}>
-                              <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "#1F3652" }}>
-                                {inc.assignedTo?.name || "Sin asignar"}
-                              </div>
-                              {commentsCount > 0 && (
-                                <div
-                                  style={{
-                                    fontSize: "0.68rem",
-                                    color: "#2F80ED",
-                                    marginTop: "2px",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "3px",
-                                  }}
-                                >
-                                  <MessageSquare size={10} /> {commentsCount} mensaje{commentsCount > 1 ? "s" : ""}
-                                </div>
-                              )}
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedIncident(inc);
-                                  setIsDrawerOpen(true);
-                                }}
-                                style={{
-                                  display: "inline-flex",
+                                  fontSize: "0.68rem",
+                                  color: "#1B3047",
+                                  marginTop: "2px",
+                                  display: "flex",
                                   alignItems: "center",
-                                  gap: "0.35rem",
-                                  backgroundColor: "rgba(31, 54, 82, 0.05)",
-                                  color: "#1F3652",
-                                  border: "1px solid #CBD5E1",
-                                  padding: "0.35rem 0.75rem",
-                                  borderRadius: "9999px",
-                                  fontSize: "0.75rem",
-                                  fontWeight: 700,
-                                  cursor: "pointer",
+                                  gap: "3px",
+                                  fontWeight: 600,
                                 }}
                               >
-                                <Eye size={13} /> Gestionar & Chat
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                                <MessageSquare size={10} /> {commentsCount} mensaje{commentsCount > 1 ? "s" : ""}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedIncident(inc);
+                                setIsDrawerOpen(true);
+                              }}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                                backgroundColor: "#1B3047",
+                                color: "#FFFFFF",
+                                border: "none",
+                                padding: "0.45rem 0.95rem",
+                                borderRadius: "9999px",
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                boxShadow: "0 2px 6px rgba(27, 48, 71, 0.15)",
+                              }}
+                            >
+                              <Eye size={13} /> Gestionar & Chat
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </>
         )}
@@ -1017,43 +1006,42 @@ export default function ProjectPostventaPage() {
         {/* TAB 2: UNIDADES VENDIDAS & ENTREGAS */}
         {mainTab === "deliveries" && (
           <>
+            {/* 4 KPI CARDS (Matching units/page.tsx standard) */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gridTemplateColumns: "repeat(4, 1fr)",
                 gap: "1rem",
+                marginBottom: "1.25rem",
               }}
             >
               <div
                 style={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: "1.1rem",
-                  padding: "1.15rem 1.25rem",
-                  border: "1px solid #EAEFF5",
-                  boxShadow: "0 2px 8px rgba(31, 54, 82, 0.04)",
+                  padding: "1.1rem 1.25rem",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+                  border: "1px solid rgba(22, 43, 63, 0.05)",
                   display: "flex",
-                  alignItems: "center",
                   justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
                 <div>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#64748B", display: "block", marginBottom: "0.35rem" }}>
                     Total Unidades Vendidas
                   </span>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.25rem" }}>
-                    <span style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652" }}>
-                      {deliveryKpis.total}
-                    </span>
-                    <span style={{ fontSize: "0.72rem", color: "#64748B" }}>en {project?.name}</span>
-                  </div>
+                  <h3 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652", margin: 0, lineHeight: 1 }}>
+                    {deliveryKpis.total}
+                  </h3>
                 </div>
                 <div
                   style={{
                     width: "42px",
                     height: "42px",
-                    borderRadius: "10px",
-                    backgroundColor: "rgba(47, 128, 237, 0.1)",
-                    color: "#2F80ED",
+                    borderRadius: "0.75rem",
+                    backgroundColor: "rgba(31, 54, 82, 0.06)",
+                    color: "#1F3652",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1067,23 +1055,23 @@ export default function ProjectPostventaPage() {
                 style={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: "1.1rem",
-                  padding: "1.15rem 1.25rem",
-                  border: "1px solid #EAEFF5",
-                  boxShadow: "0 2px 8px rgba(31, 54, 82, 0.04)",
+                  padding: "1.1rem 1.25rem",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+                  border: "1px solid rgba(22, 43, 63, 0.05)",
                   display: "flex",
-                  alignItems: "center",
                   justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
                 <div>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#64748B", display: "block", marginBottom: "0.35rem" }}>
                     Unidades Entregadas
                   </span>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.25rem" }}>
-                    <span style={{ fontSize: "1.6rem", fontWeight: 800, color: "#00C48C" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem" }}>
+                    <h3 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#10B981", margin: 0, lineHeight: 1 }}>
                       {deliveryKpis.delivered}
-                    </span>
-                    <span style={{ fontSize: "0.72rem", color: "#00C48C", fontWeight: 700 }}>
+                    </h3>
+                    <span style={{ fontSize: "0.75rem", color: "#10B981", fontWeight: 700 }}>
                       ({deliveryKpis.rate}%)
                     </span>
                   </div>
@@ -1092,9 +1080,9 @@ export default function ProjectPostventaPage() {
                   style={{
                     width: "42px",
                     height: "42px",
-                    borderRadius: "10px",
-                    backgroundColor: "rgba(0, 196, 140, 0.1)",
-                    color: "#00C48C",
+                    borderRadius: "0.75rem",
+                    backgroundColor: "rgba(16, 185, 129, 0.1)",
+                    color: "#10B981",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1108,29 +1096,27 @@ export default function ProjectPostventaPage() {
                 style={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: "1.1rem",
-                  padding: "1.15rem 1.25rem",
-                  border: "1px solid #EAEFF5",
-                  boxShadow: "0 2px 8px rgba(31, 54, 82, 0.04)",
+                  padding: "1.1rem 1.25rem",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+                  border: "1px solid rgba(22, 43, 63, 0.05)",
                   display: "flex",
-                  alignItems: "center",
                   justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
                 <div>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#64748B", display: "block", marginBottom: "0.35rem" }}>
                     Pendientes de Entrega
                   </span>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.25rem" }}>
-                    <span style={{ fontSize: "1.6rem", fontWeight: 800, color: "#F59E0B" }}>
-                      {deliveryKpis.pending}
-                    </span>
-                  </div>
+                  <h3 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#F59E0B", margin: 0, lineHeight: 1 }}>
+                    {deliveryKpis.pending}
+                  </h3>
                 </div>
                 <div
                   style={{
                     width: "42px",
                     height: "42px",
-                    borderRadius: "10px",
+                    borderRadius: "0.75rem",
                     backgroundColor: "rgba(245, 158, 11, 0.1)",
                     color: "#F59E0B",
                     display: "flex",
@@ -1146,37 +1132,37 @@ export default function ProjectPostventaPage() {
                 style={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: "1.1rem",
-                  padding: "1.15rem 1.25rem",
-                  border: "1px solid #EAEFF5",
-                  boxShadow: "0 2px 8px rgba(31, 54, 82, 0.04)",
+                  padding: "1.1rem 1.25rem",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+                  border: "1px solid rgba(22, 43, 63, 0.05)",
                   display: "flex",
-                  alignItems: "center",
                   justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
                 <div>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748B", display: "block" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#64748B", display: "block", marginBottom: "0.35rem" }}>
                     Entregadas con Incidencias
                   </span>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginTop: "0.25rem" }}>
-                    <span
-                      style={{
-                        fontSize: "1.6rem",
-                        fontWeight: 800,
-                        color: deliveryKpis.activeWithIssues > 0 ? "#EF4444" : "#00C48C",
-                      }}
-                    >
-                      {deliveryKpis.activeWithIssues}
-                    </span>
-                  </div>
+                  <h3
+                    style={{
+                      fontSize: "1.6rem",
+                      fontWeight: 800,
+                      color: deliveryKpis.activeWithIssues > 0 ? "#EF4444" : "#10B981",
+                      margin: 0,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {deliveryKpis.activeWithIssues}
+                  </h3>
                 </div>
                 <div
                   style={{
                     width: "42px",
                     height: "42px",
-                    borderRadius: "10px",
-                    backgroundColor: deliveryKpis.activeWithIssues > 0 ? "rgba(239, 68, 68, 0.1)" : "rgba(0, 196, 140, 0.1)",
-                    color: deliveryKpis.activeWithIssues > 0 ? "#EF4444" : "#00C48C",
+                    borderRadius: "0.75rem",
+                    backgroundColor: deliveryKpis.activeWithIssues > 0 ? "rgba(239, 68, 68, 0.1)" : "rgba(16, 185, 129, 0.1)",
+                    color: deliveryKpis.activeWithIssues > 0 ? "#EF4444" : "#10B981",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1187,35 +1173,32 @@ export default function ProjectPostventaPage() {
               </div>
             </div>
 
-            {/* Toolbar */}
+            {/* Toolbar (matching units/page.tsx standard) */}
             <div
               style={{
-                backgroundColor: "#FFFFFF",
-                padding: "0.85rem 1.15rem",
-                borderRadius: "1rem",
-                border: "1px solid #EAEFF5",
                 display: "flex",
-                flexWrap: "wrap",
-                gap: "0.75rem",
-                alignItems: "center",
                 justifyContent: "space-between",
-                boxShadow: "0 2px 6px rgba(31, 54, 82, 0.02)",
+                alignItems: "center",
+                gap: "1rem",
+                marginBottom: "1rem",
+                flexWrap: "wrap",
               }}
             >
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.5rem",
-                  backgroundColor: "#FAFBFD",
-                  border: "1px solid #CBD5E1",
-                  borderRadius: "0.6rem",
-                  padding: "0.45rem 0.85rem",
-                  minWidth: "280px",
+                  gap: "0.6rem",
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "9999px",
+                  padding: "0.5rem 1rem",
+                  border: "1px solid #EAEFF5",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+                  minWidth: "320px",
                   flex: 1,
                 }}
               >
-                <Search size={16} style={{ color: "#94A3B8" }} />
+                <Search size={16} color="#94A3B8" />
                 <input
                   type="text"
                   value={deliverySearch}
@@ -1225,7 +1208,7 @@ export default function ProjectPostventaPage() {
                     border: "none",
                     backgroundColor: "transparent",
                     outline: "none",
-                    fontSize: "0.82rem",
+                    fontSize: "0.85rem",
                     width: "100%",
                     color: "#1F3652",
                   }}
@@ -1236,12 +1219,15 @@ export default function ProjectPostventaPage() {
                 value={deliveryStatusFilter}
                 onChange={(e) => setDeliveryStatusFilter(e.target.value as any)}
                 style={{
-                  padding: "0.45rem 0.75rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid #CBD5E1",
-                  fontSize: "0.8rem",
-                  color: "#1F3652",
+                  padding: "0.5rem 1rem",
+                  borderRadius: "9999px",
+                  border: "1px solid #EAEFF5",
                   backgroundColor: "#FFFFFF",
+                  color: "#1F3652",
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
                   outline: "none",
                 }}
               >
@@ -1251,220 +1237,178 @@ export default function ProjectPostventaPage() {
               </select>
             </div>
 
-            {/* Table */}
+            {/* Table (matching units/page.tsx standard) */}
             <div
               style={{
                 backgroundColor: "#FFFFFF",
                 borderRadius: "1rem",
-                border: "1px solid #EAEFF5",
-                boxShadow: "0 2px 8px rgba(31, 54, 82, 0.04)",
                 overflow: "hidden",
+                boxShadow: "0 4px 15px rgba(0,0,0,0.03)",
+                border: "1px solid rgba(22, 43, 63, 0.05)",
               }}
             >
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                  <thead>
-                    <tr
-                      style={{
-                        backgroundColor: "#F8FAFC",
-                        borderBottom: "1px solid #EAEFF5",
-                        fontSize: "0.75rem",
-                        color: "#1F3652",
-                        fontWeight: 800,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.03em",
-                      }}
-                    >
-                      <th style={{ padding: "0.85rem 1rem" }}>Unidad</th>
-                      <th style={{ padding: "0.85rem 1rem" }}>Propietario / Cliente</th>
-                      <th style={{ padding: "0.85rem 1rem" }}>Fecha Venta</th>
-                      <th style={{ padding: "0.85rem 1rem" }}>Estatus Entrega</th>
-                      <th style={{ padding: "0.85rem 1rem" }}>Fecha Entrega & Garantía</th>
-                      <th style={{ padding: "0.85rem 1rem" }}>Incidencias Activas</th>
-                      <th style={{ padding: "0.85rem 1rem", textAlign: "right" }}>Acciones</th>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #EAEFF5" }}>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Unidad</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Propietario / Cliente</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Fecha Venta</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Estatus Entrega</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Fecha Entrega & Garantía</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>Incidencias Activas</th>
+                    <th style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652", textAlign: "right" }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSoldUnits.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ padding: "3.5rem 1rem", textAlign: "center", color: "#64748B" }}>
+                        <Building size={36} color="#94A3B8" style={{ margin: "0 auto 0.75rem auto", display: "block" }} />
+                        <strong style={{ fontSize: "0.95rem", color: "#1F3652", display: "block", marginBottom: "0.25rem" }}>
+                          No hay unidades vendidas en este proyecto
+                        </strong>
+                        <span style={{ fontSize: "0.82rem", color: "#94A3B8" }}>
+                          Cuando formalices ventas en el módulo de Ventas, las unidades vendidas aparecerán aquí automáticamente para gestionar su entrega y garantías.
+                        </span>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filteredSoldUnits.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} style={{ padding: "3rem", textAlign: "center", color: "#94A3B8" }}>
-                          <Building size={36} style={{ margin: "0 auto 0.5rem auto", opacity: 0.5 }} />
-                          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#1F3652" }}>
-                            No se encontraron unidades vendidas en este proyecto
+                  ) : (
+                    filteredSoldUnits.map((u, i) => (
+                      <tr
+                        key={`${u.projectId}-${u.unitNumber}-${i}`}
+                        style={{
+                          borderBottom: "1px solid #EAEFF5",
+                          backgroundColor: i % 2 === 0 ? "#FFFFFF" : "#FAFBFD",
+                          transition: "background-color 0.15s ease",
+                        }}
+                      >
+                        <td style={{ padding: "0.85rem 1rem" }}>
+                          <span style={{ fontWeight: 800, color: "#1F3652", fontSize: "0.9rem", display: "block" }}>
+                            Unidad {u.unitNumber}
+                          </span>
+                          <span style={{ fontSize: "0.75rem", color: "#64748B", fontWeight: 500 }}>
+                            {u.unitType}
+                          </span>
+                        </td>
+                        <td style={{ padding: "0.85rem 1rem", fontWeight: 600, color: "#1F3652" }}>
+                          {u.clientName}
+                        </td>
+                        <td style={{ padding: "0.85rem 1rem", color: "#64748B", fontWeight: 500 }}>
+                          {u.saleDate}
+                        </td>
+                        <td style={{ padding: "0.85rem 1rem" }}>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "0.3rem 0.85rem",
+                              borderRadius: "9999px",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              backgroundColor: u.isDelivered ? "#10B981" : "#F59E0B",
+                              color: "#FFFFFF",
+                            }}
+                          >
+                            {u.isDelivered ? "Entregada" : "Pendiente"}
+                          </span>
+                        </td>
+                        <td style={{ padding: "0.85rem 1rem" }}>
+                          {u.isDelivered ? (
+                            <div>
+                              <span style={{ fontWeight: 700, color: "#1F3652", fontSize: "0.82rem", display: "block" }}>
+                                {u.deliveredAt || "Fecha registrada"}
+                              </span>
+                              <span style={{ fontSize: "0.72rem", color: "#059669", display: "inline-flex", alignItems: "center", gap: "3px", fontWeight: 600 }}>
+                                <ShieldCheck size={12} /> Garantía hasta {u.warrantyExpiresAt || "1 año"}
+                              </span>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: "0.78rem", color: "#94A3B8" }}>
+                              Sin entrega formal aún
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: "0.85rem 1rem" }}>
+                          {u.activeIncidentsCount > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMainTab("incidents");
+                                setSearchQuery(u.unitNumber);
+                              }}
+                              style={{
+                                backgroundColor: "rgba(239, 68, 68, 0.1)",
+                                color: "#DC2626",
+                                border: "1px solid rgba(239, 68, 68, 0.25)",
+                                borderRadius: "9999px",
+                                padding: "0.2rem 0.65rem",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              🔴 {u.activeIncidentsCount} ticket{u.activeIncidentsCount > 1 ? "s" : ""}
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: "0.78rem", color: "#64748B" }}>
+                              {u.totalIncidentsCount > 0
+                                ? `0 activas (${u.totalIncidentsCount} resueltas)`
+                                : "Sin incidencias"}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
+                          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.45rem", alignItems: "center" }}>
+                            <button
+                              type="button"
+                              onClick={() => setDeliveryModalUnit(u)}
+                              style={{
+                                padding: "0.45rem 0.95rem",
+                                borderRadius: "9999px",
+                                backgroundColor: u.isDelivered ? "#FFFFFF" : "#1B3047",
+                                color: u.isDelivered ? "#1F3652" : "#FFFFFF",
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                border: u.isDelivered ? "1px solid #CBD5E1" : "none",
+                                cursor: "pointer",
+                                boxShadow: u.isDelivered ? "none" : "0 2px 6px rgba(27, 48, 71, 0.15)",
+                              }}
+                            >
+                              {u.isDelivered ? "Editar Entrega" : "Marcar como Entregada"}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewIncidentDefaults({
+                                  projectId: u.projectId,
+                                  unit: u.unitNumber,
+                                });
+                                setIsNewModalOpen(true);
+                              }}
+                              style={{
+                                padding: "0.45rem 0.95rem",
+                                borderRadius: "9999px",
+                                backgroundColor: "#1B3047",
+                                color: "#FFFFFF",
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                border: "none",
+                                cursor: "pointer",
+                                boxShadow: "0 2px 6px rgba(27, 48, 71, 0.15)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                            >
+                              <Plus size={13} /> Incidencia
+                            </button>
                           </div>
                         </td>
                       </tr>
-                    ) : (
-                      filteredSoldUnits.map((u, idx) => {
-                        const rowBg = idx % 2 === 0 ? "#FFFFFF" : "#FAFBFD";
-                        return (
-                          <tr
-                            key={`${u.projectId}-${u.unitNumber}-${idx}`}
-                            style={{
-                              backgroundColor: rowBg,
-                              borderBottom: "1px solid #EAEFF5",
-                              fontSize: "0.82rem",
-                              transition: "background 0.12s",
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F1F5F9")}
-                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = rowBg)}
-                          >
-                            <td style={{ padding: "0.85rem 1rem" }}>
-                              <div style={{ fontSize: "0.85rem", color: "#2F80ED", fontWeight: 800 }}>
-                                Unidad {u.unitNumber}
-                              </div>
-                              <div style={{ fontSize: "0.72rem", color: "#64748B" }}>
-                                {u.unitType}
-                              </div>
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem", fontWeight: 700, color: "#1F3652" }}>
-                              {u.clientName}
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem", color: "#64748B" }}>
-                              {u.saleDate}
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem" }}>
-                              {u.isDelivered ? (
-                                <span
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "0.3rem",
-                                    backgroundColor: "rgba(0, 196, 140, 0.1)",
-                                    color: "#059669",
-                                    border: "1px solid rgba(0, 196, 140, 0.3)",
-                                    padding: "0.25rem 0.65rem",
-                                    borderRadius: "999px",
-                                    fontSize: "0.74rem",
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  <CheckCircle2 size={12} /> Entregada
-                                </span>
-                              ) : (
-                                <span
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "0.3rem",
-                                    backgroundColor: "rgba(245, 158, 11, 0.1)",
-                                    color: "#D97706",
-                                    border: "1px solid rgba(245, 158, 11, 0.3)",
-                                    padding: "0.25rem 0.65rem",
-                                    borderRadius: "999px",
-                                    fontSize: "0.74rem",
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  <Clock size={12} /> Pendiente
-                                </span>
-                              )}
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem" }}>
-                              {u.isDelivered ? (
-                                <div>
-                                  <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#1F3652" }}>
-                                    {u.deliveredAt || "Fecha registrada"}
-                                  </div>
-                                  <div
-                                    style={{
-                                      fontSize: "0.7rem",
-                                      color: "#059669",
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: "3px",
-                                    }}
-                                  >
-                                    <ShieldCheck size={11} /> Garantía activa
-                                  </div>
-                                </div>
-                              ) : (
-                                <span style={{ fontSize: "0.75rem", color: "#94A3B8" }}>
-                                  Sin entrega formal aún
-                                </span>
-                              )}
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem" }}>
-                              {u.activeIncidentsCount > 0 ? (
-                                <button
-                                  onClick={() => {
-                                    setMainTab("incidents");
-                                    setSearchQuery(u.unitNumber);
-                                  }}
-                                  style={{
-                                    backgroundColor: "rgba(239, 68, 68, 0.1)",
-                                    color: "#DC2626",
-                                    border: "1px solid rgba(239, 68, 68, 0.3)",
-                                    borderRadius: "999px",
-                                    padding: "0.15rem 0.55rem",
-                                    fontSize: "0.72rem",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  🔴 {u.activeIncidentsCount} ticket{u.activeIncidentsCount > 1 ? "s" : ""}
-                                </button>
-                              ) : (
-                                <span style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                                  {u.totalIncidentsCount > 0
-                                    ? `0 activas (${u.totalIncidentsCount} resueltas)`
-                                    : "Sin incidencias"}
-                                </span>
-                              )}
-                            </td>
-                            <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
-                              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.45rem" }}>
-                                <button
-                                  type="button"
-                                  onClick={() => setDeliveryModalUnit(u)}
-                                  style={{
-                                    backgroundColor: u.isDelivered ? "#FAFBFD" : "#1B3047",
-                                    color: u.isDelivered ? "#1F3652" : "#FFFFFF",
-                                    border: "1px solid #CBD5E1",
-                                    borderRadius: "0.45rem",
-                                    padding: "0.35rem 0.75rem",
-                                    fontSize: "0.74rem",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  {u.isDelivered ? "Editar Entrega" : "Marcar como Entregada"}
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setNewIncidentDefaults({
-                                      projectId: u.projectId,
-                                      unit: u.unitNumber,
-                                    });
-                                    setIsNewModalOpen(true);
-                                  }}
-                                  style={{
-                                    backgroundColor: "#2F80ED",
-                                    color: "#FFFFFF",
-                                    border: "none",
-                                    borderRadius: "0.45rem",
-                                    padding: "0.35rem 0.75rem",
-                                    fontSize: "0.74rem",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "4px",
-                                  }}
-                                >
-                                  <Plus size={12} /> Incidencia
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </>
         )}

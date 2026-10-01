@@ -77,7 +77,7 @@ export function NewIncidentModal({
   const soldUnitsList = useMemo(() => {
     if (!currentProject || !Array.isArray(currentProject.unitsInventory)) return [];
     return currentProject.unitsInventory.filter(
-      (u: any) => u.status === "VENDIDA" || u.status === "ENTREGADA" || u.client
+      (u: any) => u.status === "VENDIDA" || u.status === "ENTREGADA"
     );
   }, [currentProject]);
 
