@@ -27,25 +27,6 @@ interface FloorPlansViewerModalProps {
   onOpenNewSale?: (unit: UnitItem) => void;
 }
 
-const DEFAULT_BLUEPRINTS = [
-  {
-    name: "Planta Tipo A (2 Recámaras)",
-    url: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1400&q=80",
-  },
-  {
-    name: "Planta Tipo B (3 Recámaras)",
-    url: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1400&q=80",
-  },
-  {
-    name: "Planta Tipo C (1 Recámara)",
-    url: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1400&q=80",
-  },
-  {
-    name: "Planta Penthouse",
-    url: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1400&q=80",
-  },
-];
-
 export default function FloorPlansViewerModal({
   isOpen,
   onClose,
@@ -60,18 +41,7 @@ export default function FloorPlansViewerModal({
     if (project.floorPlans && project.floorPlans.length > 0) {
       return project.floorPlans;
     }
-    return [
-      {
-        id: "fp-default-1",
-        name: "Planta Tipo A",
-        imageUrl: DEFAULT_BLUEPRINTS[0]?.url,
-      },
-      {
-        id: "fp-default-2",
-        name: "Planta Tipo B",
-        imageUrl: DEFAULT_BLUEPRINTS[1]?.url,
-      },
-    ];
+    return [];
   }, [project.floorPlans]);
 
   // Modal para crear / editar planta
@@ -591,78 +561,64 @@ export default function FloorPlansViewerModal({
                   />
 
                   {editingForm.imageUrl ? (
-                    <div style={{ position: "relative", height: "130px", borderRadius: "0.6rem", overflow: "hidden", border: "1px solid #CBD5E1", backgroundColor: "#0F172A", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ position: "relative", height: "160px", borderRadius: "0.75rem", overflow: "hidden", border: "1px solid #CBD5E1", backgroundColor: "#0F172A", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <img src={editingForm.imageUrl} alt="Plano" style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }} />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        style={{
-                          position: "absolute",
-                          bottom: "0.5rem",
-                          right: "0.5rem",
-                          padding: "0.3rem 0.6rem",
-                          borderRadius: "0.4rem",
-                          backgroundColor: "#1B3047",
-                          color: "#FFFFFF",
-                          fontSize: "0.7rem",
-                          fontWeight: 700,
-                          border: "none",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Cambiar Imagen
-                      </button>
+                      <div style={{ position: "absolute", bottom: "0.5rem", right: "0.5rem", display: "flex", gap: "0.35rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="btn btn-secondary"
+                          style={{ fontSize: "0.72rem", padding: "0.3rem 0.6rem" }}
+                        >
+                          Cambiar Imagen
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingForm((prev) => ({ ...prev, imageUrl: "" }))}
+                          style={{
+                            background: "rgba(239, 68, 68, 0.85)",
+                            color: "#FFFFFF",
+                            border: "none",
+                            borderRadius: "0.4rem",
+                            padding: "0.3rem 0.6rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div
                       onClick={() => fileInputRef.current?.click()}
                       style={{
-                        height: "90px",
-                        borderRadius: "0.6rem",
-                        border: "1.5px dashed #CBD5E1",
+                        padding: "1.25rem 1rem",
+                        borderRadius: "0.75rem",
+                        border: "2px dashed #CBD5E1",
                         backgroundColor: "#F8FAFC",
                         display: "flex",
                         flexDirection: "column",
                         alignItems: "center",
                         justifyContent: "center",
-                        gap: "0.25rem",
+                        gap: "0.35rem",
                         cursor: "pointer",
-                        color: "#64748B",
+                        textAlign: "center",
+                        transition: "border-color 0.2s ease",
                       }}
+                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#2F80ED")}
+                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#CBD5E1")}
                     >
-                      <Upload size={18} />
-                      <span style={{ fontSize: "0.75rem", fontWeight: 600 }}>Subir imagen de plano arquitectónico</span>
+                      <Upload size={22} color="#2F80ED" />
+                      <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#1F3652" }}>
+                        Click para subir archivo de plano arquitectónico
+                      </span>
+                      <span style={{ fontSize: "0.72rem", color: "#64748B", maxWidth: "380px", lineHeight: 1.4 }}>
+                        Resolución recomendada: 1920x1080 px o superior (16:9 / 4:3). Formatos: JPG, PNG, WebP o PDF (máx. 10 MB)
+                      </span>
                     </div>
                   )}
-
-                  {/* PLANTILLAS PREDETERMINADAS */}
-                  <div style={{ marginTop: "0.45rem" }}>
-                    <span style={{ fontSize: "0.68rem", color: "#64748B", display: "block", marginBottom: "0.25rem" }}>
-                      O elige una plantilla de plano:
-                    </span>
-                    <div style={{ display: "flex", gap: "0.35rem", overflowX: "auto" }}>
-                      {DEFAULT_BLUEPRINTS.map((bp, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => setEditingForm({ ...editingForm, imageUrl: bp.url })}
-                          style={{
-                            padding: "0.25rem 0.5rem",
-                            borderRadius: "0.35rem",
-                            fontSize: "0.68rem",
-                            fontWeight: 600,
-                            border: editingForm.imageUrl === bp.url ? "1.5px solid #2F80ED" : "1px solid #CBD5E1",
-                            backgroundColor: editingForm.imageUrl === bp.url ? "rgba(47, 128, 237, 0.08)" : "#FFFFFF",
-                            color: editingForm.imageUrl === bp.url ? "#2F80ED" : "#475569",
-                            cursor: "pointer",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {bp.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
 
                 {/* ASIGNACIÓN A UNIDADES */}
@@ -674,10 +630,15 @@ export default function FloorPlansViewerModal({
                     <div style={{ display: "flex", gap: "0.3rem" }}>
                       <button
                         type="button"
-                        onClick={() => setEditingForm({ ...editingForm, selectedUnitNumbers: allUnits.map((u) => u.unit) })}
+                        onClick={() => {
+                          const available = allUnits
+                            .filter((u) => !u.floorPlan || u.floorPlan === editingForm.name)
+                            .map((u) => u.unit);
+                          setEditingForm({ ...editingForm, selectedUnitNumbers: available });
+                        }}
                         style={{ fontSize: "0.7rem", color: "#2F80ED", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}
                       >
-                        Todas
+                        Todas disponibles
                       </button>
                       <span style={{ color: "#CBD5E1" }}>•</span>
                       <button
@@ -692,19 +653,47 @@ export default function FloorPlansViewerModal({
 
                   <div
                     style={{
-                      maxHeight: "120px",
+                      maxHeight: "150px",
                       overflowY: "auto",
                       backgroundColor: "#F8FAFC",
                       borderRadius: "0.5rem",
                       border: "1px solid #CBD5E1",
                       padding: "0.45rem",
                       display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(65px, 1fr))",
-                      gap: "0.3rem",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(75px, 1fr))",
+                      gap: "0.35rem",
                     }}
                   >
                     {allUnits.map((u) => {
+                      const isTakenByOther = !!u.floorPlan && u.floorPlan !== editingForm.name && !editingForm.selectedUnitNumbers.includes(u.unit);
                       const isSelected = editingForm.selectedUnitNumbers.includes(u.unit);
+
+                      if (isTakenByOther) {
+                        return (
+                          <div
+                            key={u.unit}
+                            title={`Ya asignada a "${u.floorPlan}"`}
+                            style={{
+                              padding: "0.3rem 0.4rem",
+                              borderRadius: "0.35rem",
+                              fontSize: "0.72rem",
+                              fontWeight: 600,
+                              textAlign: "center",
+                              cursor: "not-allowed",
+                              backgroundColor: "#F1F5F9",
+                              color: "#94A3B8",
+                              border: "1px dashed #CBD5E1",
+                              opacity: 0.65,
+                            }}
+                          >
+                            <div>{u.unit}</div>
+                            <div style={{ fontSize: "0.6rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              ({u.floorPlan})
+                            </div>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div
                           key={u.unit}
@@ -722,7 +711,7 @@ export default function FloorPlansViewerModal({
                             }
                           }}
                           style={{
-                            padding: "0.25rem 0.4rem",
+                            padding: "0.3rem 0.4rem",
                             borderRadius: "0.35rem",
                             fontSize: "0.72rem",
                             fontWeight: 700,
@@ -731,6 +720,7 @@ export default function FloorPlansViewerModal({
                             backgroundColor: isSelected ? "#2F80ED" : "#FFFFFF",
                             color: isSelected ? "#FFFFFF" : "#1F3652",
                             border: isSelected ? "1px solid #2F80ED" : "1px solid #E2E8F0",
+                            transition: "all 0.15s ease",
                           }}
                         >
                           {u.unit}

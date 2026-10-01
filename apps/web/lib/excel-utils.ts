@@ -28,6 +28,8 @@ export interface UnmappedColumnInfo {
 // -----------------------------------------------------------------------------
 // DICCIONARIO DE ALIAS Y NORMALIZACIÓN DE COLUMNAS
 // -----------------------------------------------------------------------------
+// DICCIONARIO DE ALIAS Y NORMALIZACIÓN DE COLUMNAS
+// -----------------------------------------------------------------------------
 const COLUMN_ALIASES: Record<string, string> = {
   // Unit number
   "# unidad": "unitNumber",
@@ -35,25 +37,44 @@ const COLUMN_ALIASES: Record<string, string> = {
   "unit_number": "unitNumber",
   "num unidad": "unitNumber",
   "no. unidad": "unitNumber",
+  "no unidad": "unitNumber",
   "depto": "unitNumber",
   "lote": "unitNumber",
   "local": "unitNumber",
   "nave": "unitNumber",
+  "casa": "unitNumber",
   
+  // Typology / Type
+  "tipo": "type",
+  "tipo de unidad": "type",
+  "tipologia": "type",
+  "tipología": "type",
+  "unit_type": "type",
+  "modelo": "type",
+  "prototipo": "type",
+
   // Surface
+  "superficie total (m²)": "surfaceM2",
+  "superficie total (m2)": "surfaceM2",
   "superficie (m²)": "surfaceM2",
   "superficie (m2)": "surfaceM2",
   "superficie_m2": "surfaceM2",
   "superficie": "surfaceM2",
   "m2": "surfaceM2",
+  "área total (m²)": "surfaceM2",
+  "area total (m2)": "surfaceM2",
   "área (m²)": "surfaceM2",
   "area (m2)": "surfaceM2",
   "area": "surfaceM2",
+  "superficie terreno (m²)": "surfaceM2",
+  "superficie terreno": "surfaceM2",
 
   // Price
   "precio": "price",
+  "precio ($ mxn)": "price",
   "precio de venta": "price",
   "precio_lista": "price",
+  "precio lista": "price",
   "price": "price",
   "monto": "price",
 
@@ -66,21 +87,16 @@ const COLUMN_ALIASES: Record<string, string> = {
   // Delivery Date
   "fecha de entrega": "deliveryDate",
   "fecha_entrega": "deliveryDate",
+  "fecha entrega": "deliveryDate",
   "entrega": "deliveryDate",
   "delivery_date": "deliveryDate",
 
-  // Typology / Type
-  "tipo": "type",
-  "tipo de unidad": "type",
-  "tipologia": "type",
-  "tipología": "type",
-  "unit_type": "type",
-
-  // Presets
+  // Presets / Additional real fields
   "piso / nivel.": "level",
   "piso / nivel": "level",
   "piso": "level",
   "nivel": "level",
+  "niveles": "level",
   "número de recámaras.": "bedrooms",
   "número de recámaras": "bedrooms",
   "recámaras": "bedrooms",
@@ -88,35 +104,56 @@ const COLUMN_ALIASES: Record<string, string> = {
   "número de baños.": "bathrooms",
   "número de baños": "bathrooms",
   "baños": "bathrooms",
+  "banos": "bathrooms",
   "cajones de estacionamiento.": "parkingSpaces",
   "cajones de estacionamiento": "parkingSpaces",
   "cajones": "parkingSpaces",
   "estacionamiento": "parkingSpaces",
+  "estacionamientos": "parkingSpaces",
+  "bodegas": "storageUnits",
+  "bodega": "storageUnits",
   "m² de terraza/balcón.": "terraceM2",
   "m² de terraza/balcón": "terraceM2",
+  "m² terraza / balcón": "terraceM2",
   "terraza": "terraceM2",
+  "m² terraza": "terraceM2",
   "vista": "view",
-  "orientación": "view",
+  "orientación": "orientation",
+  "orientacion": "orientation",
   "dimensiones del terreno (frente x fondo).": "frontDepth",
+  "dimensiones del terreno (frente x fondo)": "frontDepth",
   "(frente x fondo)": "frontDepth",
+  "frente x fondo": "frontDepth",
+  "área de construcción (m²)": "constructionArea",
   "área total de construcción.": "constructionArea",
   "área total de construcción": "constructionArea",
+  "construcción (m²)": "constructionArea",
+  "construcción": "constructionArea",
+  "jardín (m²)": "garden",
   "jardín (sí/no o m²).": "garden",
   "jardín": "garden",
+  "m² jardín": "garden",
   "tipo de uso": "usageType",
   "frente a calle": "streetFront",
+  "área techada (m²)": "roofedArea",
   "área techada.": "roofedArea",
   "área techada": "roofedArea",
   "altura libre (m).": "clearHeight",
+  "altura libre (m)": "clearHeight",
   "altura libre": "clearHeight",
   "capacidad de carga de piso (tons/m²).": "floorLoadCapacity",
+  "capacidad de carga de piso (tons/m²)": "floorLoadCapacity",
   "andenes de carga (#).": "loadingDocks",
+  "andenes de carga (#)": "loadingDocks",
   "andenes de carga": "loadingDocks",
+  "andenes": "loadingDocks",
   "energía eléctrica (kva disponibles).": "electricalKVA",
+  "energía eléctrica (kva)": "electricalKVA",
   "energía eléctrica": "electricalKVA",
   "kva": "electricalKVA",
   "notas / descripción corta": "notes",
   "notas": "notes",
+  "observaciones": "notes",
 };
 
 export function normalizeHeader(header: string): string {
@@ -142,107 +179,106 @@ export function generateUnitsExcelTemplate({
 }) {
   const wb = XLSX.utils.book_new();
 
-  // 1. Columnas y Filas de Ejemplo según Tipología
+  // 1. Encabezados Base Comunes a Todo Proyecto en Devio
+  const baseHeaders = [
+    "# Unidad",
+    "Tipo",
+    "Superficie (m²)",
+    "Precio",
+    "Estado",
+    "Fecha de entrega",
+  ];
+
+  // 2. Columnas y Filas de Ejemplo según Tipología (Sin duplicados)
   let typologyHeaders: string[] = [];
   let sampleRows: (string | number)[][] = [];
 
   if (projectType === "VERTICAL") {
     typologyHeaders = [
       "Piso / Nivel",
-      "Número de recámaras",
-      "Número de baños",
+      "Recámaras",
+      "Baños",
       "Cajones de estacionamiento",
       "M² de terraza/balcón",
+      "Orientación",
       "Vista",
     ];
     sampleRows = [
-      ["101", 95.5, 4200000, "Disponible", "Piso 1", "Departamento", "2028-09-17", 2, 2, 1, 12.5, "Norte"],
-      ["102", 120.0, 5350000, "Disponible", "Piso 1", "Departamento", "2028-09-17", 3, 2.5, 2, 18.0, "Jardín Central"],
-      ["201", 85.0, 3900000, "Disponible", "Piso 2", "Departamento", "2028-09-17", 1, 1.5, 1, 8.0, "Panorámica"],
+      ["101", "Departamento", 95.5, 4200000, "Disponible", "2028-10-15", "Piso 1", 2, 2, 1, 12.5, "Norte", "Panorámica"],
+      ["102", "Departamento", 120.0, 5350000, "Disponible", "2028-10-15", "Piso 1", 3, 2.5, 2, 18.0, "Sur", "Jardín Central"],
+      ["PH-01", "Penthouse", 185.0, 8900000, "Disponible", "2028-10-15", "Piso 8", 4, 3.5, 3, 45.0, "Poniente", "Ciudad y Parque"],
     ];
   } else if (projectType === "HORIZONTAL") {
     typologyHeaders = [
-      "Dimensiones del terreno (frente x fondo)",
-      "Área total de construcción",
+      "Niveles",
+      "Área de construcción (m²)",
       "Jardín (m²)",
-      "Número de recámaras",
-      "Número de baños",
+      "Recámaras",
+      "Baños",
       "Cajones de estacionamiento",
+      "Dimensiones del terreno (frente x fondo)",
     ];
     sampleRows = [
-      ["Lote 12", 220.0, 3800000, "Disponible", "PB", "Casa/Vivienda", "2028-09-17", "10x22", 185.0, 35.0, 3, 2.5, 2],
-      ["Lote 14", 300.0, 5100000, "Disponible", "PB", "Casa/Vivienda", "2028-09-17", "12x25", 240.0, 60.0, 4, 3.5, 3],
-      ["Lote 15", 180.0, 2900000, "Disponible", "PB", "Lote", "2028-09-17", "9x20", 0, 0, 0, 0, 0],
+      ["Casa 01", "Casa / Prototipo A", 220.0, 4850000, "Disponible", "2028-10-15", "2 Niveles", 185.0, 35.0, 3, 2.5, 2, "10x22"],
+      ["Casa 02", "Casa / Prototipo B", 280.0, 5950000, "Disponible", "2028-10-15", "3 Niveles", 240.0, 55.0, 4, 3.5, 3, "12x23"],
+      ["Lote 15", "Terreno / Lote", 200.0, 2900000, "Disponible", "2028-10-15", "N/A", 0, 0, 0, 0, 0, "10x20"],
     ];
   } else if (projectType === "COMMERCIAL") {
     typologyHeaders = [
       "Piso / Nivel",
-      "Frente a calle",
-      "Altura libre (m)",
-      "Energía eléctrica (kVA disponibles)",
       "Tipo de uso",
+      "Altura libre (m)",
       "Cajones de estacionamiento",
+      "Frente a calle",
+      "Energía eléctrica (kVA)",
     ];
     sampleRows = [
-      ["Local 101", 65.0, 3200000, "Disponible", "PB", "Local", "2028-09-17", "Av. Principal", 4.5, 30, "Comercial / Retail", 2],
-      ["Local 102", 120.0, 5800000, "Disponible", "PB", "Local", "2028-09-17", "Pasillo Central", 4.5, 45, "Restaurante", 4],
-      ["OF-201", 90.0, 4100000, "Disponible", "Nivel 2", "Oficina", "2028-09-17", "Fachada Poniente", 3.2, 25, "Corporativo", 3],
+      ["Local 101", "Local Comercial", 65.0, 3200000, "Disponible", "2028-10-15", "Planta Baja", "Retail / Tienda", 4.5, 2, "Av. Principal", 30],
+      ["Local 102", "Restaurante", 120.0, 5800000, "Disponible", "2028-10-15", "Planta Baja", "Restaurante / Alimentos", 4.5, 4, "Pasillo Central", 45],
+      ["OF-201", "Oficina Corporativa", 90.0, 4100000, "Disponible", "2028-10-15", "Nivel 2", "Corporativo / Consultorio", 3.2, 3, "Fachada Poniente", 25],
     ];
   } else if (projectType === "INDUSTRIAL") {
     typologyHeaders = [
+      "Área techada (m²)",
       "Altura libre (m)",
       "Andenes de carga (#)",
       "Capacidad de carga de piso (tons/m²)",
-      "Energía eléctrica (kVA disponibles)",
-      "Área techada",
+      "Energía eléctrica (kVA)",
       "Tipo de uso",
     ];
     sampleRows = [
-      ["Nave 01", 1500.0, 22500000, "Disponible", "PB", "Nave", "2028-09-17", 9.5, 2, 5.0, 150, 1400.0, "Logístico"],
-      ["Nave 02", 2800.0, 41000000, "Disponible", "PB", "Nave", "2028-09-17", 11.0, 4, 6.0, 300, 2650.0, "Manufactura Ligera"],
-      ["Lote Ind-05", 5000.0, 35000000, "Disponible", "PB", "Lote", "2028-09-17", 0, 0, 0, 500, 0, "Industrial Pesado"],
+      ["Nave 01", "Nave Industrial", 1500.0, 22500000, "Disponible", "2028-10-15", 1400.0, 9.5, 2, 5.0, 150, "Logístico / CEDIS"],
+      ["Nave 02", "Nave Industrial", 2800.0, 41000000, "Disponible", "2028-10-15", 2650.0, 11.0, 4, 6.0, 300, "Manufactura Ligera"],
+      ["Bodega B-01", "Bodega", 500.0, 7500000, "Disponible", "2028-10-15", 480.0, 7.0, 1, 4.0, 75, "Almacenaje"],
     ];
   } else {
     // MIXED
     typologyHeaders = [
       "Piso / Nivel",
       "Tipo de uso",
-      "Número de recámaras",
-      "Número de baños",
+      "Recámaras",
+      "Baños",
       "Cajones de estacionamiento",
-      "Altura libre (m)",
+      "M² de terraza/balcón",
     ];
     sampleRows = [
-      ["Dep-301", 105.0, 4800000, "Disponible", "Nivel 3", "Departamento", "2028-09-17", 2, 2, 1, 2.8],
-      ["Loc-102", 80.0, 3600000, "Disponible", "PB", "Local", "2028-09-17", 0, 1, 2, 4.2],
-      ["Of-401", 150.0, 6200000, "Disponible", "Nivel 4", "Oficina", "2028-09-17", 0, 2, 3, 3.5],
+      ["DEP-301", "Departamento", 105.0, 4800000, "Disponible", "2028-10-15", "Nivel 3", "Habitacional", 2, 2, 1, 14.0],
+      ["LOC-101", "Local Comercial", 80.0, 3600000, "Disponible", "2028-10-15", "Planta Baja", "Comercial / Retail", 0, 1, 2, 0],
+      ["OF-401", "Oficina", 150.0, 6200000, "Disponible", "2028-10-15", "Nivel 4", "Corporativo", 0, 2, 3, 0],
     ];
   }
 
-  // Filtrar columnas personalizadas que no estén ya en la tipología
+  // Filtrar columnas personalizadas que no estén ya en la base o en la tipología
   const customColsOnly = activeColumns.filter(
     (c) =>
+      !baseHeaders.some((bh) => normalizeHeader(bh) === normalizeHeader(c.title)) &&
+      !typologyHeaders.some((th) => normalizeHeader(th) === normalizeHeader(c.title)) &&
       !["unitnumber", "surfacem2", "price", "status", "deliverydate", "type"].includes(
         c.id.toLowerCase()
-      ) &&
-      !typologyHeaders.some(
-        (th) => normalizeHeader(th) === normalizeHeader(c.title)
       )
   );
 
   const customHeaders = customColsOnly.map((c) => c.title);
-
-  // Encabezados Base
-  const baseHeaders = [
-    "# Unidad",
-    "Superficie (m²)",
-    "Precio",
-    "Estado",
-    "Piso / Nivel",
-    "tipo",
-    "Fecha de entrega",
-  ];
-
   const allHeaders = [...baseHeaders, ...typologyHeaders, ...customHeaders];
 
   // Completar filas de ejemplo con las columnas custom

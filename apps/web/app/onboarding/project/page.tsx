@@ -379,40 +379,15 @@ export default function ProjectOnboardingPage() {
     assignedUnits: string[];
   }>({
     name: "",
-    imageUrl: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=80",
+    imageUrl: "",
     assignedUnits: [],
   });
   const floorPlanImageInputRef = useRef<HTMLInputElement>(null);
 
-  const handleAutoGenerateFloorPlans = () => {
-    if (units.length === 0) return;
-    const defaultPlans: ProjectFloorPlan[] = [
-      {
-        id: `fp-onb-1`,
-        name: "Planta Tipo A (2 Recámaras)",
-        imageUrl: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=80",
-      },
-      {
-        id: `fp-onb-2`,
-        name: "Planta Tipo B (3 Recámaras)",
-        imageUrl: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1400&q=80",
-      },
-    ];
-
-    setOnboardingFloorPlans(defaultPlans);
-    // Assign first half to Tipo A, second half to Tipo B
-    setUnits((prev) =>
-      prev.map((u, idx) => ({
-        ...u,
-        floorPlan: idx % 2 === 0 ? "Planta Tipo A (2 Recámaras)" : "Planta Tipo B (3 Recámaras)",
-      }))
-    );
-  };
-
   const handleOpenAddFloorPlan = () => {
     setEditingFloorPlanForm({
       name: `Planta Tipo ${String.fromCharCode(65 + onboardingFloorPlans.length)}`,
-      imageUrl: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1400&q=80",
+      imageUrl: "",
       assignedUnits: [],
     });
     setIsFloorPlanModalOpen(true);
@@ -423,7 +398,7 @@ export default function ProjectOnboardingPage() {
     setEditingFloorPlanForm({
       id: plan.id,
       name: plan.name,
-      imageUrl: plan.imageUrl || "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=80",
+      imageUrl: plan.imageUrl || "",
       assignedUnits: assigned,
     });
     setIsFloorPlanModalOpen(true);
@@ -556,30 +531,89 @@ export default function ProjectOnboardingPage() {
   };
 
   // ETAPA 2: INVENTARIO DE UNIDADES
-  const availableColumnPresets = [
-    { id: "level", title: "Piso / Nivel", type: "text" as const },
-    { id: "bedrooms", title: "Número de recámaras", type: "number" as const },
-    { id: "bathrooms", title: "Número de baños", type: "number" as const },
-    { id: "parkingSpaces", title: "Cajones de estacionamiento", type: "number" as const },
-    { id: "terraceM2", title: "M² de terraza/balcón", type: "number" as const },
-    { id: "view", title: "Vista", type: "text" as const },
-    { id: "frontDepth", title: "(frente x fondo)", type: "text" as const },
-    { id: "constructionArea", title: "Área total de construcción", type: "number" as const },
-    { id: "garden", title: "Jardín (sí/no o m²)", type: "text" as const },
-    { id: "usageType", title: "Tipo de uso", type: "text" as const },
-    { id: "streetFront", title: "Frente a calle", type: "text" as const },
-    { id: "roofedArea", title: "Área techada", type: "number" as const },
-    { id: "clearHeight", title: "Altura libre (m)", type: "number" as const },
-    { id: "floorLoadCapacity", title: "Capacidad de carga de piso (tons/m²)", type: "number" as const },
-    { id: "loadingDocks", title: "Andenes de carga (#)", type: "number" as const },
-    { id: "electricalKVA", title: "Energía eléctrica (kVA disponibles)", type: "number" as const },
-    { id: "notes", title: "Notas / descripción corta", type: "text" as const },
+  const availableColumnPresets: CustomColumn[] = [
+    { id: "level", title: "Piso / Nivel", type: "text" },
+    { id: "bedrooms", title: "Número de recámaras", type: "number" },
+    { id: "bathrooms", title: "Número de baños", type: "number" },
+    { id: "parkingSpaces", title: "Cajones de estacionamiento", type: "number" },
+    { id: "storageUnits", title: "Bodegas (#)", type: "number" },
+    { id: "terraceM2", title: "M² de terraza/balcón", type: "number" },
+    { id: "garden", title: "Jardín (m²)", type: "number" },
+    { id: "orientation", title: "Orientación", type: "text" },
+    { id: "view", title: "Vista", type: "text" },
+    { id: "frontDepth", title: "Frente x Fondo", type: "text" },
+    { id: "constructionArea", title: "Área de construcción", type: "number" },
+    { id: "usageType", title: "Giro / Tipo de uso", type: "text" },
+    { id: "streetFront", title: "Frente a calle", type: "text" },
+    { id: "roofedArea", title: "Área techada", type: "number" },
+    { id: "clearHeight", title: "Altura libre (m)", type: "number" },
+    { id: "floorLoadCapacity", title: "Capacidad de carga (t/m²)", type: "number" },
+    { id: "loadingDocks", title: "Andenes de carga (#)", type: "number" },
+    { id: "electricalKVA", title: "Energía eléctrica (kVA)", type: "number" },
+    { id: "levelHeightM", title: "Altura de entrepiso (m)", type: "number" },
+    { id: "notes", title: "Notas / descripción", type: "text" },
   ];
+
+  const getDefaultColumnsForType = (type: ProjectType): CustomColumn[] => {
+    switch (type) {
+      case "VERTICAL":
+        return [
+          { id: "level", title: "Piso / Nivel", type: "text" },
+          { id: "bedrooms", title: "Recámaras", type: "number" },
+          { id: "bathrooms", title: "Baños", type: "number" },
+          { id: "parkingSpaces", title: "Cajones", type: "number" },
+          { id: "terraceM2", title: "M² Terraza", type: "number" },
+        ];
+      case "HORIZONTAL":
+        return [
+          { id: "bedrooms", title: "Recámaras", type: "number" },
+          { id: "bathrooms", title: "Baños", type: "number" },
+          { id: "parkingSpaces", title: "Cajones", type: "number" },
+          { id: "frontDepth", title: "Frente x Fondo", type: "text" },
+          { id: "garden", title: "Jardín (m²)", type: "number" },
+        ];
+      case "COMMERCIAL":
+        return [
+          { id: "usageType", title: "Giro / Uso", type: "text" },
+          { id: "level", title: "Piso / Nivel", type: "text" },
+          { id: "streetFront", title: "Frente a calle", type: "text" },
+          { id: "parkingSpaces", title: "Cajones", type: "number" },
+        ];
+      case "INDUSTRIAL":
+        return [
+          { id: "clearHeight", title: "Altura libre (m)", type: "number" },
+          { id: "floorLoadCapacity", title: "Carga de piso (t/m²)", type: "number" },
+          { id: "loadingDocks", title: "Andenes (#)", type: "number" },
+          { id: "electricalKVA", title: "Energía (kVA)", type: "number" },
+        ];
+      case "MIXED":
+        return [
+          { id: "usageType", title: "Tipo de uso", type: "text" },
+          { id: "level", title: "Piso / Nivel", type: "text" },
+          { id: "bedrooms", title: "Recámaras", type: "number" },
+          { id: "bathrooms", title: "Baños", type: "number" },
+          { id: "parkingSpaces", title: "Cajones", type: "number" },
+        ];
+      default:
+        return [
+          { id: "level", title: "Piso / Nivel", type: "text" },
+          { id: "bedrooms", title: "Recámaras", type: "number" },
+        ];
+    }
+  };
+
+  const handleSelectProjectType = (type: ProjectType) => {
+    setProjectType(type);
+    setActiveColumns(getDefaultColumnsForType(type));
+  };
 
   const [columnSearchQuery, setColumnSearchQuery] = useState("");
   const [activeColumns, setActiveColumns] = useState<CustomColumn[]>([
     { id: "level", title: "Piso / Nivel", type: "text" },
     { id: "bedrooms", title: "Recámaras", type: "number" },
+    { id: "bathrooms", title: "Baños", type: "number" },
+    { id: "parkingSpaces", title: "Cajones", type: "number" },
+    { id: "terraceM2", title: "M² Terraza", type: "number" },
   ]);
 
   const [isColumnDropdownOpen, setIsColumnDropdownOpen] = useState(false);
@@ -1455,7 +1489,7 @@ export default function ProjectOnboardingPage() {
                     return (
                       <div
                         key={t.id}
-                        onClick={() => setProjectType(t.id as ProjectType)}
+                        onClick={() => handleSelectProjectType(t.id as ProjectType)}
                         className={`radio-card ${isSelected ? "active" : ""}`}
                         style={{ textAlign: "center", padding: "1rem 0.5rem" }}
                       >
@@ -2180,13 +2214,11 @@ export default function ProjectOnboardingPage() {
                               <option value="Bloqueada">Bloqueada</option>
                             </select>
                           </td>
-                          <td style={{ padding: "0.5rem" }}>
-                            <input
-                              type="text"
+                          <td style={{ padding: "0.5rem", minWidth: "155px" }}>
+                            <DevioDatePicker
                               value={u.deliveryDate}
-                              onChange={(e) => handleUnitChange(u.id, "deliveryDate", e.target.value)}
-                              className="form-input"
-                              style={{ padding: "0.4rem", fontSize: "0.8125rem", width: "100px" }}
+                              onChange={(val) => handleUnitChange(u.id, "deliveryDate", val)}
+                              placeholder="Seleccionar fecha"
                             />
                           </td>
                           <td style={{ padding: "0.5rem" }}>
@@ -2286,19 +2318,11 @@ export default function ProjectOnboardingPage() {
                         </h3>
                       </div>
                       <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0, marginTop: "0.15rem" }}>
-                        Asocia planos arquitectónicos y blueprints a los niveles o agrupaciones de unidades de tu proyecto.
+                        Asocia planos arquitectónicos y blueprints a las unidades de tu proyecto.
                       </p>
                     </div>
 
                     <div style={{ display: "flex", gap: "0.5rem" }}>
-                      <button
-                        type="button"
-                        onClick={handleAutoGenerateFloorPlans}
-                        className="btn btn-outline"
-                        style={{ fontSize: "0.75rem", padding: "0.35rem 0.75rem" }}
-                      >
-                        <Sparkles size={13} /> Auto-agrupar por Nivel
-                      </button>
                       <button
                         type="button"
                         onClick={handleOpenAddFloorPlan}
@@ -2326,24 +2350,16 @@ export default function ProjectOnboardingPage() {
                         Aún no has configurado plantas de conjunto para este proyecto.
                       </p>
                       <p style={{ fontSize: "0.75rem", color: "#94A3B8", margin: "0 0 1rem" }}>
-                        Puedes autogenerarlas según los niveles de tus unidades o cargarlas manualmente.
+                        Agrega planos arquitectónicos y blueprints asociando las unidades correspondientes.
                       </p>
                       <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
-                        <button
-                          type="button"
-                          onClick={handleAutoGenerateFloorPlans}
-                          className="btn btn-outline"
-                          style={{ fontSize: "0.75rem", padding: "0.4rem 0.85rem" }}
-                        >
-                          <Sparkles size={14} /> Generar Plantas Automáticas
-                        </button>
                         <button
                           type="button"
                           onClick={handleOpenAddFloorPlan}
                           className="btn btn-primary"
                           style={{ fontSize: "0.75rem", padding: "0.4rem 0.85rem" }}
                         >
-                          <Plus size={14} /> Crear Planta Manual
+                          <Plus size={14} /> Agregar Planta
                         </button>
                       </div>
                     </div>
@@ -3830,36 +3846,62 @@ export default function ProjectOnboardingPage() {
                 />
 
                 {editingFloorPlanForm.imageUrl ? (
-                  <div style={{ position: "relative", height: "130px", borderRadius: "0.6rem", overflow: "hidden", border: "1px solid var(--border-subtle)", backgroundColor: "#0F172A", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ position: "relative", height: "160px", borderRadius: "0.75rem", overflow: "hidden", border: "1px solid var(--border-subtle)", backgroundColor: "#0F172A", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <img src={editingFloorPlanForm.imageUrl} alt="Plano" style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }} />
-                    <button
-                      type="button"
-                      onClick={() => floorPlanImageInputRef.current?.click()}
-                      className="btn btn-secondary"
-                      style={{ position: "absolute", bottom: "0.5rem", right: "0.5rem", fontSize: "0.7rem", padding: "0.25rem 0.5rem" }}
-                    >
-                      Cambiar Imagen
-                    </button>
+                    <div style={{ position: "absolute", bottom: "0.5rem", right: "0.5rem", display: "flex", gap: "0.35rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => floorPlanImageInputRef.current?.click()}
+                        className="btn btn-secondary"
+                        style={{ fontSize: "0.72rem", padding: "0.3rem 0.6rem" }}
+                      >
+                        Cambiar Imagen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingFloorPlanForm((prev) => ({ ...prev, imageUrl: "" }))}
+                        style={{
+                          background: "rgba(239, 68, 68, 0.85)",
+                          color: "#FFFFFF",
+                          border: "none",
+                          borderRadius: "0.4rem",
+                          padding: "0.3rem 0.6rem",
+                          fontSize: "0.72rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div
                     onClick={() => floorPlanImageInputRef.current?.click()}
                     style={{
-                      height: "90px",
-                      borderRadius: "0.6rem",
-                      border: "1.5px dashed var(--border-subtle)",
+                      padding: "1.25rem 1rem",
+                      borderRadius: "0.75rem",
+                      border: "2px dashed var(--devio-neutral-2)",
                       backgroundColor: "var(--bg-page)",
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
                       justifyContent: "center",
-                      gap: "0.25rem",
+                      gap: "0.35rem",
                       cursor: "pointer",
-                      color: "var(--text-muted)",
+                      textAlign: "center",
+                      transition: "border-color 0.2s ease",
                     }}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--devio-blue)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--devio-neutral-2)")}
                   >
-                    <Upload size={18} />
-                    <span style={{ fontSize: "0.75rem", fontWeight: 600 }}>Subir archivo de plano arquitectónico</span>
+                    <Upload size={22} color="var(--devio-blue)" />
+                    <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                      Click para subir archivo de plano arquitectónico
+                    </span>
+                    <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", maxWidth: "380px", lineHeight: 1.4 }}>
+                      Resolución recomendada: 1920x1080 px o superior (16:9 / 4:3). Formatos: JPG, PNG, WebP o PDF (máx. 10 MB)
+                    </span>
                   </div>
                 )}
               </div>
@@ -3873,10 +3915,15 @@ export default function ProjectOnboardingPage() {
                   <div style={{ display: "flex", gap: "0.3rem" }}>
                     <button
                       type="button"
-                      onClick={() => setEditingFloorPlanForm({ ...editingFloorPlanForm, assignedUnits: units.map((u) => u.unitNumber) })}
+                      onClick={() => {
+                        const available = units
+                          .filter((u) => !u.floorPlan || u.floorPlan === editingFloorPlanForm.name)
+                          .map((u) => u.unitNumber);
+                        setEditingFloorPlanForm({ ...editingFloorPlanForm, assignedUnits: available });
+                      }}
                       style={{ fontSize: "0.7rem", color: "var(--devio-blue)", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}
                     >
-                      Todas
+                      Todas disponibles
                     </button>
                     <span style={{ color: "var(--border-subtle)" }}>•</span>
                     <button
@@ -3891,19 +3938,47 @@ export default function ProjectOnboardingPage() {
 
                 <div
                   style={{
-                    maxHeight: "120px",
+                    maxHeight: "150px",
                     overflowY: "auto",
                     backgroundColor: "var(--bg-page)",
                     borderRadius: "0.5rem",
                     border: "1px solid var(--border-subtle)",
                     padding: "0.45rem",
                     display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(70px, 1fr))",
-                    gap: "0.3rem",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(75px, 1fr))",
+                    gap: "0.35rem",
                   }}
                 >
                   {units.map((u) => {
+                    const isTakenByOther = !!u.floorPlan && u.floorPlan !== editingFloorPlanForm.name && !editingFloorPlanForm.assignedUnits.includes(u.unitNumber);
                     const isSelected = editingFloorPlanForm.assignedUnits.includes(u.unitNumber);
+
+                    if (isTakenByOther) {
+                      return (
+                        <div
+                          key={u.id}
+                          title={`Ya asignada a "${u.floorPlan}"`}
+                          style={{
+                            padding: "0.3rem 0.4rem",
+                            borderRadius: "0.35rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 600,
+                            textAlign: "center",
+                            cursor: "not-allowed",
+                            backgroundColor: "#F1F5F9",
+                            color: "#94A3B8",
+                            border: "1px dashed #CBD5E1",
+                            opacity: 0.65,
+                          }}
+                        >
+                          <div>{u.unitNumber}</div>
+                          <div style={{ fontSize: "0.6rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            ({u.floorPlan})
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
                       <div
                         key={u.id}
@@ -3921,8 +3996,8 @@ export default function ProjectOnboardingPage() {
                           }
                         }}
                         style={{
-                          padding: "0.25rem 0.4rem",
-                          borderRadius: "0.3rem",
+                          padding: "0.3rem 0.4rem",
+                          borderRadius: "0.35rem",
                           fontSize: "0.72rem",
                           fontWeight: 700,
                           textAlign: "center",
@@ -3930,6 +4005,7 @@ export default function ProjectOnboardingPage() {
                           backgroundColor: isSelected ? "var(--devio-blue)" : "var(--devio-white)",
                           color: isSelected ? "#FFFFFF" : "var(--devio-blue-dark)",
                           border: isSelected ? "1px solid var(--devio-blue)" : "1px solid var(--border-subtle)",
+                          transition: "all 0.15s ease",
                         }}
                       >
                         {u.unitNumber}
