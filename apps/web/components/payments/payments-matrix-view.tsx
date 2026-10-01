@@ -21,7 +21,14 @@ import {
   ShieldAlert,
   ChevronLeft,
   ChevronRight,
-  Plus
+  Plus,
+  HelpCircle,
+  BookOpen,
+  Sparkles,
+  Check,
+  TrendingDown,
+  Percent,
+  Activity,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { ProjectItem, SaleRecord, PaymentScheduleItem } from "@/data/projects-data";
@@ -137,6 +144,10 @@ export default function PaymentsMatrixView({
     row: RowData;
     cell: CellData;
   } | null>(null);
+
+  // Modal state for Interactive Guided Tour & Explanations
+  const [showGuideModal, setShowGuideModal] = useState<boolean>(false);
+  const [guideStep, setGuideStep] = useState<number>(0);
 
   const referenceDate = useMemo(() => {
     const d = parseDateFlexible(referenceDateStr);
@@ -557,6 +568,32 @@ export default function PaymentsMatrixView({
             <FileSpreadsheet size={16} /> XLS
           </button>
 
+          {/* Guided Tour & Explanation Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setGuideStep(0);
+              setShowGuideModal(true);
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.55rem 0.95rem",
+              borderRadius: "8px",
+              backgroundColor: "#EFF6FF",
+              color: "#1D4ED8",
+              fontSize: "0.82rem",
+              fontWeight: 700,
+              border: "1px solid #BFDBFE",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+            title="Instructivo guiado: entender colores, montos negativos y cálculos"
+          >
+            <HelpCircle size={15} /> ¿Cómo interpretar esta tabla?
+          </button>
+
           {/* Granularity Switcher Pills: Semanas / Meses / Años */}
           <div
             style={{
@@ -855,6 +892,70 @@ export default function PaymentsMatrixView({
             {globalSummary.efficiency}%
           </strong>
         </div>
+      </div>
+
+      {/* QUICK SEMÁFORO & INSTRUCTION BANNER */}
+      <div
+        style={{
+          backgroundColor: "#F8FAFC",
+          borderRadius: "0.85rem",
+          padding: "0.65rem 1.1rem",
+          border: "1px solid #E2E8F0",
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "0.75rem",
+          fontSize: "0.76rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 700, color: "var(--devio-blue-dark)", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            <Info size={14} color="#3B82F6" /> Semáforo:
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", color: "#065F46", fontWeight: 600 }}>
+            <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#10B981" }} />
+            <strong>Verde:</strong> Al corriente / Pagado (100%)
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", color: "#991B1B", fontWeight: 600 }}>
+            <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#EF4444" }} />
+            <strong>Rojo (-):</strong> Vencido en Mora (Fecha de corte rebasada)
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", color: "#92400E", fontWeight: 600 }}>
+            <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#F59E0B" }} />
+            <strong>Amarillo:</strong> Abono Parcial
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", color: "#64748B", fontWeight: 600 }}>
+            <span style={{ width: "9px", height: "9px", borderRadius: "50%", backgroundColor: "#94A3B8" }} />
+            <strong>Gris:</strong> Cuota Futura / Por Vencer
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", color: "#94A3B8" }}>
+            <strong>(-):</strong> Sin cuota este periodo
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setGuideStep(0);
+            setShowGuideModal(true);
+          }}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#2563EB",
+            fontWeight: 700,
+            fontSize: "0.76rem",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.3rem",
+            padding: "0.2rem 0.5rem",
+            borderRadius: "6px",
+          }}
+        >
+          <BookOpen size={13} /> Ver Instructivo Guiado y Glosario →
+        </button>
       </div>
 
       {/* 3. MATRIX TABLE (Identical to screenshot layout) */}
@@ -1669,6 +1770,542 @@ export default function PaymentsMatrixView({
                     }}
                   >
                     <DollarSign size={15} /> Registrar Pago / Abono
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 2: INSTRUCTIVO GUIADO Y GLOSARIO FINANCIERO INTERACTIVO */}
+      {/* ============================================================== */}
+      {showGuideModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(10, 25, 41, 0.72)",
+            backdropFilter: "blur(5px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10002,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: "1.25rem",
+              width: "100%",
+              maxWidth: "800px",
+              maxHeight: "92vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
+              overflow: "hidden",
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: "1.5rem 1.75rem 1.25rem",
+                borderBottom: "1px solid #E2E8F0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.3rem",
+                      fontSize: "0.72rem",
+                      fontWeight: 800,
+                      backgroundColor: "#DBEAFE",
+                      color: "#1D4ED8",
+                      padding: "0.2rem 0.6rem",
+                      borderRadius: "9999px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    <BookOpen size={12} /> Instructivo Guiado
+                  </span>
+                  <span style={{ fontSize: "0.75rem", color: "#64748B", fontWeight: 600 }}>
+                    Paso {guideStep + 1} de 5
+                  </span>
+                </div>
+                <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--devio-blue-dark)", margin: 0 }}>
+                  ¿Cómo interpretar la Tabla de Cobranza (Matriz)?
+                </h2>
+                <p style={{ fontSize: "0.82rem", color: "#64748B", margin: "0.25rem 0 0" }}>
+                  Aprende el significado de los colores, montos negativos, cálculo de mora y vistas temporales.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowGuideModal(false)}
+                style={{
+                  background: "#FFFFFF",
+                  border: "1px solid #CBD5E1",
+                  color: "#64748B",
+                  cursor: "pointer",
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Step Navigation Tabs */}
+            <div
+              style={{
+                display: "flex",
+                borderBottom: "1px solid #E2E8F0",
+                backgroundColor: "#FFFFFF",
+                overflowX: "auto",
+              }}
+            >
+              {[
+                { label: "1. Estructura y Filas", icon: Building2 },
+                { label: "2. Semáforo y Colores", icon: Activity },
+                { label: "3. Montos Negativos y Mora", icon: TrendingDown },
+                { label: "4. Semanas, Meses y Años", icon: Calendar },
+                { label: "5. Clic y Desglose", icon: DollarSign },
+              ].map((tab, idx) => {
+                const isActive = guideStep === idx;
+                const IconComp = tab.icon;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setGuideStep(idx)}
+                    style={{
+                      flex: 1,
+                      minWidth: "140px",
+                      padding: "0.75rem 0.5rem",
+                      fontSize: "0.78rem",
+                      fontWeight: isActive ? 700 : 500,
+                      color: isActive ? "#1D4ED8" : "#64748B",
+                      border: "none",
+                      borderBottom: isActive ? "2px solid #1D4ED8" : "2px solid transparent",
+                      backgroundColor: isActive ? "#EFF6FF" : "transparent",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.35rem",
+                      transition: "all 0.15s ease",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <IconComp size={14} /> {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Step Body Content */}
+            <div style={{ padding: "1.5rem 1.75rem", overflowY: "auto", flex: 1, fontSize: "0.86rem", color: "#334155" }}>
+              {/* STEP 0: ESTRUCTURA Y FILAS */}
+              {guideStep === 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                  <div style={{ backgroundColor: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: "0.85rem", padding: "1rem" }}>
+                    <h4 style={{ margin: "0 0 0.35rem", color: "#166534", fontSize: "0.95rem", fontWeight: 700 }}>
+                      🏢 Cada fila representa un contrato de venta activo
+                    </h4>
+                    <p style={{ margin: 0, fontSize: "0.82rem", color: "#14532D", lineHeight: 1.5 }}>
+                      La tabla organiza todos los contratos vigentes del proyecto en filas horizontales. Cada fila está vinculada directamente a la unidad departamental o lote y al cliente titular.
+                    </p>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                    <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "0.75rem", padding: "1rem" }}>
+                      <h5 style={{ margin: "0 0 0.5rem", color: "var(--devio-blue-dark)", fontWeight: 700, fontSize: "0.88rem" }}>
+                        📌 Columna Izquierda Fija
+                      </h5>
+                      <ul style={{ margin: 0, paddingLeft: "1.2rem", fontSize: "0.8rem", color: "#475569", lineHeight: 1.6 }}>
+                        <li><strong>Unidad:</strong> Número o identificador único (ej. <em>Depa 101</em>).</li>
+                        <li><strong>Cliente:</strong> Nombre completo del comprador y folio del contrato de venta.</li>
+                        <li>Permanece anclada a la izquierda mientras te desplazas horizontalmente por los meses.</li>
+                      </ul>
+                    </div>
+
+                    <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "0.75rem", padding: "1rem" }}>
+                      <h5 style={{ margin: "0 0 0.5rem", color: "var(--devio-blue-dark)", fontWeight: 700, fontSize: "0.88rem" }}>
+                        📊 Resumen Financiero por Fila
+                      </h5>
+                      <ul style={{ margin: 0, paddingLeft: "1.2rem", fontSize: "0.8rem", color: "#475569", lineHeight: 1.6 }}>
+                        <li><strong>Programado:</strong> Suma de las cuotas del periodo seleccionado.</li>
+                        <li><strong>Cobrado:</strong> Importe total pagado y conciliado en bancos.</li>
+                        <li><strong>Por Cobrar:</strong> Saldo remanente pendiente de liquidar.</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Visual Example Preview */}
+                  <div style={{ border: "1px solid #CBD5E1", borderRadius: "0.75rem", padding: "0.75rem 1rem", backgroundColor: "#FFFFFF" }}>
+                    <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", display: "block", marginBottom: "0.5rem" }}>
+                      Ejemplo visual de una fila:
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.6rem 0.8rem", backgroundColor: "#F8FAFC", borderRadius: "0.5rem", border: "1px solid #E2E8F0" }}>
+                      <div>
+                        <strong style={{ color: "var(--devio-blue-dark)", fontSize: "0.85rem" }}>U-101 • Juan Pérez Gómez</strong>
+                        <span style={{ display: "block", fontSize: "0.72rem", color: "#64748B" }}>Folio: VTA-101 | Total Venta: $ 2,450,000.00</span>
+                      </div>
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <span style={{ padding: "0.35rem 0.65rem", borderRadius: "6px", backgroundColor: "#D1FAE5", color: "#065F46", fontWeight: 700, fontSize: "0.78rem" }}>
+                          $ 18,333.33 (Pagado)
+                        </span>
+                        <span style={{ padding: "0.35rem 0.65rem", borderRadius: "6px", backgroundColor: "#FEE2E2", color: "#991B1B", fontWeight: 700, fontSize: "0.78rem" }}>
+                          -$ 18,333.33 (Mora)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 1: SEMÁFORO Y CÓDIGO DE COLORES */}
+              {guideStep === 1 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <p style={{ margin: 0, fontSize: "0.82rem", color: "#475569" }}>
+                    Cada celda en la matriz representa la cuota exigible en ese periodo de tiempo. El color indica el estado de cumplimiento en tiempo real:
+                  </p>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    {/* VERDE */}
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.85rem", padding: "0.85rem", borderRadius: "0.75rem", backgroundColor: "#ECFDF5", border: "1px solid #A7F3D0" }}>
+                      <div style={{ minWidth: "120px", padding: "0.4rem 0.75rem", borderRadius: "6px", backgroundColor: "#D1FAE5", color: "#065F46", fontWeight: 800, fontSize: "0.8rem", textAlign: "center" }}>
+                        🟢 $ 18,333.33
+                      </div>
+                      <div>
+                        <strong style={{ color: "#065F46", fontSize: "0.85rem", display: "block" }}>Verde — Pagado / Al corriente (100%)</strong>
+                        <span style={{ fontSize: "0.78rem", color: "#047857" }}>
+                          La cuota pactada fue pagada en su totalidad en o antes de su fecha programada. El monto mostrado corresponde al importe liquidado.
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* ROJO */}
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.85rem", padding: "0.85rem", borderRadius: "0.75rem", backgroundColor: "#FEF2F2", border: "1px solid #FECDD3" }}>
+                      <div style={{ minWidth: "120px", padding: "0.4rem 0.75rem", borderRadius: "6px", backgroundColor: "#FEE2E2", color: "#991B1B", fontWeight: 800, fontSize: "0.8rem", textAlign: "center" }}>
+                        🔴 -$ 18,333.33
+                      </div>
+                      <div>
+                        <strong style={{ color: "#991B1B", fontSize: "0.85rem", display: "block" }}>Rojo — Vencido / En Mora (Saldo no cubierto)</strong>
+                        <span style={{ fontSize: "0.78rem", color: "#B91C1C" }}>
+                          La fecha límite de pago ya expiró según el <em>Día de Referencia</em> y el cliente aún debe esta cuota. Genera cálculo de intereses moratorios automáticos.
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* AMARILLO */}
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.85rem", padding: "0.85rem", borderRadius: "0.75rem", backgroundColor: "#FFFBEB", border: "1px solid #FDE68A" }}>
+                      <div style={{ minWidth: "120px", padding: "0.4rem 0.75rem", borderRadius: "6px", backgroundColor: "#FEF3C7", color: "#92400E", fontWeight: 800, fontSize: "0.8rem", textAlign: "center" }}>
+                        🟡 $ 10,000.00
+                      </div>
+                      <div>
+                        <strong style={{ color: "#92400E", fontSize: "0.85rem", display: "block" }}>Amarillo / Ámbar — Abono Parcial</strong>
+                        <span style={{ fontSize: "0.78rem", color: "#B45309" }}>
+                          Se registró uno o más abonos bancarios para este mes, pero aún queda un saldo pendiente para liquidar la cuota al 100%.
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* GRIS */}
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.85rem", padding: "0.85rem", borderRadius: "0.75rem", backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                      <div style={{ minWidth: "120px", padding: "0.4rem 0.75rem", borderRadius: "6px", backgroundColor: "#F1F5F9", color: "#475569", fontWeight: 700, fontSize: "0.8rem", textAlign: "center" }}>
+                        ⚪ $ 18,333.33
+                      </div>
+                      <div>
+                        <strong style={{ color: "#334155", fontSize: "0.85rem", display: "block" }}>Gris Neutro — Cuota Futura / Por Vencer</strong>
+                        <span style={{ fontSize: "0.78rem", color: "#64748B" }}>
+                          Cuota programada que vencerá en meses o semanas posteriores a la fecha de corte. No presenta mora.
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* GUION */}
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.85rem", padding: "0.85rem", borderRadius: "0.75rem", backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+                      <div style={{ minWidth: "120px", padding: "0.4rem 0.75rem", borderRadius: "6px", backgroundColor: "#F8FAFC", color: "#94A3B8", fontWeight: 700, fontSize: "0.8rem", textAlign: "center" }}>
+                        —
+                      </div>
+                      <div>
+                        <strong style={{ color: "#64748B", fontSize: "0.85rem", display: "block" }}>Guión — Sin Cuota en este periodo</strong>
+                        <span style={{ fontSize: "0.78rem", color: "#94A3B8" }}>
+                          El plan de pago del cliente no contempla ninguna mensualidad ni enganche en este mes/semana específica.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: MONTOS NEGATIVOS Y MORA */}
+              {guideStep === 2 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                  <div style={{ backgroundColor: "#FEF2F2", border: "1px solid #FECDD3", borderRadius: "0.85rem", padding: "1.1rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "#991B1B", fontWeight: 800, fontSize: "0.92rem", marginBottom: "0.35rem" }}>
+                      <TrendingDown size={18} /> ¿Por qué salen montos con signo negativo (-)?
+                    </div>
+                    <p style={{ margin: 0, fontSize: "0.82rem", color: "#7F1D1D", lineHeight: 1.5 }}>
+                      En contabilidad corporativa y cobranza inmobiliaria, un <strong>saldo negativo o en rojo</strong> representa un <strong>déficit de cobranza exigible</strong>. Indica que el dinero que debió ingresar al banco antes de la fecha límite aún no ha sido pagado por el cliente, creando una cuenta por cobrar vencida.
+                    </p>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                    <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "0.85rem", padding: "1rem" }}>
+                      <h5 style={{ margin: "0 0 0.4rem", color: "var(--devio-blue-dark)", fontWeight: 700, fontSize: "0.86rem" }}>
+                        📅 Día de Referencia (Fecha de Corte)
+                      </h5>
+                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#475569", lineHeight: 1.5 }}>
+                        Puedes modificar el <em>Día de Referencia</em> en la barra de herramientas superior. El sistema evalúa automáticamente cada cuota contra esta fecha: si la fecha programada ya pasó y no se ha pagado, se clasifica como mora roja.
+                      </p>
+                    </div>
+
+                    <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "0.85rem", padding: "1rem" }}>
+                      <h5 style={{ margin: "0 0 0.4rem", color: "var(--devio-blue-dark)", fontWeight: 700, fontSize: "0.86rem" }}>
+                        📈 Cálculo Automático de Intereses
+                      </h5>
+                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#475569", lineHeight: 1.5 }}>
+                        Se calcula automáticamente un <strong>3% mensual de interés moratorio</strong> (0.1% por día de retraso) proporcional a los días transcurridos desde el vencimiento de la cuota:
+                      </p>
+                      <div style={{ marginTop: "0.5rem", padding: "0.4rem 0.6rem", backgroundColor: "#FFFFFF", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem", fontFamily: "monospace", color: "#991B1B", fontWeight: 700 }}>
+                        Mora = Saldo × (3% / 30) × Días Vencidos
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "0.85rem", padding: "1rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "#1E40AF", fontWeight: 700, fontSize: "0.84rem", marginBottom: "0.25rem" }}>
+                      <Info size={15} /> Notificación Automática de Mora
+                    </div>
+                    <span style={{ fontSize: "0.78rem", color: "#1E3A8A", lineHeight: 1.5, display: "block" }}>
+                      Al hacer clic en cualquier celda en rojo, puedes pulsar <strong>"Enviar Aviso de Mora"</strong> para despachar un correo institucional con el desglose del saldo y los intereses moratorios acumulados.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 3: GRANULARIDADES TEMPORALES */}
+              {guideStep === 3 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                  <p style={{ margin: 0, fontSize: "0.82rem", color: "#475569" }}>
+                    Usa las pestañas <strong>Semanas</strong>, <strong>Meses</strong> y <strong>Años</strong> en la barra de herramientas para cambiar la escala de visualización según tus necesidades:
+                  </p>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+                    <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "0.85rem", padding: "1rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "#1D4ED8", fontWeight: 800, fontSize: "0.86rem", marginBottom: "0.4rem" }}>
+                        <Calendar size={15} /> Semanas
+                      </div>
+                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#475569", lineHeight: 1.5 }}>
+                        Desglosa el mes seleccionado en sus 4 o 5 semanas operativas (ej. <em>Sem 40: 01-07 Oct</em>). Ideal para cortes semanales y gestión de cobradores.
+                      </p>
+                    </div>
+
+                    <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "0.85rem", padding: "1rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "#1D4ED8", fontWeight: 800, fontSize: "0.86rem", marginBottom: "0.4rem" }}>
+                        <Calendar size={15} /> Meses
+                      </div>
+                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#475569", lineHeight: 1.5 }}>
+                        Vista anual de 12 columnas (Enero a Diciembre). Es la vista estándar de planeación financiera para comparar la cobranza mes a mes.
+                      </p>
+                    </div>
+
+                    <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "0.85rem", padding: "1rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", color: "#1D4ED8", fontWeight: 800, fontSize: "0.86rem", marginBottom: "0.4rem" }}>
+                        <Calendar size={15} /> Años
+                      </div>
+                      <p style={{ margin: 0, fontSize: "0.78rem", color: "#475569", lineHeight: 1.5 }}>
+                        Proyección multianual (2024, 2025, 2026, 2027...). Muestra el flujo plurianual completo del proyecto y el ciclo de maduración de los créditos.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Totals explanation */}
+                  <div style={{ backgroundColor: "#F1F5F9", borderRadius: "0.85rem", padding: "1rem", border: "1px solid #CBD5E1" }}>
+                    <h5 style={{ margin: "0 0 0.35rem", color: "var(--devio-blue-dark)", fontWeight: 700, fontSize: "0.86rem" }}>
+                      ∑ Fila de Totales al Pie de Tabla
+                    </h5>
+                    <p style={{ margin: 0, fontSize: "0.78rem", color: "#475569", lineHeight: 1.5 }}>
+                      En la parte inferior de la matriz se encuentra la fila de <strong>TOTALES</strong>, que calcula en tiempo real la recaudación total de cada columna (semana, mes o año), permitiéndote auditar el flujo de efectivo consolidado del desarrollo.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 4: CLIC Y DESGLOSE INTERACTIVO */}
+              {guideStep === 4 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                  <div style={{ backgroundColor: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: "0.85rem", padding: "1rem" }}>
+                    <h4 style={{ margin: "0 0 0.35rem", color: "#166534", fontSize: "0.95rem", fontWeight: 700 }}>
+                      ⚡ Interactividad: Haz clic en cualquier celda o monto
+                    </h4>
+                    <p style={{ margin: 0, fontSize: "0.82rem", color: "#14532D", lineHeight: 1.5 }}>
+                      Al hacer clic sobre cualquier número o celda de la matriz se abre de inmediato la ventana modal de <strong>Desglose Contable de la Cuota</strong>.
+                    </p>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                    <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "0.85rem", padding: "1rem" }}>
+                      <h5 style={{ margin: "0 0 0.4rem", color: "var(--devio-blue-dark)", fontWeight: 700, fontSize: "0.86rem" }}>
+                        🧾 ¿Qué información verás en el modal?
+                      </h5>
+                      <ul style={{ margin: 0, paddingLeft: "1.2rem", fontSize: "0.78rem", color: "#475569", lineHeight: 1.6 }}>
+                        <li>Importe pactado original y fecha límite de vencimiento.</li>
+                        <li>Lista de abonos bancarios aplicados con su fecha y método (SPEI / Cheque / Efectivo).</li>
+                        <li>Cálculo exacto de días de mora y recargo por interés moratorio.</li>
+                        <li>Folios de recibos emitidos para auditoría contable.</li>
+                      </ul>
+                    </div>
+
+                    <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "0.85rem", padding: "1rem" }}>
+                      <h5 style={{ margin: "0 0 0.4rem", color: "var(--devio-blue-dark)", fontWeight: 700, fontSize: "0.86rem" }}>
+                        🚀 Acciones Rápidas Disponibles
+                      </h5>
+                      <ul style={{ margin: 0, paddingLeft: "1.2rem", fontSize: "0.78rem", color: "#475569", lineHeight: 1.6 }}>
+                        <li><strong>Registrar Pago / Abono:</strong> Aplica un nuevo depósito bancario al saldo de la cuota.</li>
+                        <li><strong>Enviar Aviso de Mora:</strong> Notifica por correo electrónico con copia de la deuda.</li>
+                        <li><strong>Recordatorio Preventivo:</strong> Envía recordatorio amistoso antes del vencimiento.</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: "center", padding: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowGuideModal(false)}
+                      style={{
+                        padding: "0.65rem 2rem",
+                        borderRadius: "9999px",
+                        backgroundColor: "var(--devio-blue)",
+                        color: "#FFFFFF",
+                        fontSize: "0.86rem",
+                        fontWeight: 700,
+                        border: "none",
+                        cursor: "pointer",
+                        boxShadow: "0 4px 12px rgba(47, 128, 237, 0.25)",
+                      }}
+                    >
+                      ¡Entendido! Explorar Matriz de Cobranza
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer Controls */}
+            <div
+              style={{
+                padding: "1rem 1.75rem",
+                borderTop: "1px solid #E2E8F0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              {/* Step Dots */}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                {[0, 1, 2, 3, 4].map((dotIdx) => (
+                  <button
+                    key={dotIdx}
+                    type="button"
+                    onClick={() => setGuideStep(dotIdx)}
+                    style={{
+                      width: guideStep === dotIdx ? "22px" : "8px",
+                      height: "8px",
+                      borderRadius: "9999px",
+                      backgroundColor: guideStep === dotIdx ? "#1D4ED8" : "#CBD5E1",
+                      border: "none",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      padding: 0,
+                    }}
+                    title={`Ir al paso ${dotIdx + 1}`}
+                  />
+                ))}
+              </div>
+
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                {guideStep > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setGuideStep((prev) => Math.max(0, prev - 1))}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.3rem",
+                      padding: "0.55rem 1.1rem",
+                      borderRadius: "9999px",
+                      border: "1px solid #CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      color: "#475569",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <ChevronLeft size={14} /> Anterior
+                  </button>
+                )}
+
+                {guideStep < 4 ? (
+                  <button
+                    type="button"
+                    onClick={() => setGuideStep((prev) => Math.min(4, prev + 1))}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.3rem",
+                      padding: "0.55rem 1.3rem",
+                      borderRadius: "9999px",
+                      border: "none",
+                      backgroundColor: "#1D4ED8",
+                      color: "#FFFFFF",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      boxShadow: "0 2px 6px rgba(29, 78, 216, 0.25)",
+                    }}
+                  >
+                    Siguiente <ChevronRight size={14} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowGuideModal(false)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.3rem",
+                      padding: "0.55rem 1.3rem",
+                      borderRadius: "9999px",
+                      border: "none",
+                      backgroundColor: "#059669",
+                      color: "#FFFFFF",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      boxShadow: "0 2px 6px rgba(5, 150, 105, 0.25)",
+                    }}
+                  >
+                    <Check size={14} /> Finalizar Instructivo
                   </button>
                 )}
               </div>
