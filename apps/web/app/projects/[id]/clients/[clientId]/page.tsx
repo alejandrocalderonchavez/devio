@@ -259,9 +259,32 @@ export default function ClientDetailPage() {
           return false;
         });
 
-        const sPaid = clientReceipts.length > 0
-          ? clientReceipts.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0)
-          : Math.round((s.paidAmount || 0) * ratio);
+        const hasTaggedPayments = (s.payments || []).some((p: any) =>
+          p.payerClientId || p.payerClientEmail || p.payerClientName ||
+          p.ownerId || p.clientId || p.clientEmail || p.ownerEmail || p.clientName || p.ownerName
+        );
+        const hasExplicitCoPayments = Array.isArray(s.coOwnerPayments) && s.coOwnerPayments.length > 0;
+
+        let sPaid = 0;
+        if (clientReceipts.length > 0) {
+          sPaid = clientReceipts.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0);
+        } else if (hasExplicitCoPayments) {
+          const matchedCp = s.coOwnerPayments?.find(
+            (cp: any) =>
+              (cp.clientId && (cp.clientId === clientId || cp.clientId === (coMatch?.id ?? ""))) ||
+              (clientEmail && cp.email && cp.email.toLowerCase().trim() === clientEmail.toLowerCase().trim()) ||
+              (clientName && cp.name && cp.name.toLowerCase().trim() === clientName.toLowerCase().trim())
+          );
+          if (matchedCp) {
+            sPaid = Number(matchedCp.amount) || 0;
+          } else {
+            sPaid = 0;
+          }
+        } else if (hasActualCoOwners && hasTaggedPayments) {
+          sPaid = 0;
+        } else {
+          sPaid = Math.round((s.paidAmount || 0) * ratio);
+        }
 
         return acc + sPaid;
       }, 0);
@@ -621,6 +644,15 @@ export default function ClientDetailPage() {
     // 3. Fallback to sale paidAmount or inventory unit paidAmount
     const invUnit = project?.unitsInventory?.find((u) => u.unit === selectedUnit);
     const rawTotalPaid = (currentSale?.paidAmount || 0) > 0 ? (currentSale?.paidAmount || 0) : (invUnit?.salePaidAmount || 0);
+    const hasTaggedOrCoPayments = (currentSale?.payments || []).some((p: any) =>
+      p.payerClientId || p.payerClientEmail || p.payerClientName ||
+      p.ownerId || p.clientId || p.clientEmail || p.ownerEmail || p.clientName || p.ownerName
+    ) || (Array.isArray(currentSale?.coOwnerPayments) && currentSale.coOwnerPayments.length > 0);
+
+    if (isCoOwned && hasTaggedOrCoPayments) {
+      return [];
+    }
+
     const totalPaid = isCoOwned && coOwnershipViewMode === "proportional"
       ? Math.round(rawTotalPaid * clientShareRatio)
       : rawTotalPaid;
@@ -660,9 +692,19 @@ export default function ClientDetailPage() {
     );
     const defaultMonthlyRatePct = matchedPlan?.moratoryRatePct ?? 3.0;
 
+    const hasTaggedPayments = (currentSale?.payments || []).some((p: any) =>
+      p.payerClientId || p.payerClientEmail || p.payerClientName ||
+      p.ownerId || p.clientId || p.clientEmail || p.ownerEmail || p.clientName || p.ownerName
+    );
+    const hasExplicitCoPayments = Array.isArray(currentSale?.coOwnerPayments) && currentSale.coOwnerPayments.length > 0;
+
     const totalPaidAvailable = paymentsList.length > 0
       ? paymentsList.reduce((acc, p) => acc + (Number(p.monto) || 0), 0)
-      : (isCoOwned && coOwnershipViewMode === "proportional" ? Math.round((Number(currentSale?.paidAmount) || 0) * clientShareRatio) : (Number(currentSale?.paidAmount) || 0));
+      : (isCoOwned && (hasTaggedPayments || hasExplicitCoPayments)
+          ? 0
+          : (isCoOwned && coOwnershipViewMode === "proportional"
+              ? Math.round((Number(currentSale?.paidAmount) || 0) * clientShareRatio)
+              : (Number(currentSale?.paidAmount) || 0)));
 
     if (currentSale?.schedule && currentSale.schedule.length > 0) {
       let remainingPaid = totalPaidAvailable;

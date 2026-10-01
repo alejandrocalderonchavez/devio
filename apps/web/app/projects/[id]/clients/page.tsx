@@ -155,6 +155,25 @@ export default function ProjectClientsPage() {
           if (matchedCp) {
             buyerPaid = Number(matchedCp.amount) || 0;
           } else {
+            buyerPaid = 0;
+          }
+        } else if (Array.isArray(sale.payments) && sale.payments.length > 0) {
+          const hasTagged = sale.payments.some((p: any) =>
+            p.payerClientId || p.payerClientEmail || p.payerClientName ||
+            p.ownerId || p.clientId || p.clientEmail || p.ownerEmail || p.clientName || p.ownerName
+          );
+          if (hasTagged) {
+            const matchedReceipts = sale.payments.filter((p: any) => {
+              const pId = p.payerClientId || p.clientId || p.ownerId;
+              const pEmail = (p.payerClientEmail || p.clientEmail || p.ownerEmail || "").toLowerCase().trim();
+              const pName = (p.payerClientName || p.clientName || p.ownerName || "").toLowerCase().trim();
+              if (pId && pId === buyer.id) return true;
+              if (pEmail && normEmail && pEmail === normEmail) return true;
+              if (pName && normName && pName === normName) return true;
+              return false;
+            });
+            buyerPaid = matchedReceipts.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0);
+          } else {
             buyerPaid = Math.round(((Number(sale.paidAmount) || 0) * buyer.ownershipPct) / 100);
           }
         } else {
