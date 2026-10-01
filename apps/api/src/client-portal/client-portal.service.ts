@@ -71,7 +71,12 @@ export class ClientPortalService {
         coOwners: { include: { client: true } },
         paymentPlan: true,
         scheduledObligations: { orderBy: { obligationNumber: "asc" } },
-        paymentReceipts: { orderBy: { paymentDate: "desc" } },
+        paymentReceipts: {
+          include: {
+            payerClient: true,
+          },
+          orderBy: { paymentDate: "desc" },
+        },
         documents: true,
       },
     });
@@ -109,7 +114,7 @@ export class ClientPortalService {
           email: sale.primaryClient?.email || targetEmail,
           phone: sale.primaryClient?.phone || clientPhone,
           rfc: sale.primaryClient?.taxId || clientRfc,
-          ownershipPct: 100 - rawCoOwners.reduce((acc: number, c: any) => acc + Number(c.ownershipPercentage || 0), 0),
+          ownershipPct: Math.max(0, 100 - rawCoOwners.reduce((acc: number, c: any) => acc + Number(c.ownershipPercentage || 0), 0)),
           isMainContact: true,
         },
         ...rawCoOwners.map((c: any) => ({
@@ -123,15 +128,41 @@ export class ClientPortalService {
         })),
       ];
 
-      const myOwner = allOwnersList.find((o) => (o.email || "").toLowerCase() === targetEmail);
+      const myOwner = allOwnersList.find((o) => (o.email || "").toLowerCase().trim() === targetEmail);
       if (myOwner) {
         myOwnershipPct = myOwner.ownershipPct;
       }
       const myOwnershipRatio = (isCoOwnership && myOwnershipPct > 0 && myOwnershipPct < 100) ? (myOwnershipPct / 100) : 1;
 
-      const paymentsList = (sale.paymentReceipts || []).map((r: any) => {
+      // Filter receipts belonging to this owner if tagged, or proportion untagged unit receipts
+      const allReceipts = sale.paymentReceipts || [];
+      const hasTaggedReceipts = isCoOwnership && allReceipts.some((r: any) =>
+        r.payerClientId || r.payerClient?.email || r.payerClient?.fullName
+      );
+
+      let filteredReceipts: any[] = allReceipts;
+      if (isCoOwnership && hasTaggedReceipts) {
+        filteredReceipts = allReceipts.filter((r: any) => {
+          const pId = r.payerClientId;
+          const pEmail = (r.payerClient?.email || "").toLowerCase().trim();
+          const pName = (r.payerClient?.fullName || "").toLowerCase().trim();
+          const myEmailNorm = targetEmail.toLowerCase().trim();
+          const myNameNorm = (myOwner?.name || clientFullName || "").toLowerCase().trim();
+          const notes = (r.notes || "").toLowerCase();
+
+          if (pId && (pId === myOwner?.id || pId === dbClient?.id)) return true;
+          if (pEmail && (pEmail === myEmailNorm || pEmail.includes(myEmailNorm) || myEmailNorm.includes(pEmail))) return true;
+          if (pName && myNameNorm && (pName === myNameNorm || pName.includes(myNameNorm) || myNameNorm.includes(pName))) return true;
+          if (notes && (notes.includes(myEmailNorm) || (myNameNorm && notes.includes(myNameNorm)))) return true;
+          return false;
+        });
+      }
+
+      const paymentsList = filteredReceipts.map((r: any) => {
         const rawAmt = Number(r.amount || 0);
-        const effectiveAmt = round2((isCoOwnership && myOwnershipRatio < 1) ? rawAmt * myOwnershipRatio : rawAmt);
+        // If receipts were tagged to this owner, rawAmt is already what this owner paid.
+        // If receipts were untagged and for the whole unit in co-ownership, scale by myOwnershipRatio.
+        const effectiveAmt = round2((isCoOwnership && !hasTaggedReceipts && myOwnershipRatio < 1) ? rawAmt * myOwnershipRatio : rawAmt);
         return {
           id: r.id,
           fechaPago: r.paymentDate ? new Date(r.paymentDate).toISOString().slice(0, 10) : "",
@@ -145,14 +176,36 @@ export class ClientPortalService {
         };
       });
 
+      const rawAgreedPrice = Number(sale.finalPrice || sale.agreedPrice || unit.basePrice || 0);
+      const agreedPrice = round2(rawAgreedPrice * myOwnershipRatio);
+      const totalPaid = round2(paymentsList.reduce((acc: number, p: any) => acc + p.monto, 0));
+      const totalPending = round2(Math.max(0, agreedPrice - totalPaid));
+
       let overdueTotal = 0;
       let nextPaymentItem: any = null;
+      let remainingClientPaid = totalPaid;
 
-      const scheduleList = (sale.scheduledObligations || []).map((ob: any, idx: number) => {
+      // Sort obligations in ascending chronological/number order
+      const sortedObligations = [...(sale.scheduledObligations || [])].sort((a: any, b: any) => {
+        const orderA = a.obligationNumber ?? 0;
+        const orderB = b.obligationNumber ?? 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      });
+
+      const scheduleList = sortedObligations.map((ob: any, idx: number) => {
         const rawScheduledAmount = Number(ob.originalAmount ?? ob.amount ?? 0);
         const scheduledAmount = round2(rawScheduledAmount * myOwnershipRatio);
-        const rawPaidAmount = Number(ob.paidAmount ?? 0);
-        const paidAmount = round2(rawPaidAmount * myOwnershipRatio);
+
+        let paidAmount = 0;
+        if (remainingClientPaid >= scheduledAmount && scheduledAmount > 0) {
+          paidAmount = scheduledAmount;
+          remainingClientPaid = round2(remainingClientPaid - scheduledAmount);
+        } else if (remainingClientPaid > 0) {
+          paidAmount = remainingClientPaid;
+          remainingClientPaid = 0;
+        }
+
         const pendingAmount = round2(Math.max(0, scheduledAmount - paidAmount));
         const dueDate = new Date(ob.dueDate);
         const isOverdue = pendingAmount > 0 && dueDate.getTime() < now.getTime();
@@ -161,7 +214,7 @@ export class ClientPortalService {
           overdueTotal = round2(overdueTotal + pendingAmount);
         }
 
-        const isPaid = (scheduledAmount > 0 && pendingAmount <= 0.01) || ob.status === "PAID";
+        const isPaid = (scheduledAmount > 0 && pendingAmount <= 0.01) || (ob.status === "PAID" && pendingAmount <= 0.01);
         const status = isPaid ? "Pagado" : isOverdue ? "Atrasado" : paidAmount > 0 ? "Parcial" : "Pendiente";
 
         // Accurate concept resolution
@@ -206,11 +259,6 @@ export class ClientPortalService {
 
         return schedItem;
       });
-
-      const rawAgreedPrice = Number(sale.finalPrice || sale.agreedPrice || unit.basePrice || 0);
-      const agreedPrice = round2(rawAgreedPrice * myOwnershipRatio);
-      const totalPaid = round2(paymentsList.reduce((acc: number, p: any) => acc + p.monto, 0));
-      const totalPending = round2(Math.max(0, agreedPrice - totalPaid));
       const constructionPct = proj.constructionProgress?.[0]?.overallPercentage
         ? Number(proj.constructionProgress[0].overallPercentage)
         : 45;

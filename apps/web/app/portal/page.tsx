@@ -440,44 +440,215 @@ export default function ClientPortalWeb() {
   };
 
   const enrichedProperties: ClientProperty[] = useMemo(() => {
-    return properties.map((prop) => {
-      let isDelivered = Boolean(prop.isDelivered);
-      let deliveredAt = prop.deliveredAt;
-      let warrantyExpiresAt = prop.warrantyExpiresAt;
-      let deliveryActUrl = prop.deliveryActUrl;
-      let projectId = prop.projectId;
+    if (properties.length > 0) {
+      return properties.map((prop) => {
+        let isDelivered = Boolean(prop.isDelivered);
+        let deliveredAt = prop.deliveredAt;
+        let warrantyExpiresAt = prop.warrantyExpiresAt;
+        let deliveryActUrl = prop.deliveryActUrl;
+        let projectId = prop.projectId;
 
-      for (const p of projects) {
-        if (
-          p.name.toLowerCase().trim() === prop.projectName.toLowerCase().trim() ||
-          (prop.projectId && p.id === prop.projectId)
-        ) {
-          projectId = p.id;
-          const matchedUnit = (p.unitsInventory || []).find(
-            (u: any) => u.unit.toLowerCase().trim() === prop.unitNumber.toLowerCase().trim()
-          );
-          if (matchedUnit) {
-            if (matchedUnit.isDelivered !== undefined) {
-              isDelivered = Boolean(matchedUnit.isDelivered);
+        for (const p of projects) {
+          if (
+            p.name.toLowerCase().trim() === prop.projectName.toLowerCase().trim() ||
+            (prop.projectId && p.id === prop.projectId)
+          ) {
+            projectId = p.id;
+            const matchedUnit = (p.unitsInventory || []).find(
+              (u: any) => u.unit.toLowerCase().trim() === prop.unitNumber.toLowerCase().trim()
+            );
+            if (matchedUnit) {
+              if (matchedUnit.isDelivered !== undefined) {
+                isDelivered = Boolean(matchedUnit.isDelivered);
+              }
+              if (matchedUnit.deliveredAt) deliveredAt = matchedUnit.deliveredAt;
+              if (matchedUnit.warrantyExpiresAt) warrantyExpiresAt = matchedUnit.warrantyExpiresAt;
+              if (matchedUnit.deliveryActUrl) deliveryActUrl = matchedUnit.deliveryActUrl;
             }
-            if (matchedUnit.deliveredAt) deliveredAt = matchedUnit.deliveredAt;
-            if (matchedUnit.warrantyExpiresAt) warrantyExpiresAt = matchedUnit.warrantyExpiresAt;
-            if (matchedUnit.deliveryActUrl) deliveryActUrl = matchedUnit.deliveryActUrl;
+            break;
           }
-          break;
+        }
+
+        return {
+          ...prop,
+          projectId,
+          isDelivered,
+          deliveredAt,
+          warrantyExpiresAt,
+          deliveryActUrl,
+        };
+      });
+    }
+
+    // Fallback: derive properties from project sales if API properties is empty
+    const fallbackList: ClientProperty[] = [];
+    const normalizedUserEmail = (userEmail || "").toLowerCase().trim();
+
+    if (normalizedUserEmail) {
+      for (const p of projects) {
+        for (const s of (p.sales || [])) {
+          if (s.status === "CANCELADA") continue;
+          const isPrimary = Boolean(s.clientEmail && s.clientEmail.toLowerCase().trim() === normalizedUserEmail);
+          const rawCoOwners = s.coOwners || [];
+          const isCoOwnership = rawCoOwners.length > 0;
+          const coMatch = rawCoOwners.find(
+            (c: any) => c.email && c.email.toLowerCase().trim() === normalizedUserEmail
+          );
+
+          if (!isPrimary && !coMatch) continue;
+
+          const matchedUnit = (p.unitsInventory || []).find(
+            (u: any) => u.unit.toLowerCase().trim() === s.unit?.toLowerCase().trim()
+          );
+
+          const ownershipPct = isCoOwnership
+            ? (coMatch ? Number(coMatch.ownershipPct) : (rawCoOwners.length > 1 ? Number(rawCoOwners[0]?.ownershipPct) : 100))
+            : 100;
+          const myOwnershipRatio = (ownershipPct > 0 && ownershipPct < 100) ? (ownershipPct / 100) : 1;
+
+          // Determine receipts
+          const allReceipts = s.payments || [];
+          const hasTagged = isCoOwnership && allReceipts.some((r: any) =>
+            r.payerClientId || r.payerClientEmail || r.payerClientName ||
+            r.ownerId || r.clientId || r.clientEmail || r.ownerEmail || r.clientName || r.ownerName
+          );
+
+          let filteredReceipts = allReceipts;
+          if (isCoOwnership && hasTagged) {
+            filteredReceipts = allReceipts.filter((r: any) => {
+              const pEmail = (r.payerClientEmail || r.clientEmail || r.ownerEmail || "").toLowerCase().trim();
+              const pName = (r.payerClientName || r.clientName || r.ownerName || "").toLowerCase().trim();
+              if (pEmail && (pEmail === normalizedUserEmail || pEmail.includes(normalizedUserEmail) || normalizedUserEmail.includes(pEmail))) return true;
+              if (pName && userName && (pName === userName.toLowerCase().trim() || pName.includes(userName.toLowerCase().trim()))) return true;
+              return false;
+            });
+          }
+
+          const paymentsList: PaymentReceipt[] = filteredReceipts.map((r: any) => {
+            const rawAmt = Number(r.amount ?? r.monto) || 0;
+            const effectiveAmt = (isCoOwnership && !hasTagged && myOwnershipRatio < 1) ? Math.round(rawAmt * myOwnershipRatio) : rawAmt;
+            return {
+              id: r.id,
+              fechaPago: r.paymentDate || r.fechaPago || "",
+              metodoPago: r.paymentMethod || r.metodoPago || "Transferencia SPEI",
+              monto: effectiveAmt,
+              unit: s.unit,
+              reciboFolio: r.receiptFolio || r.reciboFolio || `REC-${r.id?.slice(0, 6)?.toUpperCase() || "001"}`,
+              comprobanteUrl: r.voucherUrl || r.comprobanteUrl,
+              notes: r.notes || "",
+              moratoryAmount: 0,
+            };
+          });
+
+          const rawAgreedPrice = Number(s.totalPrice || matchedUnit?.price || 0);
+          const agreedPrice = Math.round(rawAgreedPrice * myOwnershipRatio);
+          const totalPaid = paymentsList.reduce((acc, pay) => acc + pay.monto, 0);
+          const totalPending = Math.max(0, agreedPrice - totalPaid);
+
+          let overdueTotal = 0;
+          let nextPaymentItem: any = null;
+          let remainingPaid = totalPaid;
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+
+          const scheduleList: ScheduleInstallment[] = (s.schedule || []).map((ob: any, idx: number) => {
+            const rawScheduledAmount = Number(ob.scheduledAmount ?? ob.montoProgramado ?? ob.amount ?? 0);
+            const scheduledAmount = Math.round(rawScheduledAmount * myOwnershipRatio);
+
+            let paidAmount = 0;
+            if (remainingPaid >= scheduledAmount && scheduledAmount > 0) {
+              paidAmount = scheduledAmount;
+              remainingPaid = remainingPaid - scheduledAmount;
+            } else if (remainingPaid > 0) {
+              paidAmount = remainingPaid;
+              remainingPaid = 0;
+            }
+
+            const pendingAmount = Math.max(0, scheduledAmount - paidAmount);
+            const dueDate = parseDateFlexible(ob.scheduledDate || ob.fechaProgramada || ob.dueDate || "") || new Date();
+            const isOverdue = pendingAmount > 0 && dueDate.getTime() < now.getTime();
+
+            if (isOverdue) {
+              overdueTotal += pendingAmount;
+            }
+
+            const isPaid = (scheduledAmount > 0 && pendingAmount <= 0.01) || ob.status === "Pagado" || ob.status === "PAID";
+            const status: "Pagado" | "Atrasado" | "Parcial" | "Pendiente" = isPaid ? "Pagado" : isOverdue ? "Atrasado" : paidAmount > 0 ? "Parcial" : "Pendiente";
+
+            const schedItem: ScheduleInstallment = {
+              id: ob.id || `cuota-${idx + 1}`,
+              cuotaNumber: idx + 1,
+              concept: ob.concept || ob.title || `Cuota ${idx + 1}`,
+              montoProgramado: scheduledAmount,
+              fechaProgramada: ob.scheduledDate || ob.fechaProgramada || dueDate.toISOString().slice(0, 10),
+              montoPagado: paidAmount,
+              montoPendiente: pendingAmount,
+              fechaPago: isPaid ? (ob.paymentDate || "Pagado") : "Pendiente",
+              planPago: s.paymentPlan || "Plan de Pago",
+              metodoPago: isPaid ? "Transferencia SPEI" : "Pendiente",
+              status,
+              interesMoratorio: 0,
+            };
+
+            if (!nextPaymentItem && pendingAmount > 0) {
+              const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              nextPaymentItem = {
+                amount: pendingAmount,
+                dueDate: schedItem.fechaProgramada,
+                daysRemaining: diffDays,
+                concept: schedItem.concept,
+              };
+            }
+
+            return schedItem;
+          });
+
+          fallbackList.push({
+            id: s.id,
+            developerName: "Desarrolladora",
+            projectName: p.name,
+            projectAddress: "Guadalajara, Jalisco",
+            unitNumber: s.unit,
+            unitType: matchedUnit?.type || "Departamento",
+            totalPrice: agreedPrice,
+            paidAmount: totalPaid,
+            pendingAmount: totalPending,
+            overdueAmount: overdueTotal,
+            nextPaymentAmount: nextPaymentItem?.amount || 0,
+            nextPaymentDueDate: nextPaymentItem?.dueDate || "",
+            nextPaymentDaysRemaining: nextPaymentItem?.daysRemaining || 0,
+            nextPaymentConcept: nextPaymentItem?.concept || "Mensualidad",
+            constructionPct: 45,
+            lastProgressUpdateDate: new Date().toLocaleDateString("es-MX"),
+            estimatedDeliveryDate: "Mayo 2028",
+            projectId: p.id,
+            isDelivered: Boolean(matchedUnit?.isDelivered),
+            deliveredAt: matchedUnit?.deliveredAt,
+            warrantyExpiresAt: matchedUnit?.warrantyExpiresAt,
+            deliveryActUrl: matchedUnit?.deliveryActUrl,
+            areaM2: Number(matchedUnit?.areaM2 || 85),
+            bedrooms: matchedUnit?.bedrooms || 2,
+            bathrooms: Number(matchedUnit?.bathrooms || 2),
+            parkingSpots: matchedUnit?.parkingSpots || 1,
+            storageUnits: matchedUnit?.storageUnits || 0,
+            floorLevel: matchedUnit?.floor || 1,
+            maintenanceFeeMonthly: 2500,
+            images: [p.coverFileName || p.image || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80"],
+            specialtiesProgress: [],
+            constructionMilestones: [],
+            documents: [],
+            schedule: scheduleList,
+            paymentsList,
+            customAttributes: [],
+            isCoOwnership,
+            myOwnershipPct: ownershipPct,
+          });
         }
       }
+    }
 
-      return {
-        ...prop,
-        projectId,
-        isDelivered,
-        deliveredAt,
-        warrantyExpiresAt,
-        deliveryActUrl,
-      };
-    });
-  }, [properties, projects]);
+    return fallbackList;
+  }, [properties, projects, userEmail, userName]);
 
   const selectedProp: ClientProperty | null = useMemo(() => {
     if (enrichedProperties.length === 0) return null;
