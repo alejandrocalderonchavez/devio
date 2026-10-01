@@ -745,6 +745,7 @@ export default function ProjectUnitsPage() {
           isOpen={showEditInventoryModal}
           onClose={() => setShowEditInventoryModal(false)}
           initialUnits={unitsList}
+          project={project}
           currency={currency}
           onSaveUnits={handleSaveInventoryGrid}
         />
@@ -777,6 +778,7 @@ export default function ProjectUnitsPage() {
             setSelectedUnitForAction(null);
           }}
           unit={selectedUnitForAction}
+          project={project}
           currency={currency}
           additionals={project.additionals || []}
           onSaveUnit={handleSaveSingleUnit}

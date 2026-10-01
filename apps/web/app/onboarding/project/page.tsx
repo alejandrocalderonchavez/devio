@@ -1222,6 +1222,8 @@ export default function ProjectOnboardingPage() {
             units: mappedUnits,
             additionals: mappedAdditionals,
             documents: documents,
+            floorPlans: onboardingFloorPlans,
+            paymentPlans: newProject.paymentPlans,
             developerId: activeDevId,
             developerName: activeDevName,
             userEmail: activeUserEmail,

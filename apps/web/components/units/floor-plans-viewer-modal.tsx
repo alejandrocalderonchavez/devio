@@ -300,7 +300,7 @@ export default function FloorPlansViewerModal({
                 style={{
                   padding: "0.6rem 1.25rem",
                   borderRadius: "0.6rem",
-                  backgroundColor: "#2F80ED",
+                  backgroundColor: "#1B3047",
                   color: "#FFFFFF",
                   fontSize: "0.85rem",
                   fontWeight: 700,

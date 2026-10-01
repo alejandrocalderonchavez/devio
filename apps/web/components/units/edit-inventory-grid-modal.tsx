@@ -14,11 +14,14 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { UnitItem } from "./bulk-price-modal";
+import { DevioDatePicker } from "../ui/devio-date-picker";
+import { ProjectItem } from "@/data/projects-data";
 
 export interface EditInventoryGridModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialUnits: UnitItem[];
+  project?: ProjectItem;
   currency?: "MXN" | "USD";
   onSaveUnits: (updatedUnits: UnitItem[]) => void;
 }
@@ -27,12 +30,13 @@ export default function EditInventoryGridModal({
   isOpen,
   onClose,
   initialUnits,
+  project,
   currency = "MXN",
   onSaveUnits,
 }: EditInventoryGridModalProps) {
   const [units, setUnits] = useState<UnitItem[]>(initialUnits);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [customColumns, setCustomColumns] = useState<string[]>(["Piso / Nivel", "Recámaras"]);
+  const [customColumns, setCustomColumns] = useState<string[]>([]);
   const [newColumnName, setNewColumnName] = useState("");
   const [showAddColInput, setShowAddColInput] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -42,8 +46,50 @@ export default function EditInventoryGridModal({
   useEffect(() => {
     if (isOpen) {
       setUnits(initialUnits);
+
+      // Compute dynamic typology columns
+      const cols: string[] = [];
+      const pType = (project?.type || "").toUpperCase();
+
+      if (pType === "HORIZONTAL" || pType === "CASAS") {
+        cols.push("Niveles", "Recámaras", "Baños", "Estacionamientos", "Lote M2", "Construcción M2");
+      } else if (pType === "LOTES" || pType === "TERRENOS") {
+        cols.push("Frente (m)", "Fondo (m)", "Uso de Suelo", "Topografía");
+      } else if (pType === "INDUSTRIAL") {
+        cols.push("Área Techada M2", "Andenes", "Altura Libre (m)", "Capacidad Eléctrica (KVA)");
+      } else if (pType === "COMERCIAL") {
+        cols.push("Frente (m)", "Uso Comercial", "Piso / Nivel");
+      } else {
+        // Vertical / Default
+        cols.push("Piso / Nivel", "Recámaras", "Baños", "Estacionamientos", "Bodegas");
+      }
+
+      // Add floor plan column if floor plans exist in the project
+      if (project?.floorPlans && project.floorPlans.length > 0) {
+        cols.push("Planta de Conjunto");
+      }
+
+      // Add any custom attributes found in the units
+      const seenCustomKeys = new Set<string>();
+      initialUnits.forEach((u) => {
+        if (u.customAttributes) {
+          Object.keys(u.customAttributes).forEach((k) => {
+            if (!["priceHistory", "deliveryDate"].includes(k)) {
+              seenCustomKeys.add(k);
+            }
+          });
+        }
+      });
+
+      seenCustomKeys.forEach((k) => {
+        if (!cols.some((c) => c.toLowerCase() === k.toLowerCase())) {
+          cols.push(k);
+        }
+      });
+
+      setCustomColumns(cols);
     }
-  }, [isOpen, initialUnits]);
+  }, [isOpen, initialUnits, project]);
 
   if (!isOpen) return null;
 
@@ -113,6 +159,9 @@ export default function EditInventoryGridModal({
     if (norm.includes("bodega") || norm.includes("storage")) {
       return u.storageUnits !== undefined && u.storageUnits !== null ? String(u.storageUnits) : "";
     }
+    if (norm.includes("planta") || norm.includes("floorplan") || norm.includes("layout")) {
+      return u.floorPlan || "";
+    }
     if (norm.includes("orientaci") || norm.includes("orientation")) {
       return u.orientation || "";
     }
@@ -129,6 +178,9 @@ export default function EditInventoryGridModal({
       prev.map((u, i) => {
         if (i !== index) return u;
         const norm = colName.trim().toLowerCase();
+        if (norm.includes("planta") || norm.includes("floorplan") || norm.includes("layout")) {
+          return { ...u, floorPlan: rawVal };
+        }
         if (norm.includes("piso") || norm.includes("nivel") || norm.includes("floor") || norm.includes("level")) {
           const num = parseInt(rawVal.replace(/\D/g, ""), 10);
           return { ...u, floor: isNaN(num) ? 1 : num };
@@ -856,21 +908,11 @@ export default function EditInventoryGridModal({
                     </td>
 
                     {/* Fecha de entrega */}
-                    <td style={{ padding: "0.3rem 0.5rem", borderRight: "1px solid var(--devio-neutral-1)" }}>
-                      <input
-                        type="text"
+                    <td style={{ padding: "0.2rem 0.4rem", borderRight: "1px solid var(--devio-neutral-1)", minWidth: "140px" }}>
+                      <DevioDatePicker
                         value={u.deliveryDate || ""}
-                        placeholder="Ej. Dic 2026"
-                        onChange={(e) => handleUpdateUnitField(index, "deliveryDate", e.target.value)}
-                        style={{
-                          width: "100%",
-                          border: "1px solid transparent",
-                          padding: "0.25rem 0.4rem",
-                          borderRadius: "4px",
-                          color: "var(--devio-neutral-5)",
-                        }}
-                        onFocus={(e) => (e.currentTarget.style.border = "1px solid var(--devio-blue)")}
-                        onBlur={(e) => (e.currentTarget.style.border = "1px solid transparent")}
+                        onChange={(val) => handleUpdateUnitField(index, "deliveryDate", val)}
+                        placeholder="YYYY-MM-DD"
                       />
                     </td>
 

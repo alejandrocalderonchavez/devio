@@ -40,7 +40,7 @@ import {
   Package,
   Box,
 } from "lucide-react";
-import { UnitItem, UnitPriceHistoryItem, ProjectAdditional } from "../../data/projects-data";
+import { UnitItem, UnitPriceHistoryItem, ProjectAdditional, ProjectItem } from "../../data/projects-data";
 import { DevioDatePicker } from "../ui/devio-date-picker";
 import CurrencyInput from "../ui/currency-input";
 import { useProject } from "../../context/project-context";
@@ -49,6 +49,7 @@ export interface UnitDetailHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   unit: UnitItem | null;
+  project?: ProjectItem;
   currency?: "MXN" | "USD";
   additionals?: ProjectAdditional[];
   onSaveUnit?: (updatedUnit: UnitItem) => void;
@@ -60,6 +61,7 @@ export default function UnitDetailHistoryModal({
   isOpen,
   onClose,
   unit,
+  project,
   currency = "MXN",
   additionals = [],
   onSaveUnit,
@@ -70,7 +72,7 @@ export default function UnitDetailHistoryModal({
   const [activeTab, setActiveTab] = useState<"general" | "spaces" | "specs" | "history">("general");
 
   const { projects } = useProject();
-  const currentProject = projects.find((p) => (p.unitsInventory || []).some((u) => u.unit === unit?.unit)) || projects[0];
+  const currentProject = project || projects.find((p) => (p.unitsInventory || []).some((u) => u.unit === unit?.unit)) || projects[0];
   const availableFloorPlans = currentProject?.floorPlans || [];
 
   const assignedAdditionals = (additionals || []).filter(
@@ -138,6 +140,7 @@ export default function UnitDetailHistoryModal({
   const [electricCapacity, setElectricCapacity] = useState<string>("");
   const [maintenanceFee, setMaintenanceFee] = useState<number>(0);
   const [notesDescription, setNotesDescription] = useState<string>("");
+  const [customAttributesState, setCustomAttributesState] = useState<Record<string, any>>({});
 
   // Price history state
   const [priceHistoryList, setPriceHistoryList] = useState<
@@ -175,30 +178,67 @@ export default function UnitDetailHistoryModal({
       setCoOwners(unit.coOwners || []);
       setCurrentPrice(unit.price || 0);
       setFloorLevel(unit.floor || 1);
-      setBedrooms(unit.bedrooms !== undefined ? unit.bedrooms : 2);
-      setBathrooms(unit.bathrooms !== undefined ? unit.bathrooms : 2);
-      setParkingSpots(unit.parkingSpots !== undefined ? unit.parkingSpots : 1);
-      setStorageUnits(unit.storageUnits !== undefined ? unit.storageUnits : 0);
-      setViewOrientation(unit.viewType || unit.orientation || "");
-      setTerraceArea(unit.terraceAreaM2 ? String(unit.terraceAreaM2) : "");
-      setGardenArea(unit.gardenAreaM2 ? String(unit.gardenAreaM2) : "");
-      setMaintenanceFee(unit.maintenanceFee || 0);
-      setFloorPlan(unit.floorPlan || (availableFloorPlans[0]?.name || ""));
+      setBedrooms(unit.bedrooms !== undefined ? unit.bedrooms : ((unit.customAttributes?.bedrooms as number) ?? 2));
+      setBathrooms(unit.bathrooms !== undefined ? unit.bathrooms : ((unit.customAttributes?.bathrooms as number) ?? 2));
+      setParkingSpots(unit.parkingSpots !== undefined ? unit.parkingSpots : ((unit.customAttributes?.parkingSpots as number) ?? 1));
+      setStorageUnits(unit.storageUnits !== undefined ? unit.storageUnits : ((unit.customAttributes?.storageUnits as number) ?? 0));
+      setViewOrientation(unit.viewType || unit.orientation || (unit.customAttributes?.viewOrientation as string) || (unit.customAttributes?.vista as string) || "");
+      setTerraceArea(unit.terraceAreaM2 ? String(unit.terraceAreaM2) : (unit.customAttributes?.terraceArea as string) || "");
+      setGardenArea(unit.gardenAreaM2 ? String(unit.gardenAreaM2) : (unit.customAttributes?.gardenArea as string) || "");
+      setMaintenanceFee(unit.maintenanceFee || (unit.customAttributes?.maintenanceFee as number) || 0);
+      setFloorPlan(unit.floorPlan || "");
+      setUnitImage(unit.images?.[0] || (unit as any).image || null);
+      setUsageType((unit.customAttributes?.usageType as string) || (unit.customAttributes?.uso as string) || "Habitacional");
+      setDimensions((unit.customAttributes?.dimensions as string) || (unit.customAttributes?.medidas as string) || "");
+      setTotalConstructionArea((unit.customAttributes?.totalConstructionArea as string) || (unit.customAttributes?.construccionM2 as string) || "");
+      setStreetFrontage((unit.customAttributes?.streetFrontage as string) || (unit.customAttributes?.frente as string) || "");
+      setLoadingDocks((unit.customAttributes?.loadingDocks as string) || (unit.customAttributes?.andenes as string) || "");
+      setRoofedArea((unit.customAttributes?.roofedArea as string) || (unit.customAttributes?.techadaM2 as string) || "");
+      setClearHeight((unit.customAttributes?.clearHeight as string) || (unit.customAttributes?.altura as string) || "");
+      setFloorLoadCapacity((unit.customAttributes?.floorLoadCapacity as string) || (unit.customAttributes?.cargaPiso as string) || "");
+      setElectricCapacity((unit.customAttributes?.electricCapacity as string) || (unit.customAttributes?.electricidad as string) || "");
+      setNotesDescription((unit.customAttributes?.notesDescription as string) || (unit.customAttributes?.notas as string) || "");
+      setCustomAttributesState(unit.customAttributes || {});
 
-      const history =
-        unit.priceHistory && unit.priceHistory.length > 0
-          ? unit.priceHistory
-          : [
-              {
-                date: new Date().toLocaleDateString("es-MX"),
-                previousPrice: unit.price,
-                newPrice: unit.price,
-                pctChange: 0,
-                reason: "Precio de Lista Inicial",
-                user: "Administrador",
-              },
-            ];
-      setPriceHistoryList(history);
+      // Construcción y preservación estricta del historial de precios inicial
+      const rawHistory = Array.isArray(unit.priceHistory) && unit.priceHistory.length > 0 ? [...unit.priceHistory] : [];
+      const baseInitialEntry: UnitPriceHistoryItem = {
+        date: unit.deliveryDate || new Date().toLocaleDateString("es-MX"),
+        previousPrice: unit.price || 0,
+        newPrice: unit.price || 0,
+        pctChange: 0,
+        reason: "Precio inicial de lista",
+        user: "Administrador",
+      };
+
+      let finalHistory: UnitPriceHistoryItem[] = [];
+      if (rawHistory.length === 0) {
+        finalHistory = [baseInitialEntry];
+      } else {
+        const hasInitial = rawHistory.some(
+          (h) => (h.reason && (h.reason.toLowerCase().includes("inicial") || h.reason.toLowerCase().includes("lista"))) || h.pctChange === 0
+        );
+        if (!hasInitial) {
+          const oldest = rawHistory[rawHistory.length - 1];
+          const oldestDate = oldest?.date || new Date().toLocaleDateString("es-MX");
+          const oldestPrice = oldest?.previousPrice || unit.price || 0;
+          finalHistory = [
+            ...rawHistory,
+            {
+              date: oldestDate,
+              previousPrice: oldestPrice,
+              newPrice: oldestPrice,
+              pctChange: 0,
+              reason: "Precio inicial de lista",
+              user: "Administrador",
+            },
+          ];
+        } else {
+          finalHistory = rawHistory;
+        }
+      }
+
+      setPriceHistoryList(finalHistory);
       setActiveTab("general");
       setShowChangePriceSubModal(false);
       setShowMarkAvailableModal(false);
@@ -274,7 +314,22 @@ export default function UnitDetailHistoryModal({
         gardenAreaM2: gardenArea ? Number(gardenArea) : undefined,
         maintenanceFee: Number(maintenanceFee),
         floorPlan: floorPlan && floorPlan !== "Sin asignar" ? floorPlan : undefined,
+        images: unitImage ? [unitImage] : [],
         priceHistory: updatedHistory,
+        customAttributes: {
+          ...(unit.customAttributes || {}),
+          ...customAttributesState,
+          usageType,
+          dimensions,
+          totalConstructionArea,
+          streetFrontage,
+          loadingDocks,
+          roofedArea,
+          clearHeight,
+          floorLoadCapacity,
+          electricCapacity,
+          notesDescription,
+        },
       });
     }
   };
@@ -326,7 +381,22 @@ export default function UnitDetailHistoryModal({
           gardenAreaM2: gardenArea ? Number(gardenArea) : undefined,
           maintenanceFee: Number(maintenanceFee),
           floorPlan: floorPlan && floorPlan !== "Sin asignar" ? floorPlan : undefined,
+          images: unitImage ? [unitImage] : [],
           priceHistory: priceHistoryList,
+          customAttributes: {
+            ...(unit.customAttributes || {}),
+            ...customAttributesState,
+            usageType,
+            dimensions,
+            totalConstructionArea,
+            streetFrontage,
+            loadingDocks,
+            roofedArea,
+            clearHeight,
+            floorLoadCapacity,
+            electricCapacity,
+            notesDescription,
+          },
         });
       }
       setTimeout(() => {
@@ -836,8 +906,8 @@ export default function UnitDetailHistoryModal({
                   Planta Asociada
                 </label>
                 <select
-                  value={floorPlan}
-                  onChange={(e) => setFloorPlan(e.target.value)}
+                  value={floorPlan || "Sin asignar"}
+                  onChange={(e) => setFloorPlan(e.target.value === "Sin asignar" ? "" : e.target.value)}
                   style={{
                     width: "100%",
                     padding: "0.5rem 0.65rem",
@@ -856,14 +926,6 @@ export default function UnitDetailHistoryModal({
                       {fp.name}
                     </option>
                   ))}
-                  {availableFloorPlans.length === 0 && (
-                    <>
-                      <option value="Planta Tipo A">Planta Tipo A</option>
-                      <option value="Planta Tipo B">Planta Tipo B</option>
-                      <option value="Planta Tipo C">Planta Tipo C</option>
-                      <option value="Planta Penthouse">Planta Penthouse</option>
-                    </>
-                  )}
                 </select>
               </div>
             </div>
@@ -1687,6 +1749,39 @@ export default function UnitDetailHistoryModal({
                       currencySymbol="$"
                     />
                   </div>
+
+                  {/* Dynamic Custom Attributes from Onboarding / Custom Columns */}
+                  {Object.entries(customAttributesState)
+                    .filter(([key]) => ![
+                      "usageType", "uso", "dimensions", "medidas", "totalConstructionArea",
+                      "construccionM2", "streetFrontage", "frente", "loadingDocks", "andenes",
+                      "roofedArea", "techadaM2", "clearHeight", "altura", "floorLoadCapacity",
+                      "cargaPiso", "electricCapacity", "electricidad", "notesDescription",
+                      "notas", "bedrooms", "bathrooms", "parkingSpots", "storageUnits",
+                      "viewOrientation", "vista", "terraceArea", "gardenArea", "maintenanceFee",
+                      "priceHistory", "deliveryDate"
+                    ].includes(key))
+                    .map(([key, value]) => (
+                      <div key={key}>
+                        <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem", textTransform: "capitalize" }}>
+                          {key}
+                        </label>
+                        <input
+                          type="text"
+                          value={value !== undefined && value !== null ? String(value) : ""}
+                          onChange={(e) => setCustomAttributesState((prev) => ({ ...prev, [key]: e.target.value }))}
+                          style={{
+                            width: "100%",
+                            padding: "0.65rem 0.85rem",
+                            borderRadius: "0.6rem",
+                            border: "1.5px solid var(--devio-neutral-2)",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                            color: "var(--devio-blue-dark)",
+                          }}
+                        />
+                      </div>
+                    ))}
 
                   <div style={{ gridColumn: "1 / -1" }}>
                     <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
