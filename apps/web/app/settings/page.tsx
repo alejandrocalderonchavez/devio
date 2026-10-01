@@ -558,8 +558,15 @@ export default function SettingsPage() {
       localStorage.setItem("devio_developer_onboarding", JSON.stringify(updated));
       sessionStorage.setItem("devio_developer_onboarding", JSON.stringify(updated));
       if (devData.logoUrl) {
-        localStorage.setItem("devio_developer_logo", devData.logoUrl);
-        sessionStorage.setItem("devio_developer_logo", devData.logoUrl);
+        try {
+          if (devData.logoUrl.length < 50000) {
+            localStorage.setItem("devio_developer_logo", devData.logoUrl);
+            sessionStorage.setItem("devio_developer_logo", devData.logoUrl);
+          } else {
+            localStorage.removeItem("devio_developer_logo");
+            sessionStorage.removeItem("devio_developer_logo");
+          }
+        } catch (_) {}
       }
       window.dispatchEvent(new Event("devio_developer_updated"));
       window.dispatchEvent(new Event("storage"));

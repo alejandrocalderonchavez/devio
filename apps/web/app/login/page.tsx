@@ -75,8 +75,12 @@ function LoginContent() {
                 sessionStorage.setItem("devio_developer_onboarding", JSON.stringify(data.developer));
                 if (data.developer.logoPath || data.developer.logoUrl || data.developer.logo) {
                   const devLogo = data.developer.logoPath || data.developer.logoUrl || data.developer.logo;
-                  localStorage.setItem("devio_developer_logo", devLogo);
-                  sessionStorage.setItem("devio_developer_logo", devLogo);
+                  try {
+                    if (devLogo.length < 50000) {
+                      localStorage.setItem("devio_developer_logo", devLogo);
+                      sessionStorage.setItem("devio_developer_logo", devLogo);
+                    }
+                  } catch (_) {}
                 }
               }
             }

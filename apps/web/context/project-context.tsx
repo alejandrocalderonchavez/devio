@@ -788,6 +788,19 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
+  const safeSetStorageLogo = (logo?: string | null) => {
+    if (typeof window === "undefined") return;
+    try {
+      if (logo && logo.length < 50000) {
+        localStorage.setItem("devio_developer_logo", logo);
+        sessionStorage.setItem("devio_developer_logo", logo);
+      } else {
+        localStorage.removeItem("devio_developer_logo");
+        sessionStorage.removeItem("devio_developer_logo");
+      }
+    } catch (_) {}
+  };
+
   const loadFromStorage = () => {
     if (typeof window === "undefined") return;
 
@@ -801,11 +814,59 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       setDeveloperLogo(storedLogo);
     }
 
+    let currentDevId = "";
+    let currentDevName = "";
+
+    if (storedDev) {
+      try {
+        const parsed = JSON.parse(storedDev);
+        if (parsed.id) currentDevId = parsed.id;
+        if (parsed.name) currentDevName = parsed.name;
+        else if (parsed.commercialName) currentDevName = parsed.commercialName;
+        else if (parsed.legalName) currentDevName = parsed.legalName;
+        if (currentDevName) setDeveloperName(currentDevName);
+        const l = parsed.logoPath || parsed.logoUrl || parsed.logo;
+        if (l) {
+          setDeveloperLogo(l);
+          safeSetStorageLogo(l);
+        }
+      } catch (e) {}
+    }
+
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        if (parsed.fullName) setUserName(parsed.fullName);
+        else if (parsed.name) setUserName(parsed.name);
+        if (parsed.email) setUserEmail(parsed.email);
+        if (parsed.role) setUserRole(parsed.role as UserRole);
+        if (parsed.developer?.id && !currentDevId) currentDevId = parsed.developer.id;
+        if (parsed.activeDeveloper && (!storedDev || !JSON.parse(storedDev)?.name)) {
+          setDeveloperName(parsed.activeDeveloper);
+          if (!currentDevName) currentDevName = parsed.activeDeveloper;
+        } else if (parsed.developer?.name && !currentDevName) {
+          currentDevName = parsed.developer.name;
+        }
+        if (Array.isArray(parsed.permissions)) setUserPermissions(parsed.permissions);
+        else if (parsed.role && DEFAULT_ROLE_PERMISSIONS[parsed.role as UserRole]) {
+          setUserPermissions(DEFAULT_ROLE_PERMISSIONS[parsed.role as UserRole]);
+        }
+      } catch (e) {}
+    }
+
     if (storedProjects) {
       try {
         const parsed = JSON.parse(storedProjects);
         if (Array.isArray(parsed)) {
-          setProjects(parsed.map(mapDbProjectToProjectItem));
+          let projectItems = parsed.map(mapDbProjectToProjectItem);
+          if (currentDevId || currentDevName) {
+            projectItems = projectItems.filter((p) => {
+              if (currentDevId && p.developerId) return p.developerId === currentDevId;
+              if (currentDevName && p.developerName) return p.developerName.toLowerCase().trim() === currentDevName.toLowerCase().trim();
+              return false;
+            });
+          }
+          setProjects(projectItems);
         }
       } catch (e) {}
     } else {
@@ -821,37 +882,6 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {}
     }
 
-    if (storedDev) {
-      try {
-        const parsed = JSON.parse(storedDev);
-        if (parsed.name) setDeveloperName(parsed.name);
-        else if (parsed.commercialName) setDeveloperName(parsed.commercialName);
-        else if (parsed.legalName) setDeveloperName(parsed.legalName);
-        const l = parsed.logoPath || parsed.logoUrl || parsed.logo;
-        if (l) {
-          setDeveloperLogo(l);
-          localStorage.setItem("devio_developer_logo", l);
-        }
-      } catch (e) {}
-    }
-
-    if (storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        if (parsed.fullName) setUserName(parsed.fullName);
-        else if (parsed.name) setUserName(parsed.name);
-        if (parsed.email) setUserEmail(parsed.email);
-        if (parsed.role) setUserRole(parsed.role as UserRole);
-        if (parsed.activeDeveloper && (!storedDev || !JSON.parse(storedDev)?.name)) {
-          setDeveloperName(parsed.activeDeveloper);
-        }
-        if (Array.isArray(parsed.permissions)) setUserPermissions(parsed.permissions);
-        else if (parsed.role && DEFAULT_ROLE_PERMISSIONS[parsed.role as UserRole]) {
-          setUserPermissions(DEFAULT_ROLE_PERMISSIONS[parsed.role as UserRole]);
-        }
-      } catch (e) {}
-    }
-
     const storedImpersonation = localStorage.getItem("devio_impersonation") || sessionStorage.getItem("devio_impersonation");
     if (storedImpersonation) {
       try {
@@ -862,7 +892,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           if (parsedImp.developerName) setDeveloperName(parsedImp.developerName);
           if (parsedImp.developerLogo) {
             setDeveloperLogo(parsedImp.developerLogo);
-            localStorage.setItem("devio_developer_logo", parsedImp.developerLogo);
+            safeSetStorageLogo(parsedImp.developerLogo);
           }
           if (parsedImp.role) setUserRole(parsedImp.role as UserRole);
           if (Array.isArray(parsedImp.projects)) {
@@ -971,8 +1001,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
             const dLogo = matchedDev.logoPath || matchedDev.logo || matchedDev.logoUrl || "";
             if (dLogo) {
               setDeveloperLogo(dLogo);
-              localStorage.setItem("devio_developer_logo", dLogo);
-              sessionStorage.setItem("devio_developer_logo", dLogo);
+              safeSetStorageLogo(dLogo);
             }
           }
         }
@@ -1018,8 +1047,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         // Filter local storage by target developer as well
         if (targetDevId || targetDevName) {
           currentLocal = currentLocal.filter((lp: any) => {
-            if (targetDevId && lp.developerId && lp.developerId !== targetDevId) return false;
-            return true;
+            if (targetDevId && lp.developerId) return lp.developerId === targetDevId;
+            if (targetDevName && lp.developerName) return lp.developerName.toLowerCase().trim() === targetDevName;
+            return false;
           });
         }
 
@@ -1051,7 +1081,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           return mappedItem;
         });
 
-        // Preserve local-only projects not yet returned by the API
+        // Preserve local-only projects not yet returned by the API that belong to this developer
         const apiIds = new Set(candidateProjects.map((cp: any) => cp.id));
         const apiNames = new Set(candidateProjects.map((cp: any) => (cp.name || "").toLowerCase().trim()));
         const localOnly = currentLocal.filter(
