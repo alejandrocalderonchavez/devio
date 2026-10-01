@@ -32,31 +32,24 @@ export class AuthService {
     const cleanRoleTitle = (dto.roleTitle || "Administrador").trim();
     const cleanDevName = (dto.developerName || `${cleanName} Desarrollos`).trim();
 
-    // 1. Check or create User
-    let user = await this.prisma.user.findUnique({
-      where: { email: cleanEmail },
-      include: {
-        memberships: {
-          include: {
-            developer: true,
-          },
-        },
-      },
-    });
+    try {
+      // 1. Check if phone is already used by ANOTHER user in Prisma (User.phone has @unique)
+      let phoneForUser: string | null = cleanPhone || null;
+      if (phoneForUser) {
+        try {
+          const userWithSamePhone = await this.prisma.user.findUnique({
+            where: { phone: phoneForUser },
+          });
+          if (userWithSamePhone && userWithSamePhone.email !== cleanEmail) {
+            // Phone is already linked to another account; leave User.phone as null to prevent P2002 crash
+            phoneForUser = null;
+          }
+        } catch (_) {}
+      }
 
-    let developer: any = null;
-
-    if (!user) {
-      user = await this.prisma.user.create({
-        data: {
-          id: randomUUID(),
-          authUserId: randomUUID(),
-          email: cleanEmail,
-          fullName: cleanName,
-          phone: cleanPhone || null,
-          preferredLanguage: "ES",
-          preferredCurrency: "MXN",
-        },
+      // 2. Check or create User
+      let user = await this.prisma.user.findUnique({
+        where: { email: cleanEmail },
         include: {
           memberships: {
             include: {
@@ -65,60 +58,131 @@ export class AuthService {
           },
         },
       });
-    }
 
-    // 2. Check or create Developer & Membership
-    if (user.memberships && user.memberships.length > 0 && user.memberships[0]?.developer) {
-      developer = user.memberships[0].developer;
-    } else {
-      developer = await this.prisma.developer.create({
-        data: {
-          id: randomUUID(),
-          name: cleanDevName,
-          legalName: cleanDevName,
-          email: cleanEmail,
-          phone: cleanPhone || null,
+      let developer: any = null;
+
+      if (!user) {
+        user = await this.prisma.user.create({
+          data: {
+            id: randomUUID(),
+            authUserId: randomUUID(),
+            email: cleanEmail,
+            fullName: cleanName,
+            phone: phoneForUser,
+            preferredLanguage: "ES",
+            preferredCurrency: "MXN",
+          },
+          include: {
+            memberships: {
+              include: {
+                developer: true,
+              },
+            },
+          },
+        });
+      } else {
+        // Update user if needed
+        try {
+          user = await this.prisma.user.update({
+            where: { id: user.id },
+            data: {
+              fullName: user.fullName || cleanName,
+              ...(phoneForUser && !user.phone ? { phone: phoneForUser } : {}),
+            },
+            include: {
+              memberships: {
+                include: {
+                  developer: true,
+                },
+              },
+            },
+          });
+        } catch (_) {}
+      }
+
+      // 3. Check or create Developer & Membership
+      if (user.memberships && user.memberships.length > 0 && user.memberships[0]?.developer) {
+        developer = user.memberships[0].developer;
+      } else {
+        // Try finding existing developer with this email or name
+        developer = await this.prisma.developer.findFirst({
+          where: {
+            OR: [
+              { email: cleanEmail },
+              { name: cleanDevName },
+            ],
+          },
+        });
+
+        if (!developer) {
+          developer = await this.prisma.developer.create({
+            data: {
+              id: randomUUID(),
+              name: cleanDevName,
+              legalName: cleanDevName,
+              email: cleanEmail,
+              phone: cleanPhone || null,
+            },
+          });
+        }
+
+        // Upsert membership to avoid unique constraint crash
+        await this.prisma.membership.upsert({
+          where: {
+            userId_developerId: {
+              userId: user.id,
+              developerId: developer.id,
+            },
+          },
+          create: {
+            id: randomUUID(),
+            userId: user.id,
+            developerId: developer.id,
+            role: "SUPER_ADMIN",
+          },
+          update: {
+            role: "SUPER_ADMIN",
+          },
+        });
+      }
+
+      const token = `devio_token_${user.id}_${Date.now()}`;
+
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          fullName: user.fullName || cleanName,
+          email: user.email || cleanEmail,
+          phone: cleanPhone || user.phone || "",
+          role: "Super Admin",
+          roleTitle: cleanRoleTitle,
+          permissions: ["all"],
+          isSuperAdmin: true,
+          activeDeveloper: developer?.name || cleanDevName,
         },
-      });
-
-      await this.prisma.membership.create({
-        data: {
-          id: randomUUID(),
-          userId: user.id,
-          developerId: developer.id,
-          role: "SUPER_ADMIN",
+        developer: {
+          id: developer?.id,
+          name: developer?.name,
+          commercialName: developer?.name,
+          legalName: developer?.legalName || developer?.name,
+          rfc: developer?.taxId || "",
+          email: developer?.email || cleanEmail,
+          phone: cleanPhone || developer?.phone || "",
+          logoPath: developer?.logoPath || null,
+          logoUrl: developer?.logoPath || null,
         },
-      });
+        token,
+      };
+    } catch (err: any) {
+      console.error("[AuthService.register] Error:", err);
+      if (err instanceof BadRequestException || err instanceof UnauthorizedException) {
+        throw err;
+      }
+      throw new BadRequestException(
+        err?.message || "No se pudo registrar la cuenta. Por favor verifica tus datos e intenta nuevamente."
+      );
     }
-
-    const token = `devio_token_${user.id}_${Date.now()}`;
-
-    return {
-      success: true,
-      user: {
-        id: user.id,
-        fullName: user.fullName || cleanName,
-        email: user.email || cleanEmail,
-        phone: user.phone || cleanPhone,
-        role: "Super Admin",
-        roleTitle: cleanRoleTitle,
-        permissions: ["all"],
-        isSuperAdmin: true,
-        activeDeveloper: developer?.name || cleanDevName,
-      },
-      developer: {
-        id: developer?.id,
-        name: developer?.name,
-        commercialName: developer?.name,
-        legalName: developer?.legalName || developer?.name,
-        rfc: developer?.taxId || "",
-        email: developer?.email || cleanEmail,
-        phone: developer?.phone || cleanPhone,
-        logoPath: developer?.logoPath || null,
-        logoUrl: developer?.logoPath || null,
-      },
-      token,
-    };
   }
 
   async login(dto: LoginDto) {
