@@ -837,17 +837,25 @@ export default function UnitDetailHistoryModal({
         {/* ------------------------------------------------------------------ */}
         {/* BODY - 2-COLUMN STRUCTURE */}
         {/* ------------------------------------------------------------------ */}
-        <div style={{ flex: 1, overflowY: "auto", display: "grid", gridTemplateColumns: "330px 1fr" }}>
-          
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            overflowX: "hidden",
+            display: "grid",
+            gridTemplateColumns: "310px minmax(0, 1fr)",
+          }}
+        >
           {/* LEFT PANEL: MEDIA, PLANTA Y VALUACIÓN */}
           <div
             style={{
-              padding: "1.5rem",
+              padding: "1.25rem",
               borderRight: "1px solid var(--devio-neutral-1)",
               backgroundColor: "rgba(31, 54, 82, 0.015)",
               display: "flex",
               flexDirection: "column",
-              gap: "1.25rem",
+              gap: "1rem",
+              minWidth: 0,
             }}
           >
             {/* 1. RENDER / FOTO DE LA UNIDAD */}
@@ -856,10 +864,10 @@ export default function UnitDetailHistoryModal({
                 backgroundColor: "#FFFFFF",
                 borderRadius: "0.85rem",
                 border: "1px solid var(--devio-neutral-1)",
-                padding: "1rem",
+                padding: "0.85rem",
                 display: "flex",
                 flexDirection: "column",
-                gap: "0.6rem",
+                gap: "0.5rem",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -881,7 +889,7 @@ export default function UnitDetailHistoryModal({
               <label
                 style={{
                   width: "100%",
-                  height: "150px",
+                  height: "140px",
                   border: unitImage ? "1px solid var(--devio-neutral-1)" : "1.5px dashed var(--devio-neutral-2)",
                   borderRadius: "0.75rem",
                   display: "flex",
@@ -908,7 +916,7 @@ export default function UnitDetailHistoryModal({
                   <img src={unitImage} alt="Render de la unidad" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.35rem", color: "var(--devio-neutral-3)" }}>
-                    <UploadCloud size={24} style={{ color: "var(--devio-blue)" }} />
+                    <UploadCloud size={22} style={{ color: "var(--devio-blue)" }} />
                     <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>Subir Imagen / Render</span>
                     <span style={{ fontSize: "0.68rem" }}>PNG, JPG o WEBP</span>
                   </div>
@@ -922,10 +930,10 @@ export default function UnitDetailHistoryModal({
                 backgroundColor: "#FFFFFF",
                 borderRadius: "0.85rem",
                 border: "1px solid var(--devio-neutral-1)",
-                padding: "1rem",
+                padding: "0.85rem",
                 display: "flex",
                 flexDirection: "column",
-                gap: "0.6rem",
+                gap: "0.5rem",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -933,7 +941,7 @@ export default function UnitDetailHistoryModal({
                   <Layers size={14} style={{ color: "var(--devio-blue)" }} /> Planta de Conjunto
                 </span>
                 <span style={{ fontSize: "0.72rem", color: "var(--devio-neutral-3)", fontWeight: 600 }}>
-                  {availableFloorPlans.length} disponibles
+                  {availableFloorPlans.length} disp.
                 </span>
               </div>
 
@@ -944,7 +952,7 @@ export default function UnitDetailHistoryModal({
                     <div
                       style={{
                         width: "100%",
-                        height: "115px",
+                        height: "105px",
                         borderRadius: "0.65rem",
                         overflow: "hidden",
                         border: "1px solid var(--devio-neutral-1)",
@@ -966,7 +974,7 @@ export default function UnitDetailHistoryModal({
                   <div
                     style={{
                       width: "100%",
-                      height: "80px",
+                      height: "75px",
                       borderRadius: "0.65rem",
                       border: "1px solid var(--devio-neutral-1)",
                       backgroundColor: "#F8FAFC",
@@ -978,7 +986,7 @@ export default function UnitDetailHistoryModal({
                       color: "var(--devio-neutral-3)",
                     }}
                   >
-                    <Layers size={20} style={{ color: "var(--devio-blue)" }} />
+                    <Layers size={18} style={{ color: "var(--devio-blue)" }} />
                     <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--devio-blue-dark)" }}>
                       {floorPlan || "Sin Planta Asignada"}
                     </span>
@@ -995,7 +1003,7 @@ export default function UnitDetailHistoryModal({
                   onChange={(e) => setFloorPlan(e.target.value === "Sin asignar" ? "" : e.target.value)}
                   style={{
                     width: "100%",
-                    padding: "0.5rem 0.65rem",
+                    padding: "0.45rem 0.6rem",
                     borderRadius: "0.5rem",
                     border: "1px solid var(--devio-neutral-2)",
                     fontSize: "0.78rem",
@@ -1023,20 +1031,20 @@ export default function UnitDetailHistoryModal({
               style={{
                 backgroundColor: "var(--devio-blue-dark)",
                 borderRadius: "0.85rem",
-                padding: "1.1rem 1.25rem",
+                padding: "1rem 1.15rem",
                 color: "var(--devio-white)",
                 display: "flex",
                 flexDirection: "column",
-                gap: "0.5rem",
+                gap: "0.4rem",
               }}
             >
-              <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "rgba(255, 255, 255, 0.7)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "rgba(255, 255, 255, 0.7)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                 Precio de Lista Vigente
               </span>
-              <div style={{ fontSize: "1.45rem", fontWeight: 800, letterSpacing: "-0.02em" }}>
+              <div style={{ fontSize: "1.35rem", fontWeight: 800, letterSpacing: "-0.02em" }}>
                 {formatMoney(currentPrice)}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.75rem", color: "rgba(255, 255, 255, 0.75)", borderTop: "1px solid rgba(255, 255, 255, 0.12)", paddingTop: "0.4rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.73rem", color: "rgba(255, 255, 255, 0.75)", borderTop: "1px solid rgba(255, 255, 255, 0.12)", paddingTop: "0.35rem" }}>
                 <span>Precio por m²:</span>
                 <strong style={{ color: "var(--devio-white)" }}>{formatMoney(pricePerM2)} / m²</strong>
               </div>
@@ -1044,24 +1052,25 @@ export default function UnitDetailHistoryModal({
           </div>
 
           {/* RIGHT PANEL: TABS & INPUT FIELDS */}
-          <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column" }}>
+          <div style={{ padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", minWidth: 0, overflowX: "hidden" }}>
             
             {/* TABS NAVIGATION */}
             <div
               style={{
                 display: "flex",
-                gap: "0.4rem",
+                gap: "0.35rem",
                 borderBottom: "1px solid var(--devio-neutral-1)",
-                paddingBottom: "0.75rem",
-                marginBottom: "1.25rem",
-                overflowX: "auto",
+                paddingBottom: "0.65rem",
+                marginBottom: "1.1rem",
+                flexWrap: "nowrap",
+                overflowX: "hidden",
               }}
             >
               {[
-                { id: "general", label: "Datos Principales", icon: <Building2 size={14} /> },
-                { id: "spaces", label: "Distribución y Espacios", icon: <SlidersHorizontal size={14} /> },
-                { id: "specs", label: "Especificaciones Técnicas", icon: <Maximize2 size={14} /> },
-                { id: "history", label: `Historial Precios (${priceHistoryList.length})`, icon: <History size={14} /> },
+                { id: "general", label: "Datos Principales", icon: <Building2 size={13} /> },
+                { id: "spaces", label: "Distribución y Espacios", icon: <SlidersHorizontal size={13} /> },
+                { id: "specs", label: "Especificaciones Técnicas", icon: <Maximize2 size={13} /> },
+                { id: "history", label: `Historial Precios (${priceHistoryList.length})`, icon: <History size={13} /> },
               ].map((tab) => {
                 const isActive = activeTab === tab.id;
                 return (
@@ -1072,10 +1081,10 @@ export default function UnitDetailHistoryModal({
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
-                      gap: "0.4rem",
-                      padding: "0.5rem 0.9rem",
-                      borderRadius: "0.6rem",
-                      fontSize: "0.8rem",
+                      gap: "0.35rem",
+                      padding: "0.45rem 0.7rem",
+                      borderRadius: "0.55rem",
+                      fontSize: "0.76rem",
                       fontWeight: isActive ? 800 : 600,
                       color: isActive ? "var(--devio-blue-dark)" : "var(--devio-neutral-3)",
                       backgroundColor: isActive ? "rgba(31, 54, 82, 0.08)" : "transparent",
@@ -1083,6 +1092,7 @@ export default function UnitDetailHistoryModal({
                       cursor: "pointer",
                       transition: "all 0.15s ease",
                       whiteSpace: "nowrap",
+                      flexShrink: 0,
                     }}
                   >
                     {tab.icon}
@@ -1092,11 +1102,11 @@ export default function UnitDetailHistoryModal({
               })}
             </div>
 
-            <form onSubmit={handleSaveAll} style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <form onSubmit={handleSaveAll} style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflowX: "hidden" }}>
               
               {/* TAB 1: DATOS PRINCIPALES */}
               {activeTab === "general" && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.1rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1rem" }}>
                   <div>
                     <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
                       Número de Unidad *
@@ -1373,8 +1383,8 @@ export default function UnitDetailHistoryModal({
 
               {/* TAB 2: DISTRIBUCIÓN Y ESPACIOS */}
               {activeTab === "spaces" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.1rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem", minWidth: 0, overflowX: "hidden" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1rem" }}>
                     {/* Typology Specific Fields */}
                     {projectType !== "LOTES" && (
                       <div>
@@ -1874,8 +1884,8 @@ export default function UnitDetailHistoryModal({
 
               {/* TAB 3: ESPECIFICACIONES TÉCNICAS */}
               {activeTab === "specs" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.1rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem", minWidth: 0, overflowX: "hidden" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1rem" }}>
                     <div>
                       <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
                         Orientación / Vista
