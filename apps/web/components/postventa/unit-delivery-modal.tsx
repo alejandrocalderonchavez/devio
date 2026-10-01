@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { X, CheckCircle2, Clock, FileText, Calendar, Building, User, ShieldCheck } from "lucide-react";
 import { getMexicoDateISO } from "../../lib/date-utils";
+import { DevioDatePicker } from "../ui/devio-date-picker";
 
 export interface DeliveryUnitData {
   projectId: string;
@@ -239,21 +240,11 @@ export function UnitDeliveryModal({
                 <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#334155", display: "block", marginBottom: "0.35rem" }}>
                   Fecha Oficial de Entrega / Recepción de Llaves *
                 </label>
-                <input
-                  type="date"
+                <DevioDatePicker
                   value={deliveryDate}
-                  onChange={(e) => setDeliveryDate(e.target.value)}
+                  onChange={(val) => setDeliveryDate(val)}
+                  placeholder="Seleccionar fecha de entrega"
                   required
-                  style={{
-                    width: "100%",
-                    padding: "0.55rem 0.75rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid #CBD5E1",
-                    fontSize: "0.85rem",
-                    color: "#1E293B",
-                    backgroundColor: "#FFFFFF",
-                    outline: "none",
-                  }}
                 />
               </div>
 
