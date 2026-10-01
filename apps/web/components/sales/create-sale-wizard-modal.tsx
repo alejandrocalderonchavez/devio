@@ -2064,52 +2064,7 @@ export default function CreateSaleWizardModal({
                   gap: "0.85rem",
                 }}
               >
-                {/* Selector rápido de cliente existente */}
-                {existingClients.length > 0 && (
-                  <div>
-                    <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--devio-neutral-4)", display: "block", marginBottom: "0.25rem" }}>
-                      Seleccionar de clientes registrados ({existingClients.length}):
-                    </label>
-                    <select
-                      onChange={(e) => {
-                        const found = existingClients.find(
-                          (c) => (c.email || c.name).toLowerCase() === e.target.value.toLowerCase()
-                        );
-                        if (found) {
-                          setPrimaryClient((prev) => ({
-                            ...prev,
-                            name: found.name,
-                            email: found.email,
-                            phone: found.phone,
-                            rfc: found.rfc,
-                          }));
-                          setIsPrimaryFound(true);
-                        }
-                      }}
-                      defaultValue=""
-                      style={{
-                        width: "100%",
-                        padding: "0.55rem 0.85rem",
-                        borderRadius: "0.5rem",
-                        border: "1px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        backgroundColor: "#FFFFFF",
-                        color: "var(--devio-blue-dark)",
-                        outline: "none",
-                        fontWeight: 600,
-                      }}
-                    >
-                      <option value="">-- Buscar o seleccionar cliente existente --</option>
-                      {existingClients.map((c, idx) => (
-                        <option key={idx} value={c.email || c.name}>
-                          {c.name} ({c.email || "Sin correo"}{c.phone ? ` • ${c.phone}` : ""})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: existingClients.length > 0 ? "1px solid var(--devio-neutral-1)" : "none", paddingTop: existingClients.length > 0 ? "0.6rem" : "0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span
                       style={{
