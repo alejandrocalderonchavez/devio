@@ -56,6 +56,7 @@ import { DevioDatePicker } from "../../../../../components/ui/devio-date-picker"
 import { UploadPaymentsModal } from "../../../../../components/payments/upload-payments-modal";
 import { EditSaleModal } from "../../../../../components/sales/edit-sale-modal";
 import { formatDateMX, parseDateSafe, getMexicoNow } from "../../../../../lib/date-utils";
+import { downloadDocumentFile, openDocumentInNewTab } from "../../../../../lib/file-utils";
 
 interface InstallmentItem {
   id: string;
@@ -3229,22 +3230,12 @@ export default function ClientDetailPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          const docUrl = doc.url;
-                          if (docUrl) {
-                            if (docUrl.startsWith("data:") || docUrl.startsWith("http") || docUrl.startsWith("blob:")) {
-                              const newTab = window.open();
-                              if (newTab) {
-                                if (docUrl.startsWith("data:image")) {
-                                  newTab.document.write(`<img src="${docUrl}" style="max-width:100%;" />`);
-                                } else if (docUrl.startsWith("data:application/pdf")) {
-                                  newTab.document.write(`<iframe src="${docUrl}" style="width:100%; height:100vh; border:none;"></iframe>`);
-                                } else {
-                                  newTab.location.href = docUrl;
-                                }
-                              }
-                            } else {
-                              window.open(docUrl, "_blank");
-                            }
+                          if (doc.url) {
+                            openDocumentInNewTab({
+                              url: doc.url,
+                              title: doc.title,
+                              fileType: doc.fileType,
+                            });
                           } else {
                             setSelectedDocForView(doc);
                           }
@@ -3270,29 +3261,17 @@ export default function ClientDetailPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          const docUrl = doc.url;
-                          const ext = doc.fileType ? doc.fileType.toLowerCase() : "pdf";
-                          const fileName = `${doc.title}.${ext}`;
-                          if (docUrl && (docUrl.startsWith("data:") || docUrl.startsWith("http") || docUrl.startsWith("blob:"))) {
-                            const a = document.createElement("a");
-                            a.href = docUrl;
-                            a.download = fileName;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            showToast("Descarga Completa", `Descargando ${fileName}...`, "success");
-                          } else {
-                            const blob = new Blob([`Expediente Oficial: ${doc.title}\nCliente: ${rawClient.name}\nUnidad: ${doc.unit}\nFecha: ${doc.uploadDate}\nNotas: ${doc.notes || ""}`], { type: "text/plain" });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = `${doc.title}.txt`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            URL.revokeObjectURL(url);
-                            showToast("Descarga Completa", `Descargando ${doc.title}...`, "success");
-                          }
+                          downloadDocumentFile({
+                            url: doc.url,
+                            title: doc.title,
+                            fileType: doc.fileType,
+                            projectName: project.name,
+                            clientName: rawClient.name,
+                            unit: doc.unit,
+                            uploadDate: doc.uploadDate,
+                            notes: doc.notes,
+                          });
+                          showToast("Descarga Iniciada", `Descargando ${doc.title}...`, "success");
                         }}
                         style={{
                           display: "inline-flex",
@@ -3309,7 +3288,7 @@ export default function ClientDetailPage() {
                         }}
                         title="Descargar archivo"
                       >
-                        <Download size={12} /> PDF
+                        <Download size={12} /> Descargar
                       </button>
                     </div>
                   </div>
@@ -4777,22 +4756,12 @@ export default function ClientDetailPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const docUrl = selectedDocForView.url;
-                    if (docUrl) {
-                      if (docUrl.startsWith("data:") || docUrl.startsWith("http") || docUrl.startsWith("blob:")) {
-                        const newTab = window.open();
-                        if (newTab) {
-                          if (docUrl.startsWith("data:image")) {
-                            newTab.document.write(`<img src="${docUrl}" style="max-width:100%;" />`);
-                          } else if (docUrl.startsWith("data:application/pdf")) {
-                            newTab.document.write(`<iframe src="${docUrl}" style="width:100%; height:100vh; border:none;"></iframe>`);
-                          } else {
-                            newTab.location.href = docUrl;
-                          }
-                        }
-                      } else {
-                        window.open(docUrl, "_blank");
-                      }
+                    if (selectedDocForView.url) {
+                      openDocumentInNewTab({
+                        url: selectedDocForView.url,
+                        title: selectedDocForView.title,
+                        fileType: selectedDocForView.fileType,
+                      });
                     } else {
                       showToast("Vista Previa", `Abriendo ${selectedDocForView.title}...`);
                     }
@@ -4816,29 +4785,17 @@ export default function ClientDetailPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const docUrl = selectedDocForView.url;
-                    const ext = selectedDocForView.fileType ? selectedDocForView.fileType.toLowerCase() : "pdf";
-                    const fileName = `${selectedDocForView.title}.${ext}`;
-                    if (docUrl && (docUrl.startsWith("data:") || docUrl.startsWith("http") || docUrl.startsWith("blob:"))) {
-                      const a = document.createElement("a");
-                      a.href = docUrl;
-                      a.download = fileName;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      showToast("Descarga Completa", `Descargando ${fileName}...`, "success");
-                    } else {
-                      const blob = new Blob([`Expediente Oficial: ${selectedDocForView.title}\nCliente: ${rawClient.name}\nUnidad: ${selectedDocForView.unit}\nFecha: ${selectedDocForView.uploadDate}\nNotas: ${selectedDocForView.notes || ""}`], { type: "text/plain" });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = `${selectedDocForView.title}.txt`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                      showToast("Descarga Completa", `Descargando ${selectedDocForView.title}...`, "success");
-                    }
+                    downloadDocumentFile({
+                      url: selectedDocForView.url,
+                      title: selectedDocForView.title,
+                      fileType: selectedDocForView.fileType,
+                      projectName: project.name,
+                      clientName: rawClient.name,
+                      unit: selectedDocForView.unit,
+                      uploadDate: selectedDocForView.uploadDate,
+                      notes: selectedDocForView.notes,
+                    });
+                    showToast("Descarga Iniciada", `Descargando ${selectedDocForView.title}...`, "success");
                   }}
                   style={{
                     display: "inline-flex",

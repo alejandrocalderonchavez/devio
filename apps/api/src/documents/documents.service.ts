@@ -124,11 +124,26 @@ export class DocumentsService {
       unit: unit || unitNumber || undefined,
       clientName: clientName || undefined,
       clientId: clientId || undefined,
+      localId: id || undefined,
+      clientDocId: id || undefined,
     };
 
-    const doc = await this.prisma.document.create({
-      data: {
-        id: id && id.length > 10 && !id.startsWith("doc-cli-") ? id : randomUUID(),
+    const isUuid = id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const targetId = isUuid ? id : randomUUID();
+
+    const doc = await this.prisma.document.upsert({
+      where: { id: targetId },
+      update: {
+        title: title || "Documento",
+        type: docType as any,
+        storagePath,
+        fileSizeBytes: parsedSizeBytes,
+        mimeType: mimeType || "application/pdf",
+        isClientVisible: isClientVisible !== false,
+        metadata,
+      },
+      create: {
+        id: targetId,
         developerId: targetDevId,
         projectId: projectId || null,
         clientId: targetClientId,

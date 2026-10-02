@@ -40,6 +40,7 @@ import PaymentsMatrixView from "../../../../components/payments/payments-matrix-
 import { generateReceiptPDF, openReceiptInNewTab, resolveProjectLogo } from "../../../../lib/pdf-generator";
 import { sendAndLogNotification } from "../../../../lib/notifications";
 import { formatDateMX, parseDateSafe, getMexicoNow } from "../../../../lib/date-utils";
+import { openDocumentInNewTab, downloadDocumentFile } from "../../../../lib/file-utils";
 
 // Date range formatters
 const formatYYYYMMDD = (d: Date) => {
@@ -3179,22 +3180,12 @@ export default function ProjectPaymentsPage() {
                             type="button"
                             onClick={() => {
                               if (voucherUrl) {
-                                if (voucherUrl.startsWith("data:") || voucherUrl.startsWith("http") || voucherUrl.startsWith("blob:")) {
-                                  const newTab = window.open();
-                                  if (newTab) {
-                                    if (voucherUrl.startsWith("data:image")) {
-                                      newTab.document.write(`<img src="${voucherUrl}" style="max-width:100%;" />`);
-                                    } else if (voucherUrl.startsWith("data:application/pdf")) {
-                                      newTab.document.write(`<iframe src="${voucherUrl}" style="width:100%; height:100vh; border:none;"></iframe>`);
-                                    } else {
-                                      newTab.location.href = voucherUrl;
-                                    }
-                                  }
-                                } else {
-                                  window.open(voucherUrl, "_blank");
-                                }
+                                openDocumentInNewTab({
+                                  url: voucherUrl,
+                                  title: selectedVoucherForView.voucherName || `Comprobante_Unidad_${selectedVoucherForView.unit}`,
+                                });
                               } else {
-                                showToast("Vista Previa", `Abriendo comprobante ${selectedVoucherForView.voucherName}...`);
+                                showToast("Vista Previa", `Abriendo comprobante ${selectedVoucherForView.voucherName || `Unidad ${selectedVoucherForView.unit}`}...`);
                               }
                             }}
                             style={{
@@ -3216,15 +3207,12 @@ export default function ProjectPaymentsPage() {
                           <button
                             type="button"
                             onClick={() => {
-                              const downloadUrl = voucherUrl;
-                              const fileName = selectedVoucherForView.voucherName || `Comprobante_${selectedVoucherForView.unit}.pdf`;
-                              if (downloadUrl) {
-                                const a = document.createElement("a");
-                                a.href = downloadUrl;
-                                a.download = fileName;
-                                document.body.appendChild(a);
-                                a.click();
-                                document.body.removeChild(a);
+                              const fileName = selectedVoucherForView.voucherName || `Comprobante_${selectedVoucherForView.unit}`;
+                              if (voucherUrl) {
+                                downloadDocumentFile({
+                                  url: voucherUrl,
+                                  title: fileName,
+                                });
                                 showToast("Descarga Completa", `Descargando ${fileName}...`, "success");
                               } else {
                                 showToast("Descarga", `Descargando ${fileName}...`, "info");

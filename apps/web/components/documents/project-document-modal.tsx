@@ -95,11 +95,15 @@ export default function ProjectDocumentModal({
 
   const handleProcessFile = (file: File) => {
     const rawExt = file.name.split(".").pop()?.toUpperCase() || "PDF";
-    let validExt: "PDF" | "DOCX" | "XLSX" | "DWG" | "ZIP" = "PDF";
+    let validExt: any = rawExt;
     if (rawExt.includes("DOC")) validExt = "DOCX";
     else if (rawExt.includes("XLS") || rawExt === "CSV") validExt = "XLSX";
     else if (rawExt === "DWG" || rawExt === "DXF") validExt = "DWG";
-    else if (rawExt === "ZIP" || rawExt === "RAR") validExt = "ZIP";
+    else if (rawExt === "ZIP" || rawExt === "RAR" || rawExt === "7Z") validExt = "ZIP";
+    else if (rawExt === "PNG") validExt = "PNG";
+    else if (rawExt === "JPG" || rawExt === "JPEG") validExt = "JPG";
+    else if (rawExt === "WEBP") validExt = "WEBP";
+    else if (rawExt === "PDF") validExt = "PDF";
 
     const sizeStr =
       file.size > 1024 * 1024

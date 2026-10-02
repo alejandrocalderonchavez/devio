@@ -46,6 +46,7 @@ import {
   Plus,
 } from "lucide-react";
 import { openReceiptInNewTab, openStatementInNewTab } from "../../lib/pdf-generator";
+import { openDocumentInNewTab, downloadDocumentFile } from "../../lib/file-utils";
 import { CLIENT_TRANSLATIONS, ClientLanguage, ClientCurrency } from "../../lib/client-i18n";
 import { useProject } from "../../context/project-context";
 import {
@@ -1809,26 +1810,46 @@ export default function ClientPortalWeb() {
                             </div>
 
                             {doc.fileUrl && (
-                              <a
-                                href={doc.fileUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{
-                                  padding: "0.5rem 0.85rem",
-                                  borderRadius: "0.5rem",
-                                  backgroundColor: "#1B3047",
-                                  color: "#FFFFFF",
-                                  fontSize: "0.75rem",
-                                  fontWeight: 800,
-                                  textDecoration: "none",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "0.35rem",
-                                  flexShrink: 0,
-                                }}
-                              >
-                                <Download size={14} /> Abrir PDF
-                              </a>
+                              <div style={{ display: "flex", gap: "0.4rem", flexShrink: 0 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => openDocumentInNewTab({ url: doc.fileUrl, title: doc.title })}
+                                  style={{
+                                    padding: "0.5rem 0.75rem",
+                                    borderRadius: "0.5rem",
+                                    backgroundColor: "#FFFFFF",
+                                    border: "1px solid #CBD5E1",
+                                    color: "#1F3652",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.35rem",
+                                  }}
+                                >
+                                  <ExternalLink size={13} /> Abrir
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => downloadDocumentFile({ url: doc.fileUrl, title: doc.title })}
+                                  style={{
+                                    padding: "0.5rem 0.85rem",
+                                    borderRadius: "0.5rem",
+                                    backgroundColor: "#1B3047",
+                                    border: "none",
+                                    color: "#FFFFFF",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 800,
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.35rem",
+                                  }}
+                                >
+                                  <Download size={13} /> Descargar
+                                </button>
+                              </div>
                             )}
                           </div>
                         ))

@@ -1234,32 +1234,46 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
             const localOnlyQuotes = (localProj.quotes || []).filter((lq: any) => !apiQuoteIds.has(lq.id));
             const mergedQuotes = [...(mappedItem.quotes || []), ...localOnlyQuotes];
 
-            // 4. Merge documents: preserve local file data URLs and newly added local documents
-            const apiDocIds = new Set((mappedItem.documents || []).map((d: any) => d.id));
-            const localOnlyDocs = (localProj.documents || []).filter((ld: any) => !apiDocIds.has(ld.id));
+            // 4. Merge documents: preserve local file data URLs and prevent duplicates
             const mergedDocuments = [
               ...(mappedItem.documents || []).map((md: any) => {
-                const localMatch = (localProj.documents || []).find((ld: any) => ld.id === md.id || ld.title === md.title);
+                const localMatch = (localProj.documents || []).find((ld: any) =>
+                  ld.id === md.id ||
+                  (ld.title?.toLowerCase().trim() === md.title?.toLowerCase().trim() && ld.category === md.category)
+                );
                 if (localMatch && localMatch.url && !md.url) {
                   return { ...md, url: localMatch.url, fileDataUrl: (localMatch as any).fileDataUrl || localMatch.url };
                 }
                 return md;
               }),
-              ...localOnlyDocs,
+              ...(localProj.documents || []).filter((ld: any) => {
+                const isCovered = (mappedItem.documents || []).some((md: any) =>
+                  md.id === ld.id ||
+                  (md.title?.toLowerCase().trim() === ld.title?.toLowerCase().trim() && md.category === ld.category)
+                );
+                return !isCovered;
+              }),
             ];
 
-            // 5. Merge clientDocuments
-            const apiClientDocIds = new Set((mappedItem.clientDocuments || []).map((d: any) => d.id));
-            const localOnlyClientDocs = (localProj.clientDocuments || []).filter((ld: any) => !apiClientDocIds.has(ld.id));
+            // 5. Merge clientDocuments: deduplicate by id OR (title + unit)
             const mergedClientDocs = [
               ...(mappedItem.clientDocuments || []).map((md: any) => {
-                const localMatch = (localProj.clientDocuments || []).find((ld: any) => ld.id === md.id || ld.title === md.title);
+                const localMatch = (localProj.clientDocuments || []).find((ld: any) =>
+                  ld.id === md.id ||
+                  (ld.title?.toLowerCase().trim() === md.title?.toLowerCase().trim() && (ld.unit || "").toLowerCase().trim() === (md.unit || "").toLowerCase().trim())
+                );
                 if (localMatch && localMatch.url && !md.url) {
                   return { ...md, url: localMatch.url, fileDataUrl: (localMatch as any).fileDataUrl || localMatch.url };
                 }
                 return md;
               }),
-              ...localOnlyClientDocs,
+              ...(localProj.clientDocuments || []).filter((ld: any) => {
+                const isCovered = (mappedItem.clientDocuments || []).some((md: any) =>
+                  md.id === ld.id ||
+                  (md.title?.toLowerCase().trim() === ld.title?.toLowerCase().trim() && (md.unit || "").toLowerCase().trim() === (ld.unit || "").toLowerCase().trim())
+                );
+                return !isCovered;
+              }),
             ];
 
             return {
@@ -3436,23 +3450,41 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const current = p.documents || [];
       return {
         ...p,
-        documents: [doc, ...current.filter((d) => d.id !== doc.id)],
+        documents: [doc, ...current.filter((d) => d.id !== doc.id && d.title !== doc.title)],
       };
     });
     saveProjects(updated);
     showToast("Documento Guardado", `Se guardó "${doc.title}" en el expediente.`);
 
-    // Persist to Supabase
+    // Persist to Supabase and reconcile ID
     fetch("/api/documents", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        id: doc.id,
         projectId,
         title: doc.title,
         category: doc.category,
         filePath: doc.url,
       }),
-    }).catch((err) => console.warn("Could not sync document with backend:", err));
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.document?.id) {
+          setProjects((prev) =>
+            prev.map((p) => {
+              if (p.id !== projectId) return p;
+              return {
+                ...p,
+                documents: (p.documents || []).map((d) =>
+                  d.id === doc.id ? { ...d, id: data.document.id, url: data.document.storagePath || d.url } : d
+                ),
+              };
+            })
+          );
+        }
+      })
+      .catch((err) => console.warn("Could not sync document with backend:", err));
   };
 
   const deleteProjectDocument = (projectId: string, docId: string) => {
@@ -3478,7 +3510,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const current = p.clientDocuments || [];
       return {
         ...p,
-        clientDocuments: [doc, ...current.filter((d) => d.id !== doc.id)],
+        clientDocuments: [doc, ...current.filter((d) => d.id !== doc.id && (d.title !== doc.title || d.unit !== doc.unit))],
       };
     });
     saveProjects(updated);
@@ -3502,7 +3534,24 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         isClientVisible: doc.isVisibleToClient,
         notes: doc.notes,
       }),
-    }).catch((err) => console.warn("Could not sync client document with backend:", err));
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.document?.id) {
+          setProjects((prev) =>
+            prev.map((p) => {
+              if (p.id !== projectId) return p;
+              return {
+                ...p,
+                clientDocuments: (p.clientDocuments || []).map((d) =>
+                  d.id === doc.id ? { ...d, id: data.document.id, url: data.document.storagePath || d.url } : d
+                ),
+              };
+            })
+          );
+        }
+      })
+      .catch((err) => console.warn("Could not sync client document with backend:", err));
   };
 
   const updateClientDocument = (projectId: string, doc: ClientDocument) => {
