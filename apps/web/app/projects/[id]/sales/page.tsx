@@ -53,6 +53,7 @@ import { EditSaleModal } from "../../../../components/sales/edit-sale-modal";
 import QuoteUnitWizardModal from "../../../../components/units/quote-unit-wizard-modal";
 import { exportTableToExcel, exportTableToPDF } from "../../../../lib/export-utils";
 import { generateQuotePDF, resolveProjectLogo } from "../../../../lib/pdf-generator";
+import { CoOwnersMiniCards } from "../../../../components/ui/co-owners-mini-cards";
 
 export default function ProjectSalesPage() {
   const router = useRouter();
@@ -219,6 +220,7 @@ export default function ProjectSalesPage() {
         saleDate: formattedDate,
         status: "ACTIVA" as const,
         isCoOwnership,
+        coOwners: u.coOwners,
         additionals: matchingAddons,
         coOwnersSummary: isCoOwnership
           ? u.coOwners?.map((c: CoOwner) => `${c.name} (${c.ownershipPct}%)`).join(" + ")
@@ -1171,33 +1173,19 @@ export default function ProjectSalesPage() {
                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                       >
                         {/* Nombre */}
-                        <td style={{ padding: "1rem 1.25rem", fontWeight: 600, color: "#1F3652", fontSize: "0.85rem" }}>
-                          <div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
-                              <span>{sale.clientName}</span>
-                              {(sale.isCoOwnership || (sale.coOwners && sale.coOwners.length > 1)) && (
-                                <span
-                                  style={{
-                                    fontSize: "0.68rem",
-                                    fontWeight: 800,
-                                    padding: "0.15rem 0.45rem",
-                                    borderRadius: "4px",
-                                    backgroundColor: "rgba(47, 128, 237, 0.1)",
-                                    color: "#2F80ED",
-                                    border: "1px solid rgba(47, 128, 237, 0.25)",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  Copropiedad
-                                </span>
-                              )}
-                            </div>
-                            {sale.clientEmail && sale.clientEmail !== "-" && (
-                              <span style={{ fontSize: "0.72rem", color: "#64748B", display: "block" }}>
-                                {sale.clientEmail}
-                              </span>
-                            )}
-                          </div>
+                        <td style={{ padding: "1rem 1.25rem", fontSize: "0.85rem" }}>
+                          <CoOwnersMiniCards
+                            clientName={sale.clientName}
+                            clientEmail={sale.clientEmail}
+                            clientPhone={sale.clientPhone}
+                            coOwners={sale.coOwners}
+                            onCoOwnerClick={(co, e) => {
+                              e.stopPropagation();
+                              const uNum = typeof sale.unit === "object" && sale.unit !== null ? (sale.unit as any).unitNumber : sale.unit;
+                              const targetId = co.id || co.email || co.name;
+                              router.push(`/projects/${projectId}/clients/${encodeURIComponent(targetId)}?unit=${encodeURIComponent(String(uNum || "").trim())}`);
+                            }}
+                          />
                         </td>
 
                         {/* Unidad */}

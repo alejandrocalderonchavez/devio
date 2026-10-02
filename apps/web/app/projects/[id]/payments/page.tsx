@@ -41,6 +41,7 @@ import { generateReceiptPDF, openReceiptInNewTab, resolveProjectLogo } from "../
 import { sendAndLogNotification } from "../../../../lib/notifications";
 import { formatDateMX, parseDateSafe, getMexicoNow } from "../../../../lib/date-utils";
 import { openDocumentInNewTab, downloadDocumentFile } from "../../../../lib/file-utils";
+import { CoOwnersMiniCards } from "../../../../components/ui/co-owners-mini-cards";
 
 // Date range formatters
 const formatYYYYMMDD = (d: Date) => {
@@ -1681,14 +1682,18 @@ export default function ProjectPaymentsPage() {
                           )}
                         </td>
 
-                        {/* Cliente (con link a su estado de cuenta) */}
-                        <td
-                          style={{ padding: "1rem 1.25rem", fontWeight: 600, color: "#1F3652", fontSize: "0.85rem" }}
-                          onClick={(e) => handleNavigateToClient(p, e)}
-                        >
-                          <span style={{ textDecoration: "underline", textUnderlineOffset: "3px", color: "#1F3652" }}>
-                            {p.clientName}
-                          </span>
+                        {/* Cliente (con link a su estado de cuenta y soporte de copropiedad) */}
+                        <td style={{ padding: "1rem 1.25rem", fontSize: "0.85rem" }}>
+                          <CoOwnersMiniCards
+                            clientName={p.clientName}
+                            clientEmail={(p as any).clientEmail || (p as any).saleRecord?.clientEmail}
+                            coOwners={(p as any).saleRecord?.coOwners || (p as any).coOwners}
+                            onCoOwnerClick={(co, e) => {
+                              e.stopPropagation();
+                              const targetId = co.id || co.email || co.name;
+                              router.push(`/projects/${projectId}/clients/${encodeURIComponent(targetId)}?unit=${encodeURIComponent(p.unit)}`);
+                            }}
+                          />
                         </td>
 
                         {/* Monto programado */}

@@ -29,6 +29,7 @@ import FloorPlansViewerModal from "../../../../components/units/floor-plans-view
 import CreateSaleWizardModal from "../../../../components/sales/create-sale-wizard-modal";
 import EditProjectModal from "../../../../components/projects/edit-project-modal";
 import RegisterProgressWizardModal from "../../../../components/projects/register-progress-wizard-modal";
+import { CoOwnersMiniCards } from "../../../../components/ui/co-owners-mini-cards";
 
 export default function ProjectUnitsPage() {
   const router = useRouter();
@@ -708,40 +709,16 @@ export default function ProjectUnitsPage() {
                     </td>
 
                     {/* 6. Cliente / Copropiedad */}
-                    <td style={{ padding: "0.85rem 1rem", color: u.client && u.client !== "-" ? "#1F3652" : "#94A3B8", fontWeight: u.client && u.client !== "-" ? 600 : 400 }}>
-                      {u.coOwners && u.coOwners.length > 1 ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-                            <span
-                              style={{
-                                fontSize: "0.68rem",
-                                fontWeight: 800,
-                                backgroundColor: "rgba(47, 128, 237, 0.1)",
-                                color: "#2F80ED",
-                                padding: "0.15rem 0.5rem",
-                                borderRadius: "9999px",
-                                border: "1px solid rgba(47, 128, 237, 0.2)",
-                              }}
-                            >
-                              Copropiedad ({u.coOwners.length})
-                            </span>
-                            <span style={{ fontWeight: 700, color: "#1F3652", fontSize: "0.83rem" }}>
-                              {u.client}
-                            </span>
-                          </div>
-                          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", fontSize: "0.72rem", color: "#64748B" }}>
-                            {u.coOwners.map((c, ci) => (
-                              <span key={ci} style={{ backgroundColor: "#F1F5F9", padding: "0.1rem 0.4rem", borderRadius: "0.3rem" }}>
-                                {c.name} ({c.ownershipPct}%)
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ) : u.client && u.client !== "-" ? (
-                        u.client
-                      ) : (
-                        "Sin asignar"
-                      )}
+                    <td style={{ padding: "0.85rem 1rem" }}>
+                      <CoOwnersMiniCards
+                        clientName={u.client}
+                        coOwners={u.coOwners}
+                        onCoOwnerClick={u.status === "VENDIDA" ? (co, e) => {
+                          e.stopPropagation();
+                          const targetId = co.id || co.email || co.name;
+                          router.push(`/projects/${projectId}/clients/${encodeURIComponent(targetId)}?unit=${encodeURIComponent(u.unit)}`);
+                        } : undefined}
+                      />
                     </td>
 
                     {/* 7. Editar / Ver estado de cuenta */}

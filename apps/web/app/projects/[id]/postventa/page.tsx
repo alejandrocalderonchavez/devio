@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import AppLayout from "../../../../components/layout/app-layout";
 import {
   Wrench,
@@ -37,8 +37,10 @@ import { exportTableToExcel, exportTableToPDF } from "../../../../lib/export-uti
 import { NewIncidentModal } from "../../../../components/postventa/new-incident-modal";
 import { IncidentDetailDrawer } from "../../../../components/postventa/incident-detail-drawer";
 import { UnitDeliveryModal, DeliveryUnitData } from "../../../../components/postventa/unit-delivery-modal";
+import { CoOwnersMiniCards } from "../../../../components/ui/co-owners-mini-cards";
 
 export default function ProjectPostventaPage() {
+  const router = useRouter();
   const params = useParams();
   const projectId = (params?.id as string) || "p-1";
   const {
@@ -89,6 +91,7 @@ export default function ProjectPostventaPage() {
       saleDate: string;
       activeIncidentsCount: number;
       totalIncidentsCount: number;
+      coOwners?: any[];
     }> = [];
 
     project.unitsInventory.forEach((u: any) => {
@@ -101,13 +104,17 @@ export default function ProjectPostventaPage() {
         const activeCount = unitIncidents.filter(
           (i) => i.status !== "Cerrada" && i.status !== "Resuelta"
         ).length;
+        const matchedSale = (project.sales || []).find(
+          (s: any) => s.status !== "CANCELADA" && (s.unit === u.unit || (typeof s.unit === "object" && (s.unit as any)?.unitNumber === u.unit))
+        );
 
         list.push({
           projectId: project.id,
           projectName: project.name,
           unitNumber: u.unit,
           unitType: u.type || "Unidad",
-          clientName: u.client && u.client !== "-" ? u.client : "Cliente Propietario",
+          clientName: u.client && u.client !== "-" ? u.client : matchedSale?.clientName || "Cliente Propietario",
+          coOwners: u.coOwners || matchedSale?.coOwners,
           price: u.price || 0,
           saleDate: u.saleDate && u.saleDate !== "-" ? formatDateMX(u.saleDate, "short") : "Fecha registrada",
           isDelivered: Boolean(u.isDelivered || u.status === "ENTREGADA"),
@@ -894,10 +901,23 @@ export default function ProjectPostventaPage() {
                             Unidad {inc.unit}
                           </td>
                           <td style={{ padding: "0.85rem 1rem" }}>
-                            <div style={{ fontWeight: 600, color: "#1F3652" }}>{inc.clientName}</div>
-                            {inc.clientPhone && (
-                              <div style={{ fontSize: "0.72rem", color: "#64748B" }}>{inc.clientPhone}</div>
-                            )}
+                            {(() => {
+                              const uObj = (project?.unitsInventory || []).find((u) => u.unit.toLowerCase().trim() === (inc.unit || "").toLowerCase().trim());
+                              const sObj = (project?.sales || []).find((s) => s.unit.toLowerCase().trim() === (inc.unit || "").toLowerCase().trim());
+                              const coList = uObj?.coOwners || sObj?.coOwners;
+                              return (
+                                <CoOwnersMiniCards
+                                  clientName={inc.clientName}
+                                  clientPhone={inc.clientPhone}
+                                  coOwners={coList}
+                                  onCoOwnerClick={(co, e) => {
+                                    e.stopPropagation();
+                                    const targetId = co.id || co.email || co.name;
+                                    router.push(`/projects/${projectId}/clients/${encodeURIComponent(targetId)}?unit=${encodeURIComponent(inc.unit)}`);
+                                  }}
+                                />
+                              );
+                            })()}
                           </td>
                           <td style={{ padding: "0.85rem 1rem", maxWidth: "260px" }}>
                             <div style={{ fontSize: "0.72rem", color: "#64748B", fontWeight: 600 }}>
@@ -1290,8 +1310,16 @@ export default function ProjectPostventaPage() {
                             {u.unitType}
                           </span>
                         </td>
-                        <td style={{ padding: "0.85rem 1rem", fontWeight: 600, color: "#1F3652" }}>
-                          {u.clientName}
+                        <td style={{ padding: "0.85rem 1rem" }}>
+                          <CoOwnersMiniCards
+                            clientName={u.clientName}
+                            coOwners={(u as any).coOwners}
+                            onCoOwnerClick={(co, e) => {
+                              e.stopPropagation();
+                              const targetId = co.id || co.email || co.name;
+                              router.push(`/projects/${projectId}/clients/${encodeURIComponent(targetId)}?unit=${encodeURIComponent(u.unitNumber)}`);
+                            }}
+                          />
                         </td>
                         <td style={{ padding: "0.85rem 1rem", color: "#64748B", fontWeight: 500 }}>
                           {u.saleDate}
