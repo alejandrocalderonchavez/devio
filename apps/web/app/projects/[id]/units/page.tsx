@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Home,
   Building2,
@@ -31,6 +31,7 @@ import EditProjectModal from "../../../../components/projects/edit-project-modal
 import RegisterProgressWizardModal from "../../../../components/projects/register-progress-wizard-modal";
 
 export default function ProjectUnitsPage() {
+  const router = useRouter();
   const params = useParams();
   const projectId = (params?.id as string) || "p-1";
   const { projects, getProject, currency, formatMoney, updateBulkPrices, updateUnit, updateMultipleUnits, bulkImportUnits, bulkImportAdditionals, unsellUnit, addSale, updateProjectProgress, updateProjectAdditionals, showToast, hasPermission } = useProject();
@@ -67,6 +68,69 @@ export default function ProjectUnitsPage() {
   const handleOpenQuoteWizard = (unit: UnitItem) => {
     setSelectedUnitForAction(unit);
     setShowQuoteModal(true);
+  };
+
+  // Redirigir al estado de cuenta del cliente (o titular principal en copropiedad) para unidades vendidas
+  const handleNavigateToClient = (unit: UnitItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    // 1. Buscar en project.sales
+    const matchedSale = (project?.sales || []).find(
+      (s) =>
+        s.status !== "CANCELADA" &&
+        (s.unit === unit.unit || (typeof s.unit === "object" && (s.unit as any)?.unitNumber === unit.unit))
+    );
+
+    if (matchedSale) {
+      if (matchedSale.coOwners && matchedSale.coOwners.length > 0) {
+        const primaryCo = matchedSale.coOwners.find((co: any) => co.isPrimary) || matchedSale.coOwners[0];
+        const targetId = primaryCo?.id || primaryCo?.email || primaryCo?.name;
+        if (targetId) {
+          router.push(`/projects/${projectId}/clients/${encodeURIComponent(targetId)}?unit=${encodeURIComponent(unit.unit)}`);
+          return;
+        }
+      }
+
+      const targetId =
+        (matchedSale.clientId && matchedSale.clientId !== "primary-1" ? matchedSale.clientId : null) ||
+        (matchedSale as any).primaryClientId ||
+        matchedSale.clientEmail ||
+        matchedSale.clientName;
+
+      if (targetId) {
+        router.push(`/projects/${projectId}/clients/${encodeURIComponent(targetId)}?unit=${encodeURIComponent(unit.unit)}`);
+        return;
+      }
+    }
+
+    // 2. Buscar en unit.coOwners
+    if (unit.coOwners && unit.coOwners.length > 0) {
+      const primaryCo = unit.coOwners.find((co: any) => co.isPrimary) || unit.coOwners[0];
+      const targetId = primaryCo?.id || primaryCo?.email || primaryCo?.name;
+      if (targetId) {
+        router.push(`/projects/${projectId}/clients/${encodeURIComponent(targetId)}?unit=${encodeURIComponent(unit.unit)}`);
+        return;
+      }
+    }
+
+    // 3. Buscar en project.clients
+    const matchedClient = (project?.clients || []).find((c) =>
+      c.ownedUnits?.some((ou) => ou.unit.toLowerCase().trim() === unit.unit.toLowerCase().trim())
+    );
+    if (matchedClient) {
+      const targetId = matchedClient.id || matchedClient.email || matchedClient.name;
+      router.push(`/projects/${projectId}/clients/${encodeURIComponent(targetId)}?unit=${encodeURIComponent(unit.unit)}`);
+      return;
+    }
+
+    // 4. Si tiene nombre de cliente asignado
+    if (unit.client && unit.client !== "-" && unit.client !== "Sin asignar") {
+      router.push(`/projects/${projectId}/clients/${encodeURIComponent(unit.client)}?unit=${encodeURIComponent(unit.unit)}`);
+      return;
+    }
+
+    // Fallback si no está vendida o no tiene cliente
+    handleOpenUnitDetail(unit);
   };
 
   const handleApplyPriceAdjustment = (updatedUnits: UnitItem[], logSummary: string) => {
@@ -577,11 +641,21 @@ export default function ProjectUnitsPage() {
                 .map((u, i) => (
                   <tr
                     key={u.id || i}
+                    onClick={() => {
+                      if (u.status === "VENDIDA") {
+                        handleNavigateToClient(u);
+                      } else {
+                        handleOpenUnitDetail(u);
+                      }
+                    }}
                     style={{
                       borderBottom: "1px solid #EAEFF5",
                       backgroundColor: i % 2 === 0 ? "#FFFFFF" : "#FAFBFD",
                       transition: "background-color 0.15s ease",
+                      cursor: "pointer",
                     }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(31, 54, 82, 0.04)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? "#FFFFFF" : "#FAFBFD")}
                   >
                     {/* 1. Numero */}
                     <td style={{ padding: "0.85rem 1rem", fontWeight: 800, color: "#1F3652" }}>
@@ -670,12 +744,19 @@ export default function ProjectUnitsPage() {
                       )}
                     </td>
 
-                    {/* 7. Editar */}
-                    <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
+                    {/* 7. Editar / Ver estado de cuenta */}
+                    <td style={{ padding: "0.85rem 1rem", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        onClick={() => handleOpenUnitDetail(u)}
-                        title="Editar información de la unidad"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (u.status === "VENDIDA") {
+                            handleNavigateToClient(u, e);
+                          } else {
+                            handleOpenUnitDetail(u);
+                          }
+                        }}
+                        title={u.status === "VENDIDA" ? "Ver estado de cuenta de la unidad vendida" : "Editar información de la unidad"}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -695,11 +776,14 @@ export default function ProjectUnitsPage() {
                     </td>
 
                     {/* 8. Cotización */}
-                    <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
+                    <td style={{ padding: "0.85rem 1rem", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                       {hasPermission("units.quote") ? (
                         <button
                           type="button"
-                          onClick={() => handleOpenQuoteWizard(u)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenQuoteWizard(u);
+                          }}
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
@@ -838,7 +922,11 @@ export default function ProjectUnitsPage() {
           project={project}
           onOpenUnitDetail={(unit) => {
             setShowFloorPlansModal(false);
-            handleOpenUnitDetail(unit);
+            if (unit.status === "VENDIDA") {
+              handleNavigateToClient(unit);
+            } else {
+              handleOpenUnitDetail(unit);
+            }
           }}
           onOpenQuoteWizard={(unit) => {
             setShowFloorPlansModal(false);

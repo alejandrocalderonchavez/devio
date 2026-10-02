@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   CreditCard,
   Search,
@@ -55,6 +55,7 @@ import { exportTableToExcel, exportTableToPDF } from "../../../../lib/export-uti
 import { generateQuotePDF, resolveProjectLogo } from "../../../../lib/pdf-generator";
 
 export default function ProjectSalesPage() {
+  const router = useRouter();
   const params = useParams();
   const projectId = (params?.id as string) || "p-1";
   const {
@@ -77,6 +78,39 @@ export default function ProjectSalesPage() {
 
   // Main Section Tab
   const [activeTab, setActiveTab] = useState<"SALES" | "QUOTES">("SALES");
+
+  // Redirigir al estado de cuenta del cliente (o titular principal en copropiedad) para la venta
+  const handleNavigateToSaleClient = (sale: SaleRecord, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    const uNum = typeof sale.unit === "object" && sale.unit !== null ? (sale.unit as any).unitNumber : sale.unit;
+    const unitStr = String(uNum || "").trim();
+
+    // 1. Si es copropiedad o tiene lista de copropietarios, buscar el titular principal
+    if (sale.coOwners && sale.coOwners.length > 0) {
+      const primaryCoOwner = sale.coOwners.find((co: any) => co.isPrimary) || sale.coOwners[0];
+      const targetId = primaryCoOwner?.id || primaryCoOwner?.email || primaryCoOwner?.name;
+      if (targetId) {
+        router.push(`/projects/${projectId}/clients/${encodeURIComponent(targetId)}?unit=${encodeURIComponent(unitStr)}`);
+        return;
+      }
+    }
+
+    // 2. Direct clientId / primaryClientId / email / name
+    const targetClientId =
+      (sale.clientId && sale.clientId !== "primary-1" ? sale.clientId : null) ||
+      (sale as any).primaryClientId ||
+      sale.clientEmail ||
+      sale.clientName;
+
+    if (targetClientId) {
+      router.push(`/projects/${projectId}/clients/${encodeURIComponent(targetClientId)}?unit=${encodeURIComponent(unitStr)}`);
+      return;
+    }
+
+    // 3. Fallback
+    router.push(`/projects/${projectId}/clients/${encodeURIComponent(sale.id)}?unit=${encodeURIComponent(unitStr)}`);
+  };
 
   // Sales States
   const [searchQuery, setSearchQuery] = useState("");
@@ -1127,7 +1161,7 @@ export default function ProjectSalesPage() {
                     processedSales.map((sale) => (
                       <tr
                         key={sale.id}
-                        onClick={() => setSelectedSale(sale)}
+                        onClick={() => handleNavigateToSaleClient(sale)}
                         style={{
                           borderBottom: "1px solid #F1F5F9",
                           cursor: "pointer",
