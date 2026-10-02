@@ -51,81 +51,52 @@ export function CoOwnersMiniCards({
     };
   }, [isOpen]);
 
-  // Si hay más de un copropietario
+  // Si hay más de un copropietario: SOLO mostrar la card/badge de Copropiedad
   if (validCoOwners.length > 1) {
-    const primaryCo = validCoOwners.find((co) => co.isPrimary) || validCoOwners[0] || { name: clientName || "Cliente", ownershipPct: 100 };
-    const primaryPct = primaryCo.ownershipPct ?? primaryCo.percentage ?? Math.round(100 / validCoOwners.length);
     const showPopup = isOpen || isHovered;
 
     return (
       <div
         ref={containerRef}
-        style={{ position: "relative", display: "inline-flex", flexDirection: "column", gap: "0.25rem" }}
+        style={{ position: "relative", display: "inline-block" }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Titular Principal + Badge de Copropiedad */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-            <span
-              style={{
-                fontWeight: 700,
-                color: "#1F3652",
-                fontSize: "0.85rem",
-                whiteSpace: "nowrap",
-                maxWidth: "170px",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-              title={primaryCo.name}
-            >
-              {primaryCo.name}
-            </span>
-            <span
-              style={{
-                fontSize: "0.62rem",
-                fontWeight: 800,
-                color: "#059669",
-                backgroundColor: "rgba(16, 185, 129, 0.1)",
-                padding: "0.1rem 0.35rem",
-                borderRadius: "4px",
-                flexShrink: 0,
-              }}
-            >
-              {primaryPct}%
-            </span>
-          </div>
-
-          {/* Botón sutil con hover/click para ver todos los copropietarios */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsOpen(!isOpen);
-            }}
+        {/* Card / Badge interactivo de Copropiedad */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen(!isOpen);
+          }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.35rem",
+            fontSize: "0.78rem",
+            fontWeight: 700,
+            backgroundColor: showPopup ? "rgba(47, 128, 237, 0.16)" : "rgba(47, 128, 237, 0.08)",
+            color: "#2F80ED",
+            padding: "0.28rem 0.65rem",
+            borderRadius: "9999px",
+            border: "1px solid rgba(47, 128, 237, 0.28)",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+            boxShadow: showPopup ? "0 2px 6px rgba(47, 128, 237, 0.15)" : "none",
+          }}
+          title="Ver lista de copropietarios"
+        >
+          <Users size={13} color="#2F80ED" />
+          <span>Copropiedad ({validCoOwners.length})</span>
+          <ChevronDown
+            size={12}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.3rem",
-              fontSize: "0.72rem",
-              fontWeight: 700,
-              backgroundColor: showPopup ? "rgba(47, 128, 237, 0.14)" : "rgba(47, 128, 237, 0.08)",
-              color: "#2F80ED",
-              padding: "0.18rem 0.55rem",
-              borderRadius: "9999px",
-              border: "1px solid rgba(47, 128, 237, 0.25)",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-              width: "fit-content",
+              transform: showPopup ? "rotate(180deg)" : "none",
+              transition: "transform 0.15s ease",
             }}
-            title="Ver lista de copropietarios"
-          >
-            <Users size={11} />
-            <span>Copropiedad ({validCoOwners.length})</span>
-            <ChevronDown size={11} style={{ transform: showPopup ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }} />
-          </button>
-        </div>
+          />
+        </button>
 
         {/* Pop-up Flotante (Hover & Click) */}
         {showPopup && (
@@ -140,11 +111,10 @@ export function CoOwnersMiniCards({
               backgroundColor: "#FFFFFF",
               borderRadius: "0.85rem",
               padding: "0.85rem",
-              boxShadow: "0 12px 35px -4px rgba(15, 41, 66, 0.2), 0 4px 12px rgba(0, 0, 0, 0.08)",
+              boxShadow: "0 14px 40px -4px rgba(15, 41, 66, 0.25), 0 4px 12px rgba(0, 0, 0, 0.08)",
               border: "1px solid #E2E8F0",
               minWidth: "260px",
               maxWidth: "320px",
-              animation: "fadeIn 0.15s ease-out",
             }}
           >
             {/* Pop-up Header */}
@@ -320,7 +290,7 @@ export function CoOwnersMiniCards({
     );
   }
 
-  // Single client fallback
+  // Single client fallback: Cuando NO es copropiedad, mostrar el nombre del cliente normal
   const displayName =
     (validCoOwners.length === 1 ? validCoOwners[0]?.name : null) ||
     clientName ||
