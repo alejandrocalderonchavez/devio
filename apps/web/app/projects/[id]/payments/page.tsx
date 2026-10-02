@@ -77,6 +77,7 @@ export default function ProjectPaymentsPage() {
     getProject,
     formatMoney,
     showToast,
+    registerPayment,
     updateSaleScheduleInstallment,
     updateSalePayment,
     deleteSalePayment,
@@ -804,19 +805,16 @@ export default function ProjectPaymentsPage() {
     e.preventDefault();
     if (!selectedPaymentForRecord) return;
 
-    const updated = payments.map((p) => {
-      if (p.id !== selectedPaymentForRecord.id) return p;
-      return {
-        ...p,
-        paidAmount: Number(paymentForm.paidAmount),
-        paymentDate: paymentForm.paymentDate,
-        paymentMethod: paymentForm.paymentMethod as any,
-        status: "PAGADO" as const,
-      };
+    registerPayment(projectId, {
+      unitNumber: selectedPaymentForRecord.unit,
+      amount: Number(paymentForm.paidAmount) || selectedPaymentForRecord.scheduledAmount,
+      paymentDate: paymentForm.paymentDate,
+      paymentMethod: paymentForm.paymentMethod,
+      reference: paymentForm.reference || undefined,
+      notes: `Pago registrado desde Módulo de Cobranza • Cuota ${selectedPaymentForRecord.scheduledDate}`,
+      sendReceiptEmail: true,
     });
 
-    setLocalPayments(updated);
-    showToast("Pago Registrado", `Se aplicó el pago de ${formatMoney(paymentForm.paidAmount)} para la unidad ${selectedPaymentForRecord.unit}.`);
     setSelectedPaymentForRecord(null);
   };
 

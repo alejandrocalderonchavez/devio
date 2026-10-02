@@ -32,6 +32,7 @@ import {
 } from "../lib/permissions";
 import { safeSaveProjectsState } from "../lib/storage-utils";
 import { formatDateMX, parseDateSafe, getMexicoDateISO, getMexicoNow } from "../lib/date-utils";
+import { sendAndLogNotification } from "../lib/notifications";
 
 export type Currency = "MXN" | "USD";
 
@@ -2112,6 +2113,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     if (payAmount <= 0) return;
 
     const todayStr = paymentPayload.paymentDate || new Date().toLocaleDateString("es-MX");
+    let recordedSale: any = null;
+    let recordedUnit: any = null;
+    let recordedReceiptFolio = "";
+    let recordedUnitPending = 0;
 
     const updated = projects.map((p) => {
       if (p.id !== targetProject.id) return p;
@@ -2119,6 +2124,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       // Find unit
       const unitObj = p.unitsInventory.find((u) => u.unit === unitNum);
       if (!unitObj) return p;
+      recordedUnit = unitObj;
 
       // Find or synthesize existing sale
       const existingSales = p.sales || [];
@@ -2200,6 +2206,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
       const currentPayments = sale.payments || [];
       const nextReceiptFolio = `REC-${new Date().getFullYear()}-${String(currentPayments.length + 1).padStart(3, "0")}`;
+      recordedReceiptFolio = nextReceiptFolio;
       const moratoryCharged = Number(paymentPayload.moratoryAmount) || 0;
       const principalToAllocate = Math.max(0, payAmount - moratoryCharged);
 
@@ -2244,6 +2251,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
       const newUnitPaid = (unitObj.salePaidAmount || 0) + principalToAllocate;
       const newUnitPending = Math.max(0, (unitObj.price || 0) - newUnitPaid);
+      recordedUnitPending = newUnitPending;
 
       const updatedSale: SaleRecord = {
         ...sale,
@@ -2253,6 +2261,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         payments: [newReceipt, ...currentPayments],
         status: newUnitPending === 0 ? "PAGADA" : "ACTIVA",
       };
+      recordedSale = updatedSale;
 
       const newSales = [updatedSale, ...existingSales.filter((s) => s.unit !== unitNum)];
 
@@ -2301,6 +2310,83 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         notes: paymentPayload.notes,
       }),
     }).catch((err) => console.warn("Could not save payment to API:", err));
+
+    // Despacho de Correo de Recibo de Pago (Postmark recibo-pago)
+    if (paymentPayload.sendReceiptEmail !== false) {
+      const activeSale = recordedSale;
+      const targetClient = (targetProject.clients || []).find(
+        (c) =>
+          (c.ownedUnits || []).some((u) => u.unit === unitNum) ||
+          (c.name && c.name.toLowerCase() === (activeSale?.clientName || "").toLowerCase()) ||
+          (c.email && c.email === activeSale?.clientEmail)
+      );
+
+      const targetEmail = (
+        activeSale?.clientEmail ||
+        targetClient?.email ||
+        recordedUnit?.coOwners?.[0]?.email ||
+        (typeof window !== "undefined" ? localStorage.getItem("devio_user_email") || "" : "")
+      ).trim();
+
+      const clientDisplayName = activeSale?.clientName || targetClient?.name || recordedUnit?.client || "Cliente Propietario";
+      const devName = developerName || targetProject.name || "Desarrolladora Inmobiliaria";
+      const devLogo =
+        developerLogo ||
+        (typeof window !== "undefined" ? localStorage.getItem("devio_developer_logo") || "" : "") ||
+        "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398110026x731242031517065300/grupo_veq_logo.jpeg";
+      const projLogo =
+        targetProject.logoUrl ||
+        (targetProject.image?.startsWith("http")
+          ? targetProject.image
+          : "https://6d94a8ea50a1bc576a3e8162c197d74f.cdn.bubble.io/f1777398492782x453733136803679400/lirica.jpeg");
+
+      const originUrl = typeof window !== "undefined" ? window.location.origin : "https://devio.lat";
+      const loginLink = `${originUrl}/login`;
+      const portalLink = `${originUrl}/portal`;
+
+      if (targetEmail && targetEmail.includes("@")) {
+        sendAndLogNotification({
+          to: targetEmail,
+          templateAlias: "recibo-pago",
+          templateModel: {
+            nombre: clientDisplayName,
+            correo: targetEmail,
+            proyecto: targetProject.name,
+            unidad: unitNum,
+            folio_recibo: recordedReceiptFolio || "REC-2026-001",
+            monto_pagado: formatMoney(payAmount),
+            monto: formatMoney(payAmount),
+            concepto: paymentPayload.notes || (paymentPayload.reference ? `Ref: ${paymentPayload.reference}` : `Abono a Cuenta • Unidad ${unitNum}`),
+            metodo_pago: paymentPayload.paymentMethod || "Transferencia SPEI",
+            fecha_pago: todayStr,
+            saldo_pendiente: formatMoney(recordedUnitPending),
+            desarrolladora: devName,
+            logo_proyecto: projLogo,
+            logo_desarrolladora: devLogo,
+            url_recibo: portalLink,
+            link_recibo: portalLink,
+            recibo_url: portalLink,
+            url: portalLink,
+            link: portalLink,
+            pdf_url: portalLink,
+            login_link: loginLink,
+            portal_link: portalLink,
+            año: new Date().getFullYear().toString(),
+          },
+          triggerKey: "payments.receipt_dispatch",
+          triggerName: "Recibo de Pago de Enganche / Abono",
+          recipientName: clientDisplayName,
+          developerName: devName,
+          channel: "POSTMARK",
+        })
+          .then((res) => {
+            if (res.success) {
+              showToast("Recibo Despachado", `Se envió el comprobante oficial por correo a ${targetEmail}.`, "success");
+            }
+          })
+          .catch((err) => console.warn("Error enviando correo de recibo de pago:", err));
+      }
+    }
   };
 
   const updateSaleScheduleInstallment = (
