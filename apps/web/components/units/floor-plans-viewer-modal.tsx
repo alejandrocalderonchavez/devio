@@ -35,14 +35,16 @@ export default function FloorPlansViewerModal({
   onOpenQuoteWizard,
   onOpenNewSale,
 }: FloorPlansViewerModalProps) {
-  const { addFloorPlan, updateFloorPlan, deleteFloorPlan, updateUnit, showToast } = useProject();
+  const { getProject, saveFloorPlanWithAssignments, deleteFloorPlan, showToast } = useProject();
+
+  const currentProject = getProject(project?.id) || project;
 
   const floorPlansList: ProjectFloorPlan[] = useMemo(() => {
-    if (project.floorPlans && project.floorPlans.length > 0) {
-      return project.floorPlans;
+    if (currentProject.floorPlans && currentProject.floorPlans.length > 0) {
+      return currentProject.floorPlans;
     }
     return [];
-  }, [project.floorPlans]);
+  }, [currentProject.floorPlans]);
 
   // Modal para crear / editar planta
   const [isEditingModalOpen, setIsEditingModalOpen] = useState(false);
@@ -63,7 +65,7 @@ export default function FloorPlansViewerModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Unidades del proyecto
-  const allUnits = project.unitsInventory || [];
+  const allUnits = currentProject.unitsInventory || [];
 
   const handleOpenCreate = () => {
     setEditingForm({
@@ -92,50 +94,20 @@ export default function FloorPlansViewerModal({
       return;
     }
 
-    if (editingForm.id) {
-      // Actualizar planta existente
-      const oldPlan = floorPlansList.find((p) => p.id === editingForm.id);
-      updateFloorPlan(project.id, editingForm.id, {
-        name: editingForm.name,
-        imageUrl: editingForm.imageUrl,
-      });
+    const targetId = editingForm.id || `fp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const planToSave: ProjectFloorPlan = {
+      id: targetId,
+      name: editingForm.name.trim(),
+      imageUrl: editingForm.imageUrl,
+    };
 
-      // Actualizar unidades asignadas
-      allUnits.forEach((u) => {
-        const shouldBeAssigned = editingForm.selectedUnitNumbers.includes(u.unit);
-        if (shouldBeAssigned && u.floorPlan !== editingForm.name) {
-          updateUnit(project.id, u.unit, { floorPlan: editingForm.name });
-        } else if (!shouldBeAssigned && u.floorPlan === oldPlan?.name) {
-          updateUnit(project.id, u.unit, { floorPlan: undefined });
-        }
-      });
-    } else {
-      // Crear nueva planta
-      const newPlan: ProjectFloorPlan = {
-        id: `fp-${Date.now()}`,
-        name: editingForm.name,
-        imageUrl: editingForm.imageUrl,
-      };
-      addFloorPlan(project.id, newPlan);
-
-      // Asignar a unidades seleccionadas
-      editingForm.selectedUnitNumbers.forEach((unitNum) => {
-        updateUnit(project.id, unitNum, { floorPlan: newPlan.name });
-      });
-    }
-
+    saveFloorPlanWithAssignments(currentProject.id, planToSave, editingForm.selectedUnitNumbers);
     setIsEditingModalOpen(false);
   };
 
   const handleDelete = (plan: ProjectFloorPlan) => {
     if (confirm(`¿Estás seguro de eliminar la planta "${plan.name}"?`)) {
-      deleteFloorPlan(project.id, plan.id);
-      // Limpiar asignación en unidades
-      allUnits.forEach((u) => {
-        if (u.floorPlan === plan.name) {
-          updateUnit(project.id, u.unit, { floorPlan: undefined });
-        }
-      });
+      deleteFloorPlan(currentProject.id, plan.id);
     }
   };
 
@@ -225,7 +197,7 @@ export default function FloorPlansViewerModal({
                     borderRadius: "9999px",
                   }}
                 >
-                  {project.name}
+                  {currentProject.name}
                 </span>
               </div>
               <p style={{ fontSize: "0.8rem", color: "#64748B", margin: 0, marginTop: "0.15rem" }}>

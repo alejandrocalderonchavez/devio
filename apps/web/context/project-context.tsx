@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import {
   INITIAL_PROJECTS,
   ProjectItem,
@@ -183,6 +183,7 @@ interface ProjectContextType {
   deleteConstructionProgress: (projectId: string, advanceId: string) => Promise<void>;
   updateProjectFloorPlans: (projectId: string, floorPlans: ProjectFloorPlan[]) => void;
   addFloorPlan: (projectId: string, floorPlan: ProjectFloorPlan) => void;
+  saveFloorPlanWithAssignments: (projectId: string, floorPlan: ProjectFloorPlan, assignedUnitNumbers: string[]) => void;
   updateFloorPlan: (projectId: string, floorPlanId: string, updatedFields: Partial<ProjectFloorPlan>) => void;
   deleteFloorPlan: (projectId: string, floorPlanId: string) => void;
   bulkImportUnits: (projectId: string, newUnits: UnitItem[]) => { addedCount: number; updatedCount: number };
@@ -219,6 +220,10 @@ const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const projectsRef = useRef<ProjectItem[]>([]);
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
   const [isLoadingProjects, setIsLoadingProjects] = useState<boolean>(true);
   const [currency, setCurrency] = useState<Currency>("MXN");
   const [developerName, setDeveloperName] = useState<string>("Mi Desarrolladora");
@@ -1277,6 +1282,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
               }),
             ];
 
+            // 6. Merge floorPlans: preserve local floor plans created by the user
+            const apiFpIds = new Set((mappedItem.floorPlans || []).map((fp: any) => fp.id));
+            const apiFpNames = new Set((mappedItem.floorPlans || []).map((fp: any) => (fp.name || "").toLowerCase().trim()));
+            const localOnlyFp = (localProj.floorPlans || []).filter(
+              (lfp: any) => !apiFpIds.has(lfp.id) && !apiFpNames.has((lfp.name || "").toLowerCase().trim())
+            );
+            const mergedFloorPlans = [...(mappedItem.floorPlans || []), ...localOnlyFp];
+
             return {
               ...mappedItem,
               sales: mergedSales,
@@ -1284,7 +1297,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
               quotes: mergedQuotes,
               documents: mergedDocuments,
               clientDocuments: mergedClientDocs,
-              floorPlans: (mappedItem.floorPlans && mappedItem.floorPlans.length > 0) ? mappedItem.floorPlans : (localProj.floorPlans || []),
+              floorPlans: mergedFloorPlans,
             };
           }
           return mappedItem;
@@ -1426,12 +1439,20 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     setPaymentPlans([]);
   };
 
-  const saveProjects = (newProjects: ProjectItem[]) => {
-    setProjects(newProjects);
-    safeSaveProjectsState(newProjects);
+  const saveProjects = (newProjects: ProjectItem[] | ((prev: ProjectItem[]) => ProjectItem[])) => {
+    let resolved: ProjectItem[];
+    if (typeof newProjects === "function") {
+      resolved = newProjects(projectsRef.current.length > 0 ? projectsRef.current : projects);
+    } else {
+      resolved = newProjects;
+    }
+    projectsRef.current = resolved;
+    setProjects(resolved);
+    safeSaveProjectsState(resolved);
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("devio_projects_updated"));
     }
+    return resolved;
   };
 
   const showToast = (title: string, desc: string, type: "success" | "info" | "warning" = "success") => {
@@ -1453,9 +1474,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   };
 
   const getProject = (id: string): ProjectItem | undefined => {
-    if (!id) return projects[0];
-    const inState = projects.find((p) => p.id === id);
-    if (inState) return inState;
+    const list = projectsRef.current.length > 0 ? projectsRef.current : projects;
+    if (!id) return list[0];
+    const inRef = list.find((p) => p.id === id);
+    if (inRef) return inRef;
 
     if (typeof window !== "undefined") {
       try {
@@ -1468,11 +1490,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       } catch (_) {}
     }
 
-    return projects[0];
+    return list[0];
   };
 
   const updateUnit = (projectId: string, unitNumber: string, updatedFields: Partial<UnitItem>) => {
-    const updated = projects.map((p) => {
+    const currentList = projectsRef.current.length > 0 ? projectsRef.current : projects;
+    const updated = currentList.map((p) => {
       if (p.id !== projectId) return p;
       const isAvailable = updatedFields.status === "DISPONIBLE";
       const newInventory = p.unitsInventory.map((u) => {
@@ -3324,7 +3347,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateProjectFloorPlans = (projectId: string, floorPlans: ProjectFloorPlan[]) => {
-    const updated = projects.map((p) => {
+    const currentList = projectsRef.current.length > 0 ? projectsRef.current : projects;
+    const updated = currentList.map((p) => {
       if (p.id !== projectId) return p;
       return {
         ...p,
@@ -3340,12 +3364,75 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }).catch((err) => console.warn("Could not sync floor plans with backend:", err));
   };
 
+  const saveFloorPlanWithAssignments = (
+    projectId: string,
+    floorPlan: ProjectFloorPlan,
+    assignedUnitNumbers: string[]
+  ) => {
+    let finalPlans: ProjectFloorPlan[] = [];
+    let finalUnits: UnitItem[] = [];
+
+    const currentList = projectsRef.current.length > 0 ? projectsRef.current : projects;
+    const updated = currentList.map((p) => {
+      if (p.id !== projectId) return p;
+
+      const currentPlans = p.floorPlans || [];
+      const planIndex = currentPlans.findIndex((fp) => fp.id === floorPlan.id);
+      const oldPlan = planIndex !== -1 ? currentPlans[planIndex] : null;
+
+      if (planIndex !== -1) {
+        finalPlans = currentPlans.map((fp, idx) => (idx === planIndex ? { ...fp, ...floorPlan } : fp));
+      } else {
+        finalPlans = [...currentPlans, floorPlan];
+      }
+
+      finalUnits = (p.unitsInventory || []).map((u) => {
+        const shouldBeAssigned = assignedUnitNumbers.includes(u.unit);
+        if (shouldBeAssigned) {
+          return { ...u, floorPlan: floorPlan.name };
+        } else if (u.floorPlan === floorPlan.name || (oldPlan && u.floorPlan === oldPlan.name)) {
+          return { ...u, floorPlan: undefined };
+        }
+        return u;
+      });
+
+      return {
+        ...p,
+        floorPlans: finalPlans,
+        unitsInventory: finalUnits,
+      };
+    });
+
+    saveProjects(updated);
+    showToast("Planta Guardada", `Se guardó la planta "${floorPlan.name}" y sus unidades asignadas.`, "success");
+
+    // Persist to backend API in single atomic call
+    fetch(`/api/projects/${projectId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        floorPlans: finalPlans,
+        unitsInventory: finalUnits,
+      }),
+    }).catch((err) => console.warn("Could not sync floor plans with backend:", err));
+  };
+
   const addFloorPlan = (projectId: string, floorPlan: ProjectFloorPlan) => {
     let finalPlans: ProjectFloorPlan[] = [];
-    const updated = projects.map((p) => {
+    const currentList = projectsRef.current.length > 0 ? projectsRef.current : projects;
+    const updated = currentList.map((p) => {
       if (p.id !== projectId) return p;
       const current = p.floorPlans || [];
-      finalPlans = [...current, floorPlan];
+      const exists = current.some((fp) => fp.id === floorPlan.id || fp.name.toLowerCase().trim() === floorPlan.name.toLowerCase().trim());
+      if (exists) {
+        finalPlans = current.map((fp) =>
+          fp.id === floorPlan.id || fp.name.toLowerCase().trim() === floorPlan.name.toLowerCase().trim()
+            ? { ...fp, ...floorPlan }
+            : fp
+        );
+      } else {
+        finalPlans = [...current, floorPlan];
+      }
       return {
         ...p,
         floorPlans: finalPlans,
@@ -3363,7 +3450,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   const updateFloorPlan = (projectId: string, floorPlanId: string, updatedFields: Partial<ProjectFloorPlan>) => {
     let finalPlans: ProjectFloorPlan[] = [];
-    const updated = projects.map((p) => {
+    const currentList = projectsRef.current.length > 0 ? projectsRef.current : projects;
+    const updated = currentList.map((p) => {
       if (p.id !== projectId) return p;
       const current = p.floorPlans || [];
       finalPlans = current.map((fp) => (fp.id === floorPlanId ? { ...fp, ...updatedFields } : fp));
@@ -3384,13 +3472,23 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   const deleteFloorPlan = (projectId: string, floorPlanId: string) => {
     let finalPlans: ProjectFloorPlan[] = [];
-    const updated = projects.map((p) => {
+    let finalUnits: UnitItem[] = [];
+    const currentList = projectsRef.current.length > 0 ? projectsRef.current : projects;
+    const updated = currentList.map((p) => {
       if (p.id !== projectId) return p;
       const current = p.floorPlans || [];
+      const planToDelete = current.find((fp) => fp.id === floorPlanId);
       finalPlans = current.filter((fp) => fp.id !== floorPlanId);
+      finalUnits = (p.unitsInventory || []).map((u) => {
+        if (planToDelete && u.floorPlan === planToDelete.name) {
+          return { ...u, floorPlan: undefined };
+        }
+        return u;
+      });
       return {
         ...p,
         floorPlans: finalPlans,
+        unitsInventory: finalUnits,
       };
     });
     saveProjects(updated);
@@ -3399,7 +3497,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     fetch(`/api/projects/${projectId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ floorPlans: finalPlans }),
+      body: JSON.stringify({ floorPlans: finalPlans, unitsInventory: finalUnits }),
     }).catch((err) => console.warn("Could not sync floor plans with backend:", err));
   };
 
@@ -4009,6 +4107,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         deleteConstructionProgress,
         updateProjectFloorPlans,
         addFloorPlan,
+        saveFloorPlanWithAssignments,
         updateFloorPlan,
         deleteFloorPlan,
         bulkImportUnits,
