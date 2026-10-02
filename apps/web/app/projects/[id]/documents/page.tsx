@@ -627,7 +627,7 @@ export default function ProjectDocumentsPage() {
               >
                 <FileCheck size={48} color="#2F80ED" />
                 <h4 style={{ fontSize: "1.05rem", fontWeight: 700, color: "#1F3652", margin: 0 }}>
-                  {selectedDocForView.title}.pdf
+                  {selectedDocForView.title.includes(".") ? selectedDocForView.title : `${selectedDocForView.title}.${(selectedDocForView.fileType || "pdf").toLowerCase()}`}
                 </h4>
                 <p style={{ fontSize: "0.82rem", color: "#64748B", maxWidth: "450px", margin: 0 }}>
                   {selectedDocForView.notes || "Documento oficial listo para visualización y descarga."}
