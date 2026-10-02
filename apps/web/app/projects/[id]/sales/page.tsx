@@ -648,75 +648,66 @@ export default function ProjectSalesPage() {
     <AppLayout activeProjectId={projectId} projectSubTab="sales">
       <main style={{ padding: "1.25rem 2rem 2rem 2rem", flex: 1, overflowY: "auto" }}>
         
-        {/* ENCABEZADO PRINCIPAL & SWITCHER DE PESTAÑAS */}
-        <div style={{ marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-          <div>
-            <h1 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
-              {activeTab === "SALES" ? "Ventas" : "Cotizaciones y Prospectos"}
-            </h1>
-            <p style={{ fontSize: "0.85rem", color: "#64748B", margin: "0.2rem 0 0" }}>
-              {activeTab === "SALES"
-                ? "Libro oficial de contratos, unidades vendidas y estados financieros"
-                : "Seguimiento comercial de propuestas emitidas, prospectos y cotizaciones en curso"}
-            </p>
-          </div>
+        {/* ENCABEZADO PRINCIPAL */}
+        <div style={{ marginBottom: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h1 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#1F3652", margin: 0 }}>
+            {activeTab === "SALES" ? "Ventas" : "Cotizaciones y Prospectos"}
+          </h1>
+        </div>
 
-          {/* TAB SWITCHER */}
-          <div
+        {/* TAB SWITCHER */}
+        <div
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            borderBottom: "2px solid #EAEFF5",
+            paddingBottom: "0.15rem",
+            marginBottom: "1.25rem",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setActiveTab("SALES")}
             style={{
+              padding: "0.65rem 1.25rem",
+              borderRadius: "0.6rem 0.6rem 0 0",
+              border: "none",
+              backgroundColor: activeTab === "SALES" ? "#1B3047" : "transparent",
+              color: activeTab === "SALES" ? "#FFFFFF" : "#64748B",
+              fontWeight: 700,
+              fontSize: "0.85rem",
               display: "flex",
               alignItems: "center",
-              backgroundColor: "#F1F5F9",
-              padding: "0.3rem",
-              borderRadius: "9999px",
-              border: "1px solid #E2E8F0",
-              boxShadow: "inset 0 1px 2px rgba(0,0,0,0.04)",
+              gap: "0.5rem",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
             }}
           >
-            <button
-              type="button"
-              onClick={() => setActiveTab("SALES")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.45rem",
-                padding: "0.55rem 1.25rem",
-                borderRadius: "9999px",
-                fontSize: "0.84rem",
-                fontWeight: 700,
-                border: "none",
-                cursor: "pointer",
-                backgroundColor: activeTab === "SALES" ? "#1B3047" : "transparent",
-                color: activeTab === "SALES" ? "#FFFFFF" : "#64748B",
-                boxShadow: activeTab === "SALES" ? "0 2px 6px rgba(27, 48, 71, 0.25)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <CreditCard size={15} /> Ventas Concretadas ({sales.length})
-            </button>
+            <CreditCard size={16} />
+            <span>Ventas Concretadas ({sales.length})</span>
+          </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab("QUOTES")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.45rem",
-                padding: "0.55rem 1.25rem",
-                borderRadius: "9999px",
-                fontSize: "0.84rem",
-                fontWeight: 700,
-                border: "none",
-                cursor: "pointer",
-                backgroundColor: activeTab === "QUOTES" ? "#1B3047" : "transparent",
-                color: activeTab === "QUOTES" ? "#FFFFFF" : "#64748B",
-                boxShadow: activeTab === "QUOTES" ? "0 2px 6px rgba(27, 48, 71, 0.25)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <FileCheck2 size={15} /> Cotizaciones y Prospectos ({quotes.length})
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab("QUOTES")}
+            style={{
+              padding: "0.65rem 1.25rem",
+              borderRadius: "0.6rem 0.6rem 0 0",
+              border: "none",
+              backgroundColor: activeTab === "QUOTES" ? "#1B3047" : "transparent",
+              color: activeTab === "QUOTES" ? "#FFFFFF" : "#64748B",
+              fontWeight: 700,
+              fontSize: "0.85rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <FileCheck2 size={16} />
+            <span>Cotizaciones y Prospectos ({quotes.length})</span>
+          </button>
         </div>
 
         {/* ========================================================================= */}

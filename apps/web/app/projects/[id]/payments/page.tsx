@@ -968,49 +968,57 @@ export default function ProjectPaymentsPage() {
         </div>
 
         {/* NAVEGACIÓN POR PESTAÑAS (TAB MENU) */}
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            borderBottom: "2px solid #EAEFF5",
+            paddingBottom: "0.15rem",
+            marginBottom: "1.25rem",
+          }}
+        >
           <button
             type="button"
             onClick={() => setPaymentsActiveTab("list")}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.45rem",
-              padding: "0.55rem 1.25rem",
-              borderRadius: "9999px",
-              fontSize: "0.84rem",
-              fontWeight: 700,
+              padding: "0.65rem 1.25rem",
+              borderRadius: "0.6rem 0.6rem 0 0",
               border: "none",
-              cursor: "pointer",
-              backgroundColor: paymentsActiveTab === "list" ? "#1B3047" : "#FFFFFF",
+              backgroundColor: paymentsActiveTab === "list" ? "#1B3047" : "transparent",
               color: paymentsActiveTab === "list" ? "#FFFFFF" : "#64748B",
-              boxShadow: paymentsActiveTab === "list" ? "0 2px 6px rgba(27, 48, 71, 0.2)" : "0 1px 3px rgba(0,0,0,0.03)",
+              fontWeight: 700,
+              fontSize: "0.85rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              cursor: "pointer",
               transition: "all 0.15s ease",
             }}
           >
-            <CreditCard size={15} /> Lista de Cobranza y Recibos
+            <CreditCard size={16} />
+            <span>Lista de Cobranza y Recibos</span>
           </button>
 
           <button
             type="button"
             onClick={() => setPaymentsActiveTab("matrix")}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.45rem",
-              padding: "0.55rem 1.25rem",
-              borderRadius: "9999px",
-              fontSize: "0.84rem",
-              fontWeight: 700,
+              padding: "0.65rem 1.25rem",
+              borderRadius: "0.6rem 0.6rem 0 0",
               border: "none",
-              cursor: "pointer",
-              backgroundColor: paymentsActiveTab === "matrix" ? "#1B3047" : "#FFFFFF",
+              backgroundColor: paymentsActiveTab === "matrix" ? "#1B3047" : "transparent",
               color: paymentsActiveTab === "matrix" ? "#FFFFFF" : "#64748B",
-              boxShadow: paymentsActiveTab === "matrix" ? "0 2px 6px rgba(27, 48, 71, 0.2)" : "0 1px 3px rgba(0,0,0,0.03)",
+              fontWeight: 700,
+              fontSize: "0.85rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              cursor: "pointer",
               transition: "all 0.15s ease",
             }}
           >
-            <FileSpreadsheet size={15} /> Tabla de Cobranza (Matriz)
+            <FileSpreadsheet size={16} />
+            <span>Tabla de Cobranza (Matriz)</span>
           </button>
         </div>
 
