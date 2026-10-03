@@ -3211,10 +3211,15 @@ export default function ProjectOnboardingPage() {
                               value={add.type}
                               onChange={(e) => handleAdditionalChange(add.id, "type", e.target.value as any)}
                               className="form-select"
-                              style={{ padding: "0.4rem", fontSize: "0.8125rem", minWidth: "150px" }}
+                              style={{ padding: "0.4rem", fontSize: "0.8125rem", minWidth: "160px" }}
                             >
                               <option value="Estacionamiento">Estacionamiento</option>
                               <option value="Bodega">Bodega</option>
+                              <option value="Acabados">Acabados / Paquete</option>
+                              <option value="Terraza">Terraza / Balcón</option>
+                              <option value="Roof Garden">Roof Garden</option>
+                              <option value="Jardín">Jardín Excedente</option>
+                              <option value="Equipamiento">Equipamiento / Mobiliario</option>
                               <option value="Otro">Otro Adicional</option>
                             </select>
                           </td>
@@ -3510,44 +3515,79 @@ export default function ProjectOnboardingPage() {
           {/* ETAPA 5: ASIGNACIÓN DE EQUIPO */}
           {step === 5 && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
                 <div>
                   <h2 style={{ fontSize: "1.25rem", color: "var(--devio-blue-dark)", margin: 0 }}>
                     5. Asignación de Equipo al Proyecto
                   </h2>
-                  <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.25rem", margin: 0 }}>
+                  <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.2rem", margin: 0 }}>
                     Asigna a los asesores comerciales y administradores que tendrán acceso operativo a este desarrollo.
                   </p>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <div style={{ display: "flex", gap: "0.45rem", alignItems: "center", flexWrap: "wrap" }}>
                   {teamMembers.length > 0 && (
                     <>
+                      {/* Asignar Todos */}
                       <button
                         type="button"
                         onClick={() => handleSelectAllMembers(true)}
                         className="btn btn-outline"
-                        style={{ fontSize: "0.78rem", padding: "0.4rem 0.8rem" }}
+                        style={{
+                          fontSize: "0.75rem",
+                          padding: "0.42rem 0.75rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          color: "#475569",
+                          borderColor: "#CBD5E1",
+                          backgroundColor: "#FFFFFF",
+                          fontWeight: 500,
+                        }}
                       >
-                        <CheckSquare size={14} /> Asignar Todos
+                        <CheckSquare size={13} color="#64748B" />
+                        <span>Asignar Todos</span>
                       </button>
+
+                      {/* Ninguno */}
                       <button
                         type="button"
                         onClick={() => handleSelectAllMembers(false)}
                         className="btn btn-outline"
-                        style={{ fontSize: "0.78rem", padding: "0.4rem 0.8rem" }}
+                        style={{
+                          fontSize: "0.75rem",
+                          padding: "0.42rem 0.75rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          color: "#475569",
+                          borderColor: "#CBD5E1",
+                          backgroundColor: "#FFFFFF",
+                          fontWeight: 500,
+                        }}
                       >
-                        <Square size={14} /> Ninguno
+                        <Square size={13} color="#64748B" />
+                        <span>Ninguno</span>
                       </button>
                     </>
                   )}
+
+                  {/* Agregar Colaborador */}
                   <button
                     type="button"
                     onClick={() => setShowAddMemberModal(true)}
                     className="btn btn-primary"
-                    style={{ fontSize: "0.78rem", padding: "0.45rem 0.9rem" }}
+                    style={{
+                      fontSize: "0.75rem",
+                      padding: "0.42rem 0.85rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      fontWeight: 600,
+                    }}
                   >
-                    <Plus size={15} /> Agregar Colaborador
+                    <Plus size={14} />
+                    <span>Agregar Colaborador</span>
                   </button>
                 </div>
               </div>
@@ -3613,15 +3653,15 @@ export default function ProjectOnboardingPage() {
                       {teamMembers.filter((m) => m.assigned).length} de {teamMembers.length} colaboradores asignados a este proyecto
                     </span>
                     <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 500 }}>
-                      Haz clic en la casilla para activar o desactivar el acceso
+                      Haz clic en la tarjeta o casilla para activar o desactivar el acceso
                     </span>
                   </div>
 
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                      gap: "0.75rem",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+                      gap: "0.85rem",
                     }}
                   >
                     {teamMembers.map((member) => {
@@ -3629,10 +3669,11 @@ export default function ProjectOnboardingPage() {
                       const isAssigned = isSuperAdmin ? true : member.assigned;
                       const initials = member.name
                         .split(" ")
+                        .filter(Boolean)
                         .map((n) => n[0])
                         .join("")
                         .substring(0, 2)
-                        .toUpperCase();
+                        .toUpperCase() || "US";
 
                       return (
                         <div
@@ -3646,69 +3687,84 @@ export default function ProjectOnboardingPage() {
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "space-between",
-                            padding: "0.85rem 1rem",
-                            borderRadius: "0.65rem",
-                            border: `1.5px solid ${isAssigned ? "var(--devio-blue)" : "var(--border-subtle)"}`,
-                            backgroundColor: isAssigned ? "rgba(31, 54, 82, 0.02)" : "var(--devio-white)",
+                            gap: "0.75rem",
+                            padding: "0.9rem 1.1rem",
+                            borderRadius: "0.75rem",
+                            border: `1.5px solid ${isAssigned ? "var(--devio-blue)" : "#CBD5E1"}`,
+                            backgroundColor: isAssigned ? "rgba(31, 54, 82, 0.03)" : "#FFFFFF",
+                            boxShadow: isAssigned ? "0 2px 8px rgba(31, 54, 82, 0.06)" : "0 1px 3px rgba(0,0,0,0.03)",
                             cursor: isSuperAdmin ? "default" : "pointer",
                             transition: "all 0.15s ease",
                           }}
                           title={isSuperAdmin ? "El Super Admin tiene acceso global obligatorio a todos los proyectos de la desarrolladora." : undefined}
                         >
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: 1 }}>
                             <div
                               style={{
-                                width: "36px",
-                                height: "36px",
+                                width: "40px",
+                                height: "40px",
                                 borderRadius: "50%",
-                                backgroundColor: isSuperAdmin ? "#1F3652" : (isAssigned ? "var(--devio-blue)" : "var(--devio-neutral-2)"),
-                                color: "var(--devio-white)",
+                                backgroundColor: isSuperAdmin ? "#1F3652" : (isAssigned ? "var(--devio-blue)" : "#CBD5E1"),
+                                color: "#FFFFFF",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                fontSize: "0.8rem",
-                                fontWeight: 800,
+                                fontSize: "0.82rem",
+                                fontWeight: 700,
                                 flexShrink: 0,
                               }}
                             >
                               {initials}
                             </div>
-                            <div>
-                              <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontSize: "0.875rem", fontWeight: 700, color: "var(--devio-blue-dark)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {member.name}
                               </div>
-                              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                              <div style={{ fontSize: "0.74rem", color: "#64748B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {member.email}
                               </div>
                             </div>
                           </div>
 
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexShrink: 0 }}>
                             <span
                               style={{
-                                fontSize: "0.68rem",
-                                fontWeight: 700,
-                                padding: "0.2rem 0.55rem",
-                                borderRadius: "999px",
-                                backgroundColor: isSuperAdmin ? "rgba(31, 54, 82, 0.12)" : (isAssigned ? "rgba(31, 54, 82, 0.1)" : "rgba(0,0,0,0.05)"),
-                                color: "var(--devio-blue-dark)",
+                                fontSize: "0.7rem",
+                                fontWeight: 600,
+                                padding: "0.22rem 0.55rem",
+                                borderRadius: "0.375rem",
+                                backgroundColor: isSuperAdmin ? "#F1F5F9" : (isAssigned ? "rgba(31, 54, 82, 0.08)" : "#F8FAFC"),
+                                color: isSuperAdmin ? "#334155" : (isAssigned ? "var(--devio-blue-dark)" : "#64748B"),
+                                border: isSuperAdmin ? "1px solid #CBD5E1" : (isAssigned ? "1px solid rgba(31, 54, 82, 0.15)" : "1px solid #E2E8F0"),
+                                whiteSpace: "nowrap",
                               }}
                             >
                               {member.role}
                             </span>
-                            <input
-                              type="checkbox"
-                              checked={isAssigned}
-                              disabled={isSuperAdmin}
-                              onChange={() => {
+                            <div
+                              onClick={(e) => {
                                 if (!isSuperAdmin) {
+                                  e.stopPropagation();
                                   handleToggleAssignMember(member.id);
                                 }
                               }}
-                              onClick={(e) => e.stopPropagation()}
-                              title={isSuperAdmin ? "Acceso global permanente a todos los proyectos" : ""}
-                              style={{ cursor: isSuperAdmin ? "not-allowed" : "pointer", width: "16px", height: "16px", accentColor: "var(--devio-blue)", opacity: isSuperAdmin ? 0.85 : 1 }}
-                            />
+                              style={{
+                                width: "20px",
+                                height: "20px",
+                                borderRadius: "0.3rem",
+                                border: `1.5px solid ${isAssigned ? "var(--devio-blue)" : "#CBD5E1"}`,
+                                backgroundColor: isAssigned ? "var(--devio-blue)" : "#FFFFFF",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#FFFFFF",
+                                cursor: isSuperAdmin ? "default" : "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                              title={isSuperAdmin ? "Acceso global permanente a todos los proyectos" : (isAssigned ? "Asignado" : "No asignado")}
+                            >
+                              {isAssigned && <Check size={13} strokeWidth={3} />}
+                            </div>
                           </div>
                         </div>
                       );
