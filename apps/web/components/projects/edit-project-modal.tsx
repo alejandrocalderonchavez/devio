@@ -21,8 +21,10 @@ import {
   Briefcase,
   Landmark,
   CreditCard,
+  Edit2,
 } from "lucide-react";
 import { DevioDatePicker } from "../ui/devio-date-picker";
+import { InfoTooltip } from "../ui/tooltip";
 import { ProjectItem, ProjectBankAccount } from "../../data/projects-data";
 import { useProject } from "../../context/project-context";
 
@@ -71,13 +73,55 @@ export default function EditProjectModal({
     estimatedDeliveryDate: "",
   });
 
-  const [bankAccountData, setBankAccountData] = useState<ProjectBankAccount>({
+  // BANK ACCOUNTS STATE & MODAL
+  const [bankAccounts, setBankAccounts] = useState<ProjectBankAccount[]>([]);
+  const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+  const [editingBankIndex, setEditingBankIndex] = useState<number | null>(null);
+  const [bankModalForm, setBankModalForm] = useState<ProjectBankAccount>({
     bankName: "",
     accountHolder: "",
     clabe: "",
     accountNumber: "",
     branchOrReference: "",
   });
+
+  const handleOpenAddBankAccount = () => {
+    setEditingBankIndex(null);
+    setBankModalForm({
+      id: `bank-${Date.now()}`,
+      bankName: "",
+      accountHolder: "",
+      clabe: "",
+      accountNumber: "",
+      branchOrReference: "",
+    });
+    setIsBankModalOpen(true);
+  };
+
+  const handleOpenEditBankAccount = (index: number) => {
+    setEditingBankIndex(index);
+    setBankModalForm({ ...bankAccounts[index] });
+    setIsBankModalOpen(true);
+  };
+
+  const handleSaveBankAccount = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bankModalForm.bankName?.trim() && !bankModalForm.clabe?.trim() && !bankModalForm.accountNumber?.trim()) {
+      return;
+    }
+    if (editingBankIndex !== null) {
+      setBankAccounts((prev) =>
+        prev.map((acc, idx) => (idx === editingBankIndex ? { ...bankModalForm } : acc))
+      );
+    } else {
+      setBankAccounts((prev) => [...prev, { ...bankModalForm, id: bankModalForm.id || `bank-${Date.now()}` }]);
+    }
+    setIsBankModalOpen(false);
+  };
+
+  const handleDeleteBankAccount = (index: number) => {
+    setBankAccounts((prev) => prev.filter((_, idx) => idx !== index));
+  };
 
   const [logoFileName, setLogoFileName] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string>("");
@@ -108,13 +152,12 @@ export default function EditProjectModal({
         estimatedDeliveryDate: activeProject.estimatedDeliveryDate || "",
       });
 
-      setBankAccountData({
-        bankName: activeProject.bankAccount?.bankName || "",
-        accountHolder: activeProject.bankAccount?.accountHolder || "",
-        clabe: activeProject.bankAccount?.clabe || "",
-        accountNumber: activeProject.bankAccount?.accountNumber || "",
-        branchOrReference: activeProject.bankAccount?.branchOrReference || "",
-      });
+      const initialBankAccounts = Array.isArray(activeProject.bankAccounts) && activeProject.bankAccounts.length > 0
+        ? activeProject.bankAccounts
+        : activeProject.bankAccount
+        ? [activeProject.bankAccount]
+        : [];
+      setBankAccounts(initialBankAccounts);
 
       if (activeProject.type) {
         const mapped = activeProject.type.toUpperCase() as ProjectType;
@@ -328,7 +371,8 @@ export default function EditProjectModal({
       websiteUrl: projectGeneralData.websiteUrl.trim(),
       totalSurfaceM2: projectGeneralData.totalSurfaceM2 ? Number(projectGeneralData.totalSurfaceM2) : undefined,
       estimatedDeliveryDate: projectGeneralData.estimatedDeliveryDate,
-      bankAccount: (bankAccountData.bankName || bankAccountData.accountNumber || bankAccountData.clabe) ? bankAccountData : undefined,
+      bankAccount: bankAccounts.length > 0 ? bankAccounts[0] : undefined,
+      bankAccounts: bankAccounts,
       type: projectType,
       currency: baseCurrency,
       image: coverImageUrl || activeProject?.image || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
@@ -804,7 +848,7 @@ export default function EditProjectModal({
                 </div>
               </div>
 
-              {/* Cuenta Bancaria de Transferencia (SPEI) */}
+              {/* Cuentas Bancarias del Proyecto (SPEI) */}
               <div
                 style={{
                   padding: "1.15rem",
@@ -817,101 +861,167 @@ export default function EditProjectModal({
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <Landmark size={17} color="var(--devio-blue)" />
                     <h4 style={{ fontSize: "0.9rem", fontWeight: 700, margin: 0, color: "var(--devio-blue-dark)" }}>
-                      Cuenta Bancaria de Transferencia (SPEI)
+                      Cuentas Bancarias del Proyecto
                     </h4>
+                    <InfoTooltip
+                      title="Cuentas Bancarias del Proyecto"
+                      content="Se mostrará en los estados de cuenta de forma informativa para que los clientes compradores puedan realizar transferencias bancarias directas."
+                    />
                   </div>
                   <span style={{ fontSize: "0.7rem", backgroundColor: "#EDF2F7", color: "#4A5568", padding: "0.2rem 0.5rem", borderRadius: "9999px", fontWeight: 600 }}>
                     Opcional
                   </span>
                 </div>
                 <p style={{ fontSize: "0.76rem", color: "var(--devio-neutral-3)", margin: "0 0 0.85rem 0" }}>
-                  Datos bancarios para recibir pagos y transferencias de clientes.
+                  Se mostrará en los estados de cuenta de forma informativa para realizar transferencias.
                 </p>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", marginBottom: "0.85rem" }}>
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                      Nombre del Banco
-                    </label>
-                    <input
-                      type="text"
-                      value={bankAccountData.bankName || ""}
-                      onChange={(e) => setBankAccountData({ ...bankAccountData, bankName: e.target.value })}
-                      placeholder="Ej: BBVA México, Banorte, Santander"
+                {bankAccounts.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "1.25rem",
+                      textAlign: "center",
+                      backgroundColor: "#FFFFFF",
+                      borderRadius: "0.6rem",
+                      border: "1.5px dashed #CBD5E1",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <p style={{ fontSize: "0.82rem", color: "#64748B", margin: 0 }}>
+                      No has agregado cuentas bancarias a este proyecto todavía.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleOpenAddBankAccount}
                       style={{
-                        width: "100%",
-                        padding: "0.6rem 0.8rem",
+                        fontSize: "0.8rem",
+                        padding: "0.45rem 0.9rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        color: "var(--devio-blue)",
+                        backgroundColor: "#FFFFFF",
+                        border: "1px solid var(--devio-blue)",
                         borderRadius: "0.5rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        color: "var(--devio-blue-dark)",
+                        fontWeight: 700,
+                        cursor: "pointer",
                       }}
-                    />
+                    >
+                      <Plus size={15} /> Agregar Cuenta Bancaria
+                    </button>
                   </div>
+                ) : (
+                  <div>
+                    <div style={{ display: "grid", gridTemplateColumns: bankAccounts.length > 1 ? "1fr 1fr" : "1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                      {bankAccounts.map((acc, idx) => (
+                        <div
+                          key={acc.id || idx}
+                          style={{
+                            padding: "0.9rem 1rem",
+                            backgroundColor: "#FFFFFF",
+                            border: "1px solid #CBD5E1",
+                            borderRadius: "0.6rem",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                          }}
+                        >
+                          <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+                            <div
+                              style={{
+                                width: "36px",
+                                height: "36px",
+                                borderRadius: "0.5rem",
+                                backgroundColor: "rgba(31, 54, 82, 0.08)",
+                                color: "var(--devio-blue)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <Landmark size={18} />
+                            </div>
+                            <div>
+                              <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--devio-blue-dark)", marginBottom: "0.15rem" }}>
+                                {acc.bankName || "Cuenta Bancaria"}
+                              </div>
+                              {acc.accountHolder && (
+                                <div style={{ fontSize: "0.76rem", color: "#64748B", marginBottom: "0.3rem" }}>
+                                  {acc.accountHolder}
+                                </div>
+                              )}
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", fontSize: "0.76rem", color: "#334155" }}>
+                                {acc.clabe && (
+                                  <div>
+                                    <span style={{ color: "#94A3B8" }}>CLABE: </span>
+                                    <strong style={{ fontFamily: "monospace" }}>{acc.clabe}</strong>
+                                  </div>
+                                )}
+                                {acc.accountNumber && (
+                                  <div>
+                                    <span style={{ color: "#94A3B8" }}>Cuenta: </span>
+                                    <strong style={{ fontFamily: "monospace" }}>{acc.accountNumber}</strong>
+                                  </div>
+                                )}
+                              </div>
+                              {acc.branchOrReference && (
+                                <div style={{ fontSize: "0.72rem", color: "#64748B", marginTop: "0.25rem" }}>
+                                  Ref / Suc: {acc.branchOrReference}
+                                </div>
+                              )}
+                            </div>
+                          </div>
 
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                      Titular / Beneficiario
-                    </label>
-                    <input
-                      type="text"
-                      value={bankAccountData.accountHolder || ""}
-                      onChange={(e) => setBankAccountData({ ...bankAccountData, accountHolder: e.target.value })}
-                      placeholder="Ej: Desarrollos Residenciales S.A. de C.V."
-                      style={{
-                        width: "100%",
-                        padding: "0.6rem 0.8rem",
-                        borderRadius: "0.5rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    />
-                  </div>
-                </div>
+                          <div style={{ display: "flex", gap: "0.25rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditBankAccount(idx)}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "#64748B", padding: "0.25rem" }}
+                              title="Editar cuenta"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBankAccount(idx)}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", padding: "0.25rem" }}
+                              title="Eliminar cuenta"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                      CLABE Interbancaria (18 dígitos)
-                    </label>
-                    <input
-                      type="text"
-                      maxLength={18}
-                      value={bankAccountData.clabe || ""}
-                      onChange={(e) => setBankAccountData({ ...bankAccountData, clabe: e.target.value.replace(/\D/g, "") })}
-                      placeholder="012180001234567890"
+                    <button
+                      type="button"
+                      onClick={handleOpenAddBankAccount}
                       style={{
                         width: "100%",
-                        padding: "0.6rem 0.8rem",
+                        padding: "0.55rem",
+                        backgroundColor: "#FFFFFF",
+                        border: "1.5px dashed #CBD5E1",
                         borderRadius: "0.5rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        color: "var(--devio-blue-dark)",
+                        fontSize: "0.8rem",
+                        fontWeight: 700,
+                        color: "var(--devio-blue)",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.4rem",
                       }}
-                    />
+                    >
+                      <Plus size={15} /> Agregar Otra Cuenta Bancaria
+                    </button>
                   </div>
-
-                  <div>
-                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
-                      Número de Cuenta
-                    </label>
-                    <input
-                      type="text"
-                      value={bankAccountData.accountNumber || ""}
-                      onChange={(e) => setBankAccountData({ ...bankAccountData, accountNumber: e.target.value })}
-                      placeholder="Ej: 0123456789"
-                      style={{
-                        width: "100%",
-                        padding: "0.6rem 0.8rem",
-                        borderRadius: "0.5rem",
-                        border: "1.5px solid var(--devio-neutral-2)",
-                        fontSize: "0.85rem",
-                        color: "var(--devio-blue-dark)",
-                      }}
-                    />
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -1151,6 +1261,201 @@ export default function EditProjectModal({
           </div>
         </form>
       </div>
+
+      {/* MODAL AGREGAR / EDITAR CUENTA BANCARIA */}
+      {isBankModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(10, 25, 47, 0.72)",
+            backdropFilter: "blur(5px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10001,
+            padding: "1rem",
+          }}
+          onClick={() => setIsBankModalOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--devio-white)",
+              borderRadius: "0.85rem",
+              width: "100%",
+              maxWidth: "520px",
+              boxShadow: "0 20px 35px -5px rgba(0, 0, 0, 0.25)",
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "1.25rem 1.5rem",
+                borderBottom: "1px solid #E2E8F0",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Landmark size={20} color="var(--devio-blue)" />
+                <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0, color: "var(--devio-blue-dark)" }}>
+                  {editingBankIndex !== null ? "Editar Cuenta Bancaria" : "Agregar Cuenta Bancaria"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBankModalOpen(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#64748B" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                  Nombre del Banco / Institución *
+                </label>
+                <input
+                  type="text"
+                  value={bankModalForm.bankName || ""}
+                  onChange={(e) => setBankModalForm({ ...bankModalForm, bankName: e.target.value })}
+                  placeholder="Ej: BBVA México, Banorte, Santander, Banamex"
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem 0.8rem",
+                    borderRadius: "0.5rem",
+                    border: "1.5px solid var(--devio-neutral-2)",
+                    fontSize: "0.85rem",
+                    color: "var(--devio-blue-dark)",
+                  }}
+                  required
+                />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                  Titular / Beneficiario de la Cuenta
+                </label>
+                <input
+                  type="text"
+                  value={bankModalForm.accountHolder || ""}
+                  onChange={(e) => setBankModalForm({ ...bankModalForm, accountHolder: e.target.value })}
+                  placeholder="Ej: Desarrollos Inmobiliarios S.A. de C.V."
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem 0.8rem",
+                    borderRadius: "0.5rem",
+                    border: "1.5px solid var(--devio-neutral-2)",
+                    fontSize: "0.85rem",
+                    color: "var(--devio-blue-dark)",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                    CLABE Interbancaria (18 dígitos)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={18}
+                    value={bankModalForm.clabe || ""}
+                    onChange={(e) => setBankModalForm({ ...bankModalForm, clabe: e.target.value.replace(/\D/g, "") })}
+                    placeholder="012180001234567890"
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem 0.8rem",
+                      borderRadius: "0.5rem",
+                      border: "1.5px solid var(--devio-neutral-2)",
+                      fontSize: "0.85rem",
+                      color: "var(--devio-blue-dark)",
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                    Número de Cuenta
+                  </label>
+                  <input
+                    type="text"
+                    value={bankModalForm.accountNumber || ""}
+                    onChange={(e) => setBankModalForm({ ...bankModalForm, accountNumber: e.target.value })}
+                    placeholder="Ej: 0123456789"
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem 0.8rem",
+                      borderRadius: "0.5rem",
+                      border: "1.5px solid var(--devio-neutral-2)",
+                      fontSize: "0.85rem",
+                      color: "var(--devio-blue-dark)",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)" }}>
+                  Convenio / Referencia / Sucursal (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={bankModalForm.branchOrReference || ""}
+                  onChange={(e) => setBankModalForm({ ...bankModalForm, branchOrReference: e.target.value })}
+                  placeholder="Ej: Convenio CIE 123456 o Sucursal 7010"
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem 0.8rem",
+                    borderRadius: "0.5rem",
+                    border: "1.5px solid var(--devio-neutral-2)",
+                    fontSize: "0.85rem",
+                    color: "var(--devio-blue-dark)",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setIsBankModalOpen(false)}
+                  style={{
+                    padding: "0.6rem 1.2rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid var(--devio-neutral-2)",
+                    backgroundColor: "transparent",
+                    color: "var(--devio-blue-dark)",
+                    fontSize: "0.85rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveBankAccount}
+                  style={{
+                    padding: "0.6rem 1.4rem",
+                    borderRadius: "0.5rem",
+                    border: "none",
+                    backgroundColor: "var(--devio-blue)",
+                    color: "#FFFFFF",
+                    fontSize: "0.85rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {editingBankIndex !== null ? "Guardar Cambios" : "Agregar Cuenta"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

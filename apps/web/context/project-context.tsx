@@ -19,6 +19,7 @@ import {
   ClientDocument,
   QuoteRecord,
   ProjectMetric,
+  ProjectBankAccount,
 } from "../data/projects-data";
 import { PostventaIncident, INITIAL_INCIDENTS } from "../data/postventa-data";
 import {
@@ -730,6 +731,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       // Exclude floor plan documents from generic file management lists
       if (d.metadata?.isFloorPlan === true) return;
 
+      // Exclude banking info documents from generic file management lists
+      if (d.metadata?.isBankingInfo === true || d.title === "Información Bancaria") return;
+
       // Exclude quotes from general project documents vault
       const isQuoteDoc =
         d.type === "QUOTE" ||
@@ -837,6 +841,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         ? mappedConstructionHistory[0].pct
         : Number(dbProj.progressPct) || 0;
 
+    const extractedBankAccounts: ProjectBankAccount[] =
+      Array.isArray(dbProj.bankAccounts) && dbProj.bankAccounts.length > 0
+        ? dbProj.bankAccounts
+        : rawDocs
+            .find((d: any) => d.metadata?.isBankingInfo === true || d.title === "Información Bancaria")?.metadata?.bankAccounts ||
+          (dbProj.bankAccount ? [dbProj.bankAccount] : []);
+
     return {
       id: dbProj.id,
       developerId: dbProj.developerId,
@@ -856,6 +867,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       websiteUrl,
       totalSurfaceM2,
       estimatedDeliveryDate: dbProj.estimatedDeliveryDate || dbProj.neighborhood || "",
+      bankAccount: extractedBankAccounts.length > 0 ? extractedBankAccounts[0] : undefined,
+      bankAccounts: extractedBankAccounts,
       logoFileName: dbProj.logoFileName || (logo ? (logo.startsWith("data:") ? "logo.png" : logo.split("/").pop()) : "logo.png"),
       logoUrl: logo,
       logo,

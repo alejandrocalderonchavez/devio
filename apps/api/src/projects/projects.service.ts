@@ -40,6 +40,8 @@ export class ProjectsService {
       estimatedDeliveryDate,
       legalName,
       floorPlans,
+      bankAccount,
+      bankAccounts,
     } = body;
 
     if (!name) {
@@ -135,7 +137,7 @@ export class ProjectsService {
         status: "ACTIVE",
         addressLine1: googleMapsUrl || addressLine1 || address || null,
         addressLine2: websiteUrl || null,
-        neighborhood: neighborhood || null,
+        neighborhood: estimatedDeliveryDate || neighborhood || null,
         city: city || null,
         state: state || null,
         postalCode: postalCode || zipCode || (totalSurfaceM2 ? String(totalSurfaceM2) : null),
@@ -325,6 +327,28 @@ export class ProjectsService {
       });
     }
 
+    // 7. Create Bank Accounts Document if provided
+    const bankAccountsList = Array.isArray(bankAccounts) && bankAccounts.length > 0 ? bankAccounts : bankAccount ? [bankAccount] : [];
+    if (bankAccountsList.length > 0) {
+      await this.prisma.document.create({
+        data: {
+          id: randomUUID(),
+          developerId: targetDevId,
+          projectId: project.id,
+          title: "Información Bancaria",
+          type: "OTHER",
+          storagePath: `/banking/${project.id}.json`,
+          fileSizeBytes: 1024,
+          mimeType: "application/json",
+          isClientVisible: true,
+          metadata: {
+            isBankingInfo: true,
+            bankAccounts: bankAccountsList,
+          },
+        },
+      }).catch(() => {});
+    }
+
     return {
       success: true,
       project: {
@@ -457,6 +481,8 @@ export class ProjectsService {
       baseCurrency,
       unitsInventory,
       floorPlans,
+      bankAccount,
+      bankAccounts,
     } = body;
 
     if (!id || id.startsWith("proj-")) {
@@ -570,6 +596,36 @@ export class ProjectsService {
             },
           }).catch(() => {});
         }
+      }
+    }
+
+    if (bankAccounts !== undefined || bankAccount !== undefined) {
+      const bankAccountsList = Array.isArray(bankAccounts) ? bankAccounts : bankAccount ? [bankAccount] : [];
+      await this.prisma.document.deleteMany({
+        where: {
+          projectId: id,
+          title: "Información Bancaria",
+        },
+      }).catch(() => {});
+
+      if (bankAccountsList.length > 0) {
+        await this.prisma.document.create({
+          data: {
+            id: randomUUID(),
+            developerId: updated.developerId,
+            projectId: id,
+            title: "Información Bancaria",
+            type: "OTHER",
+            storagePath: `/banking/${id}.json`,
+            fileSizeBytes: 1024,
+            mimeType: "application/json",
+            isClientVisible: true,
+            metadata: {
+              isBankingInfo: true,
+              bankAccounts: bankAccountsList,
+            },
+          },
+        }).catch(() => {});
       }
     }
 
