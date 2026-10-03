@@ -128,6 +128,79 @@ interface ProjectDocumentItem {
 
 const STORAGE_KEY_GLOBAL_PLANS = "devio_payment_plans_library";
 
+function InfoHoverTooltip({ title, content }: { title: string; content: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div
+      style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
+      onMouseEnter={() => setIsOpen(true)}
+      onMouseLeave={() => setIsOpen(false)}
+    >
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={(e) => {
+          e.preventDefault();
+          setIsOpen(!isOpen);
+        }}
+        style={{
+          background: "none",
+          border: "none",
+          padding: "2px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          color: isOpen ? "var(--devio-blue)" : "#94A3B8",
+          transition: "color 0.15s ease",
+        }}
+        aria-label={title}
+      >
+        <Info size={14} />
+      </button>
+
+      {isOpen && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 8px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "280px",
+            padding: "0.75rem 0.85rem",
+            backgroundColor: "#0F172A",
+            color: "#F8FAFC",
+            borderRadius: "0.6rem",
+            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.35)",
+            zIndex: 9999,
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#38BDF8", marginBottom: "0.25rem" }}>
+            {title}
+          </div>
+          <div style={{ fontSize: "0.74rem", lineHeight: "1.4", color: "#E2E8F0" }}>
+            {content}
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 0,
+              height: 0,
+              borderLeft: "6px solid transparent",
+              borderRight: "6px solid transparent",
+              borderTop: "6px solid #0F172A",
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProjectOnboardingPage() {
   const router = useRouter();
   const { addProject } = useProject();
@@ -172,13 +245,55 @@ export default function ProjectOnboardingPage() {
     estimatedDeliveryDate: "",
   });
 
-  const [bankAccountData, setBankAccountData] = useState<ProjectBankAccount>({
+  // BANK ACCOUNTS STATE & MODAL
+  const [bankAccounts, setBankAccounts] = useState<ProjectBankAccount[]>([]);
+  const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+  const [editingBankIndex, setEditingBankIndex] = useState<number | null>(null);
+  const [bankModalForm, setBankModalForm] = useState<ProjectBankAccount>({
     bankName: "",
     accountHolder: "",
     clabe: "",
     accountNumber: "",
     branchOrReference: "",
   });
+
+  const handleOpenAddBankAccount = () => {
+    setEditingBankIndex(null);
+    setBankModalForm({
+      id: `bank-${Date.now()}`,
+      bankName: "",
+      accountHolder: "",
+      clabe: "",
+      accountNumber: "",
+      branchOrReference: "",
+    });
+    setIsBankModalOpen(true);
+  };
+
+  const handleOpenEditBankAccount = (index: number) => {
+    setEditingBankIndex(index);
+    setBankModalForm({ ...bankAccounts[index] });
+    setIsBankModalOpen(true);
+  };
+
+  const handleSaveBankAccount = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bankModalForm.bankName?.trim() && !bankModalForm.clabe?.trim() && !bankModalForm.accountNumber?.trim()) {
+      return;
+    }
+    if (editingBankIndex !== null) {
+      setBankAccounts((prev) =>
+        prev.map((acc, idx) => (idx === editingBankIndex ? { ...bankModalForm } : acc))
+      );
+    } else {
+      setBankAccounts((prev) => [...prev, { ...bankModalForm, id: bankModalForm.id || `bank-${Date.now()}` }]);
+    }
+    setIsBankModalOpen(false);
+  };
+
+  const handleDeleteBankAccount = (index: number) => {
+    setBankAccounts((prev) => prev.filter((_, idx) => idx !== index));
+  };
 
   // ETAPA 5: ASIGNACIÓN DE EQUIPO
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -1242,7 +1357,8 @@ export default function ProjectOnboardingPage() {
       totalSurfaceM2: projectGeneralData.totalSurfaceM2 ? Number(projectGeneralData.totalSurfaceM2) : undefined,
       estimatedDeliveryDate: projectGeneralData.estimatedDeliveryDate || "",
       currency: baseCurrency || "MXN",
-      bankAccount: (bankAccountData.bankName || bankAccountData.accountNumber || bankAccountData.clabe) ? bankAccountData : undefined,
+      bankAccount: bankAccounts.length > 0 ? bankAccounts[0] : undefined,
+      bankAccounts: bankAccounts.length > 0 ? bankAccounts : undefined,
       type: projectType || "VERTICAL",
       image: projectCoverPreview || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80",
       coverFileName: projectCoverName || undefined,
@@ -1355,7 +1471,8 @@ export default function ProjectOnboardingPage() {
             websiteUrl: projectGeneralData.websiteUrl || undefined,
             totalSurfaceM2: projectGeneralData.totalSurfaceM2 ? Number(projectGeneralData.totalSurfaceM2) : undefined,
             estimatedDeliveryDate: projectGeneralData.estimatedDeliveryDate || undefined,
-            bankAccount: (bankAccountData.bankName || bankAccountData.accountNumber || bankAccountData.clabe) ? bankAccountData : undefined,
+            bankAccount: bankAccounts.length > 0 ? bankAccounts[0] : undefined,
+            bankAccounts: bankAccounts.length > 0 ? bankAccounts : undefined,
             image: newProject.image,
             coverImagePath: newProject.image,
             coverFileName: projectCoverName || undefined,
@@ -1432,7 +1549,7 @@ export default function ProjectOnboardingPage() {
 
 
   return (
-    <div style={{ maxWidth: "1140px", margin: "2.5rem auto", padding: "0 1.5rem" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "var(--bg-page, #F8FAFC)" }}>
       {/* Hidden File Inputs for Bulk Upload */}
       <input
         type="file"
@@ -1449,74 +1566,119 @@ export default function ProjectOnboardingPage() {
         style={{ display: "none" }}
       />
 
-      {/* Header */}
-      <div style={{ marginBottom: "2rem", textAlign: "center" }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.25rem" }}>
-          <Link href="/dashboard">
-            <img
-              src="/brand/13.png"
-              alt="Devio"
-              style={{ height: "36px", width: "auto", objectFit: "contain" }}
-            />
-          </Link>
-        </div>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-          <span className="badge badge-info">Onboarding de Proyecto (6 Etapas)</span>
-        </div>
-        <h1 style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>Configuración de Nuevo Proyecto</h1>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.95rem" }}>
-          Define la identidad, inventario, adicionales, planes de pago y documentación.
-        </p>
-      </div>
-
-      {/* Steps Navigation (6 Etapas) */}
+      {/* Floating / Sticky Header Stepper Bar */}
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: "1.5rem",
-          gap: "0.25rem",
+          position: "sticky",
+          top: 0,
+          zIndex: 50,
+          backgroundColor: "rgba(255, 255, 255, 0.95)",
+          backdropFilter: "blur(12px)",
+          borderBottom: "1px solid #E2E8F0",
+          boxShadow: "0 4px 15px -2px rgba(0, 0, 0, 0.05)",
+          transition: "all 0.2s ease",
         }}
       >
-        {[
-          { num: 1, label: "1. Datos Generales" },
-          { num: 2, label: "2. Inventario de Unidades" },
-          { num: 3, label: "3. Adicionales (Add-ons)" },
-          { num: 4, label: "4. Planes de Pago" },
-          { num: 5, label: "5. Asignación de Equipo" },
-          { num: 6, label: "6. Documentos" },
-        ].map((item) => {
-          const isActive = step === item.num;
-          const isCompleted = step > item.num;
+        <div style={{ maxWidth: "1140px", margin: "0 auto", padding: "0.75rem 1.5rem 0.5rem" }}>
+          {/* Compact Top Bar */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "0.6rem",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <Link href="/dashboard" style={{ display: "flex", alignItems: "center" }}>
+                <img
+                  src="/brand/13.png"
+                  alt="Devio"
+                  style={{ height: "24px", width: "auto", objectFit: "contain" }}
+                />
+              </Link>
+              <div style={{ height: "16px", width: "1px", backgroundColor: "#CBD5E1" }} />
+              <h1 style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0, color: "var(--devio-blue-dark)" }}>
+                Alta de Proyecto
+              </h1>
+            </div>
 
-          return (
-            <div
-              key={item.num}
-              onClick={() => goToStep(item.num)}
-              style={{
-                flex: 1,
-                textAlign: "center",
-                cursor: "pointer",
-                paddingBottom: "0.75rem",
-                borderBottom: `3px solid ${
-                  isActive ? "var(--devio-blue)" : isCompleted ? "var(--devio-green)" : "var(--devio-neutral-1)"
-                }`,
-                transition: "border-color 0.2s ease",
-              }}
-            >
+            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
               <span
                 style={{
-                  fontSize: "0.75rem",
-                  fontWeight: isActive ? 700 : 500,
-                  color: isActive ? "var(--devio-blue)" : isCompleted ? "var(--devio-green)" : "var(--devio-neutral-3)",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  color: "var(--devio-blue)",
+                  backgroundColor: "rgba(31, 54, 82, 0.08)",
+                  padding: "0.2rem 0.6rem",
+                  borderRadius: "9999px",
                 }}
               >
-                {item.label}
+                Paso {step} de 6
               </span>
             </div>
-          );
-        })}
+          </div>
+
+          {/* Steps Navigation */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "0.35rem",
+            }}
+          >
+            {[
+              { num: 1, label: "1. Datos Generales" },
+              { num: 2, label: "2. Unidades" },
+              { num: 3, label: "3. Adicionales" },
+              { num: 4, label: "4. Planes de Pago" },
+              { num: 5, label: "5. Equipo" },
+              { num: 6, label: "6. Documentos" },
+            ].map((item) => {
+              const isActive = step === item.num;
+              const isCompleted = step > item.num;
+
+              return (
+                <div
+                  key={item.num}
+                  onClick={() => goToStep(item.num)}
+                  style={{
+                    flex: 1,
+                    textAlign: "center",
+                    cursor: "pointer",
+                    paddingBottom: "0.5rem",
+                    borderBottom: `3px solid ${
+                      isActive
+                        ? "var(--devio-blue)"
+                        : isCompleted
+                        ? "var(--devio-green)"
+                        : "#E2E8F0"
+                    }`,
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.74rem",
+                      fontWeight: isActive ? 700 : isCompleted ? 600 : 500,
+                      color: isActive
+                        ? "var(--devio-blue)"
+                        : isCompleted
+                        ? "var(--devio-green)"
+                        : "#64748B",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
+
+      <div style={{ maxWidth: "1140px", margin: "1.5rem auto 3rem", padding: "0 1.5rem" }}>
 
       {/* Error Alert Banner */}
       {errorMsg && (
@@ -1565,9 +1727,13 @@ export default function ProjectOnboardingPage() {
 
               {/* Selector de Tipología */}
               <div style={{ marginBottom: "1.5rem" }}>
-                <label className="form-label" style={{ marginBottom: "0.5rem", display: "block" }}>
-                  Tipología del Desarrollo *
-                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.5rem" }}>
+                  <label className="form-label" style={{ margin: 0 }}>Tipología del Desarrollo *</label>
+                  <InfoHoverTooltip
+                    title="Tipología del Proyecto"
+                    content="Define la estructura de tu inventario (torres y departamentos, casas, lotes, naves o locales) y adapta las métricas y planos arquitectónicos."
+                  />
+                </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem" }}>
                   {projectTypesList.map((t) => {
                     const Icon = t.icon;
@@ -1606,7 +1772,13 @@ export default function ProjectOnboardingPage() {
               <div className="grid-cols-2" style={{ marginBottom: "1rem" }}>
                 {/* Logo Uploader */}
                 <div className="form-group">
-                  <label className="form-label">Logo del Proyecto (Solo PNG) *</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.35rem" }}>
+                    <label className="form-label" style={{ margin: 0 }}>Logo del Proyecto (Solo PNG) *</label>
+                    <InfoHoverTooltip
+                      title="Logo de Identidad del Proyecto"
+                      content="Se estampará en el encabezado de cotizaciones PDF, estados de cuenta oficiales y en el portal web de compradores."
+                    />
+                  </div>
                   <input
                     type="file"
                     ref={logoInputRef}
@@ -1702,7 +1874,13 @@ export default function ProjectOnboardingPage() {
 
                 {/* Portada Uploader */}
                 <div className="form-group">
-                  <label className="form-label">Portada del desarrollo *</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.35rem" }}>
+                    <label className="form-label" style={{ margin: 0 }}>Portada del desarrollo *</label>
+                    <InfoHoverTooltip
+                      title="Imagen de Portada Principal"
+                      content="Fotografía o render en alta resolución que servirá de imagen de cabecera en el portal de clientes y en el dashboard de proyectos."
+                    />
+                  </div>
                   <input
                     type="file"
                     ref={coverInputRef}
@@ -1797,7 +1975,13 @@ export default function ProjectOnboardingPage() {
 
               <div className="grid-cols-2">
                 <div className="form-group">
-                  <label className="form-label">Nombre del Proyecto *</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.35rem" }}>
+                    <label className="form-label" style={{ margin: 0 }}>Nombre del Proyecto *</label>
+                    <InfoHoverTooltip
+                      title="Nombre Comercial"
+                      content="Nombre comercial con el que se identificará públicamente el desarrollo ante asesores y clientes."
+                    />
+                  </div>
                   <input
                     id="proj_input_name"
                     type="text"
@@ -1813,7 +1997,13 @@ export default function ProjectOnboardingPage() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Razón Social del Proyecto</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.35rem" }}>
+                    <label className="form-label" style={{ margin: 0 }}>Razón Social del Proyecto</label>
+                    <InfoHoverTooltip
+                      title="Razón Social Legal"
+                      content="Persona moral o fideicomiso emisor para contratos, pagarés y facturación (opcional en el registro inicial)."
+                    />
+                  </div>
                   <input
                     id="proj_input_legalName"
                     type="text"
@@ -1830,7 +2020,13 @@ export default function ProjectOnboardingPage() {
 
               <div className="grid-cols-2">
                 <div className="form-group">
-                  <label className="form-label">Ubicación (Google Maps) *</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.35rem" }}>
+                    <label className="form-label" style={{ margin: 0 }}>Ubicación (Google Maps) *</label>
+                    <InfoHoverTooltip
+                      title="Ubicación Geográfica"
+                      content="Enlace directo a Google Maps para generar mapas interactivos y rutas de llegada en fichas técnicas y cotizaciones."
+                    />
+                  </div>
                   <input
                     id="proj_input_googleMaps"
                     type="url"
@@ -1876,9 +2072,16 @@ export default function ProjectOnboardingPage() {
 
               <div className="grid-cols-2">
                 <div className="form-group">
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.35rem" }}>
+                    <label className="form-label" style={{ margin: 0 }}>Fecha de Entrega Estimada *</label>
+                    <InfoHoverTooltip
+                      title="Fecha de Entrega Estimada"
+                      content="Fecha proyectada para la entrega de unidades; se utiliza como referencia base en los contratos y planes de pago."
+                    />
+                  </div>
                   <DevioDatePicker
                     id="proj_input_deliveryDate"
-                    label="Fecha de Entrega Estimada"
+                    label=""
                     value={projectGeneralData.estimatedDeliveryDate}
                     onChange={(val) => {
                       setErrorMsg("");
@@ -1890,7 +2093,13 @@ export default function ProjectOnboardingPage() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Moneda Base (Banxico FX)</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.35rem" }}>
+                    <label className="form-label" style={{ margin: 0 }}>Moneda Base (Banxico FX)</label>
+                    <InfoHoverTooltip
+                      title="Moneda Base y FX"
+                      content="Divisa contable del proyecto. Si manejas ventas en USD y cobranza en MXN, Devio sincronizará el tipo de cambio FIX oficial de Banxico."
+                    />
+                  </div>
                   <select
                     value={baseCurrency}
                     onChange={(e) => setBaseCurrency(e.target.value as Currency)}
@@ -1906,80 +2115,154 @@ export default function ProjectOnboardingPage() {
               <div
                 style={{
                   marginTop: "0.75rem",
-                  marginBottom: "0.5rem",
+                  marginBottom: "1rem",
                   padding: "1.25rem",
                   backgroundColor: "#F8FAFC",
                   borderRadius: "0.75rem",
                   border: "1px solid #E2E8F0",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <Landmark size={18} color="var(--devio-blue)" />
                     <h3 style={{ fontSize: "0.95rem", fontWeight: 700, margin: 0, color: "var(--devio-blue-dark)" }}>
-                      Cuenta Bancaria para Transferencias (SPEI)
+                      Cuentas Bancarias para Transferencias (SPEI)
                     </h3>
+                    <InfoHoverTooltip
+                      title="Cuentas Bancarias del Proyecto"
+                      content="Se mostrará en los estados de cuenta de forma informativa para que los clientes compradores puedan realizar transferencias bancarias directas."
+                    />
                   </div>
                   <span className="badge badge-neutral" style={{ fontSize: "0.7rem", backgroundColor: "#EDF2F7", color: "#4A5568" }}>
                     Opcional
                   </span>
                 </div>
                 <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "0 0 1rem 0" }}>
-                  Esta información bancaria se mostrará a los clientes compradores en sus recibos, estados de cuenta y opciones de pago para realizar transferencias.
+                  Se mostrará en los estados de cuenta de forma informativa para realizar transferencias.
                 </p>
 
-                <div className="grid-cols-2">
-                  <div className="form-group">
-                    <label className="form-label">Nombre del Banco</label>
-                    <input
-                      id="proj_input_bankName"
-                      type="text"
-                      value={bankAccountData.bankName || ""}
-                      onChange={(e) => setBankAccountData({ ...bankAccountData, bankName: e.target.value })}
-                      placeholder="Ej: BBVA México, Banorte, Santander"
-                      className="form-input"
-                    />
+                {bankAccounts.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "1.25rem",
+                      textAlign: "center",
+                      backgroundColor: "#FFFFFF",
+                      borderRadius: "0.6rem",
+                      border: "1.5px dashed #CBD5E1",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: 0 }}>
+                      No has agregado cuentas bancarias a este proyecto todavía.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleOpenAddBankAccount}
+                      className="btn btn-outline"
+                      style={{ fontSize: "0.8rem", padding: "0.45rem 0.9rem", display: "inline-flex", alignItems: "center", gap: "0.4rem", color: "var(--devio-blue)", borderColor: "var(--devio-blue)" }}
+                    >
+                      <Plus size={15} /> Agregar Cuenta Bancaria
+                    </button>
                   </div>
+                ) : (
+                  <div>
+                    <div style={{ display: "grid", gridTemplateColumns: bankAccounts.length > 1 ? "1fr 1fr" : "1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                      {bankAccounts.map((acc, idx) => (
+                        <div
+                          key={acc.id || idx}
+                          style={{
+                            padding: "0.9rem 1rem",
+                            backgroundColor: "#FFFFFF",
+                            border: "1px solid #CBD5E1",
+                            borderRadius: "0.6rem",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                          }}
+                        >
+                          <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+                            <div
+                              style={{
+                                width: "36px",
+                                height: "36px",
+                                borderRadius: "0.5rem",
+                                backgroundColor: "rgba(31, 54, 82, 0.08)",
+                                color: "var(--devio-blue)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <Landmark size={18} />
+                            </div>
+                            <div>
+                              <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--devio-blue-dark)", marginBottom: "0.15rem" }}>
+                                {acc.bankName || "Cuenta Bancaria"}
+                              </div>
+                              {acc.accountHolder && (
+                                <div style={{ fontSize: "0.76rem", color: "#64748B", marginBottom: "0.3rem" }}>
+                                  {acc.accountHolder}
+                                </div>
+                              )}
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", fontSize: "0.76rem", color: "#334155" }}>
+                                {acc.clabe && (
+                                  <div>
+                                    <span style={{ color: "#94A3B8" }}>CLABE: </span>
+                                    <strong style={{ fontFamily: "monospace" }}>{acc.clabe}</strong>
+                                  </div>
+                                )}
+                                {acc.accountNumber && (
+                                  <div>
+                                    <span style={{ color: "#94A3B8" }}>Cuenta: </span>
+                                    <strong style={{ fontFamily: "monospace" }}>{acc.accountNumber}</strong>
+                                  </div>
+                                )}
+                              </div>
+                              {acc.branchOrReference && (
+                                <div style={{ fontSize: "0.72rem", color: "#64748B", marginTop: "0.25rem" }}>
+                                  Ref / Suc: {acc.branchOrReference}
+                                </div>
+                              )}
+                            </div>
+                          </div>
 
-                  <div className="form-group">
-                    <label className="form-label">Titular / Beneficiario de la Cuenta</label>
-                    <input
-                      id="proj_input_accountHolder"
-                      type="text"
-                      value={bankAccountData.accountHolder || ""}
-                      onChange={(e) => setBankAccountData({ ...bankAccountData, accountHolder: e.target.value })}
-                      placeholder="Ej: Desarrollos Residenciales S.A. de C.V."
-                      className="form-input"
-                    />
-                  </div>
-                </div>
+                          <div style={{ display: "flex", gap: "0.25rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditBankAccount(idx)}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "#64748B", padding: "0.25rem" }}
+                              title="Editar cuenta"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBankAccount(idx)}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", padding: "0.25rem" }}
+                              title="Eliminar cuenta"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
 
-                <div className="grid-cols-2">
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">CLABE Interbancaria (18 dígitos)</label>
-                    <input
-                      id="proj_input_clabe"
-                      type="text"
-                      maxLength={18}
-                      value={bankAccountData.clabe || ""}
-                      onChange={(e) => setBankAccountData({ ...bankAccountData, clabe: e.target.value.replace(/\D/g, "") })}
-                      placeholder="012180001234567890"
-                      className="form-input"
-                    />
+                    <button
+                      type="button"
+                      onClick={handleOpenAddBankAccount}
+                      className="btn btn-outline"
+                      style={{ fontSize: "0.78rem", padding: "0.4rem 0.8rem", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                    >
+                      <Plus size={14} /> Agregar otra cuenta bancaria
+                    </button>
                   </div>
-
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Número de Cuenta</label>
-                    <input
-                      id="proj_input_accountNumber"
-                      type="text"
-                      value={bankAccountData.accountNumber || ""}
-                      onChange={(e) => setBankAccountData({ ...bankAccountData, accountNumber: e.target.value })}
-                      placeholder="Ej: 0123456789"
-                      className="form-input"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Documentos & Imágenes iniciales */}
@@ -4184,6 +4467,138 @@ export default function ProjectOnboardingPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL AGREGAR / EDITAR CUENTA BANCARIA */}
+      {isBankModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(10, 25, 47, 0.72)",
+            backdropFilter: "blur(5px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "1rem",
+          }}
+          onClick={() => setIsBankModalOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--devio-white)",
+              borderRadius: "0.85rem",
+              width: "100%",
+              maxWidth: "520px",
+              boxShadow: "0 20px 35px -5px rgba(0, 0, 0, 0.25)",
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "1.25rem 1.5rem",
+                borderBottom: "1px solid var(--border-subtle)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Landmark size={20} color="var(--devio-blue)" />
+                <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0, color: "var(--devio-blue-dark)" }}>
+                  {editingBankIndex !== null ? "Editar Cuenta Bancaria" : "Agregar Cuenta Bancaria"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBankModalOpen(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBankAccount} style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Nombre del Banco / Institución *</label>
+                <input
+                  type="text"
+                  value={bankModalForm.bankName || ""}
+                  onChange={(e) => setBankModalForm({ ...bankModalForm, bankName: e.target.value })}
+                  placeholder="Ej: BBVA México, Banorte, Santander, Banamex"
+                  className="form-input"
+                  required
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Titular / Beneficiario de la Cuenta</label>
+                <input
+                  type="text"
+                  value={bankModalForm.accountHolder || ""}
+                  onChange={(e) => setBankModalForm({ ...bankModalForm, accountHolder: e.target.value })}
+                  placeholder="Ej: Desarrollos Inmobiliarios S.A. de C.V."
+                  className="form-input"
+                />
+              </div>
+
+              <div className="grid-cols-2" style={{ gap: "0.75rem" }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">CLABE Interbancaria (18 dígitos)</label>
+                  <input
+                    type="text"
+                    maxLength={18}
+                    value={bankModalForm.clabe || ""}
+                    onChange={(e) => setBankModalForm({ ...bankModalForm, clabe: e.target.value.replace(/\D/g, "") })}
+                    placeholder="012180001234567890"
+                    className="form-input"
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Número de Cuenta</label>
+                  <input
+                    type="text"
+                    value={bankModalForm.accountNumber || ""}
+                    onChange={(e) => setBankModalForm({ ...bankModalForm, accountNumber: e.target.value })}
+                    placeholder="Ej: 0123456789"
+                    className="form-input"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Convenio / Referencia / Sucursal (Opcional)</label>
+                <input
+                  type="text"
+                  value={bankModalForm.branchOrReference || ""}
+                  onChange={(e) => setBankModalForm({ ...bankModalForm, branchOrReference: e.target.value })}
+                  placeholder="Ej: Convenio CIE 123456 o Sucursal 7010"
+                  className="form-input"
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setIsBankModalOpen(false)}
+                  className="btn btn-outline"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                >
+                  {editingBankIndex !== null ? "Guardar Cambios" : "Agregar Cuenta"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      </div>
     </div>
   );
 }

@@ -123,6 +123,7 @@ export interface ProjectTeamMember {
 }
 
 export interface ProjectBankAccount {
+  id?: string;
   bankName?: string;
   accountHolder?: string;
   clabe?: string;
@@ -151,6 +152,7 @@ export interface ProjectItem {
   estimatedDeliveryDate?: string;
   currency?: "MXN" | "USD";
   bankAccount?: ProjectBankAccount;
+  bankAccounts?: ProjectBankAccount[];
   logoFileName?: string;
   logoUrl?: string;
   logo?: string;
