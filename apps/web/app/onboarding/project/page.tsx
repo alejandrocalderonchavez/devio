@@ -3211,16 +3211,13 @@ export default function ProjectOnboardingPage() {
                               value={add.type}
                               onChange={(e) => handleAdditionalChange(add.id, "type", e.target.value as any)}
                               className="form-select"
-                              style={{ padding: "0.4rem", fontSize: "0.8125rem", minWidth: "160px" }}
+                              style={{ padding: "0.4rem", fontSize: "0.8125rem", minWidth: "150px" }}
                             >
                               <option value="Estacionamiento">Estacionamiento</option>
                               <option value="Bodega">Bodega</option>
-                              <option value="Acabados">Acabados / Paquete</option>
-                              <option value="Terraza">Terraza / Balcón</option>
-                              <option value="Roof Garden">Roof Garden</option>
-                              <option value="Jardín">Jardín Excedente</option>
-                              <option value="Equipamiento">Equipamiento / Mobiliario</option>
-                              <option value="Otro">Otro Adicional</option>
+                              <option value="Acabados">Acabados</option>
+                              <option value="Terraza">Terraza</option>
+                              <option value="Otro">Otro</option>
                             </select>
                           </td>
                           <td style={{ padding: "0.5rem" }}>

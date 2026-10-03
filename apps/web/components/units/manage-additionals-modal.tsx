@@ -959,7 +959,7 @@ export default function ManageAdditionalsModal({
                       <option value="bodega">Bodega</option>
                       <option value="acabados">Acabados</option>
                       <option value="terraza">Terraza</option>
-                      <option value="otro">Otro Adicional</option>
+                      <option value="otro">Otro</option>
                     </select>
                   </div>
 
