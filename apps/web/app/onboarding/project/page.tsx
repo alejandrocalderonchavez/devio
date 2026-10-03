@@ -1572,67 +1572,52 @@ export default function ProjectOnboardingPage() {
           position: "sticky",
           top: 0,
           zIndex: 50,
-          backgroundColor: "rgba(255, 255, 255, 0.95)",
+          backgroundColor: "rgba(255, 255, 255, 0.96)",
           backdropFilter: "blur(12px)",
           borderBottom: "1px solid #E2E8F0",
           boxShadow: "0 4px 15px -2px rgba(0, 0, 0, 0.05)",
+          padding: "1rem 0 0.5rem",
           transition: "all 0.2s ease",
         }}
       >
-        <div style={{ maxWidth: "1140px", margin: "0 auto", padding: "0.75rem 1.5rem 0.5rem" }}>
-          {/* Compact Top Bar */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: "0.6rem",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <Link href="/dashboard" style={{ display: "flex", alignItems: "center" }}>
-                <img
-                  src="/brand/13.png"
-                  alt="Devio"
-                  style={{ height: "24px", width: "auto", objectFit: "contain" }}
-                />
-              </Link>
-              <div style={{ height: "16px", width: "1px", backgroundColor: "#CBD5E1" }} />
-              <h1 style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0, color: "var(--devio-blue-dark)" }}>
-                Alta de Proyecto
-              </h1>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <span
-                style={{
-                  fontSize: "0.72rem",
-                  fontWeight: 700,
-                  color: "var(--devio-blue)",
-                  backgroundColor: "rgba(31, 54, 82, 0.08)",
-                  padding: "0.2rem 0.6rem",
-                  borderRadius: "9999px",
-                }}
-              >
-                Paso {step} de 6
-              </span>
-            </div>
+        <div style={{ maxWidth: "1140px", margin: "0 auto", padding: "0 1.5rem", textAlign: "center" }}>
+          {/* Header Logo */}
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.75rem" }}>
+            <Link href="/dashboard">
+              <img
+                src="/brand/13.png"
+                alt="Devio"
+                style={{ height: "32px", width: "auto", objectFit: "contain" }}
+              />
+            </Link>
           </div>
 
-          {/* Steps Navigation */}
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
+            <span className="badge badge-info">Onboarding de Proyecto (6 Etapas)</span>
+          </div>
+
+          <h1 style={{ fontSize: "1.65rem", marginBottom: "0.25rem", color: "var(--devio-blue-dark)" }}>
+            Configuración de Nuevo Proyecto
+          </h1>
+
+          <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", marginBottom: "0.85rem" }}>
+            Define la identidad, inventario, adicionales, planes de pago y documentación.
+          </p>
+
+          {/* Steps Navigation (6 Etapas) */}
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              gap: "0.35rem",
+              gap: "0.25rem",
             }}
           >
             {[
               { num: 1, label: "1. Datos Generales" },
-              { num: 2, label: "2. Unidades" },
-              { num: 3, label: "3. Adicionales" },
+              { num: 2, label: "2. Inventario de Unidades" },
+              { num: 3, label: "3. Adicionales (Add-ons)" },
               { num: 4, label: "4. Planes de Pago" },
-              { num: 5, label: "5. Equipo" },
+              { num: 5, label: "5. Asignación de Equipo" },
               { num: 6, label: "6. Documentos" },
             ].map((item) => {
               const isActive = step === item.num;
@@ -1646,27 +1631,18 @@ export default function ProjectOnboardingPage() {
                     flex: 1,
                     textAlign: "center",
                     cursor: "pointer",
-                    paddingBottom: "0.5rem",
+                    paddingBottom: "0.55rem",
                     borderBottom: `3px solid ${
-                      isActive
-                        ? "var(--devio-blue)"
-                        : isCompleted
-                        ? "var(--devio-green)"
-                        : "#E2E8F0"
+                      isActive ? "var(--devio-blue)" : isCompleted ? "var(--devio-green)" : "var(--devio-neutral-1)"
                     }`,
-                    transition: "all 0.2s ease",
+                    transition: "border-color 0.2s ease",
                   }}
                 >
                   <span
                     style={{
-                      fontSize: "0.74rem",
-                      fontWeight: isActive ? 700 : isCompleted ? 600 : 500,
-                      color: isActive
-                        ? "var(--devio-blue)"
-                        : isCompleted
-                        ? "var(--devio-green)"
-                        : "#64748B",
-                      whiteSpace: "nowrap",
+                      fontSize: "0.75rem",
+                      fontWeight: isActive ? 700 : 500,
+                      color: isActive ? "var(--devio-blue)" : isCompleted ? "var(--devio-green)" : "var(--devio-neutral-3)",
                     }}
                   >
                     {item.label}
