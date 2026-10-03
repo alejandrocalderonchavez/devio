@@ -127,6 +127,7 @@ interface ProjectDocumentItem {
 }
 
 const STORAGE_KEY_GLOBAL_PLANS = "devio_payment_plans_library";
+const DRAFT_STORAGE_KEY = "devio_project_onboarding_draft";
 
 function InfoHoverTooltip({ title, content }: { title: string; content: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -849,6 +850,132 @@ export default function ProjectOnboardingPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // ---------------------------------------------------------------------------
+  // AUTO-GUARDADO Y RESTAURACIÓN DE BORRADOR DE ONBOARDING (LOCALSTORAGE)
+  // ---------------------------------------------------------------------------
+  const isDraftHydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY) || sessionStorage.getItem(DRAFT_STORAGE_KEY);
+        if (savedDraft) {
+          const d = JSON.parse(savedDraft);
+          if (d) {
+            if (typeof d.step === "number" && d.step >= 1 && d.step <= 6) setStep(d.step);
+            if (d.projectType) setProjectType(d.projectType);
+            if (d.baseCurrency) setBaseCurrency(d.baseCurrency);
+            if (d.defaultLanguage) setDefaultLanguage(d.defaultLanguage);
+            if (d.projectGeneralData) {
+              setProjectGeneralData((prev) => ({
+                ...prev,
+                ...d.projectGeneralData,
+              }));
+            }
+            if (Array.isArray(d.bankAccounts)) setBankAccounts(d.bankAccounts);
+            if (d.projectLogoPreview !== undefined) setProjectLogoPreview(d.projectLogoPreview);
+            if (d.projectLogoName !== undefined) setProjectLogoName(d.projectLogoName);
+            if (d.projectLogoSize !== undefined) setProjectLogoSize(d.projectLogoSize);
+            if (d.projectCoverPreview !== undefined) setProjectCoverPreview(d.projectCoverPreview);
+            if (d.projectCoverName !== undefined) setProjectCoverName(d.projectCoverName);
+            if (d.projectCoverSize !== undefined) setProjectCoverSize(d.projectCoverSize);
+            if (Array.isArray(d.galleryPreviews)) setGalleryPreviews(d.galleryPreviews);
+            if (d.brochureFile !== undefined) setBrochureFile(d.brochureFile);
+            if (Array.isArray(d.units)) setUnits(d.units);
+            if (Array.isArray(d.activeColumns) && d.activeColumns.length > 0) setActiveColumns(d.activeColumns);
+            if (Array.isArray(d.additionals)) setAdditionals(d.additionals);
+            if (Array.isArray(d.onboardingFloorPlans)) setOnboardingFloorPlans(d.onboardingFloorPlans);
+            if (Array.isArray(d.selectedPlanIds)) setSelectedPlanIds(d.selectedPlanIds);
+            if (Array.isArray(d.documents)) setDocuments(d.documents);
+            if (Array.isArray(d.teamMembers) && d.teamMembers.length > 0) setTeamMembers(d.teamMembers);
+          }
+        }
+      } catch (e) {
+        console.warn("Could not load project onboarding draft:", e);
+      } finally {
+        isDraftHydratedRef.current = true;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isDraftHydratedRef.current || typeof window === "undefined") return;
+
+    const draft = {
+      step,
+      projectType,
+      baseCurrency,
+      defaultLanguage,
+      projectGeneralData,
+      bankAccounts,
+      projectLogoPreview,
+      projectLogoName,
+      projectLogoSize,
+      projectCoverPreview,
+      projectCoverName,
+      projectCoverSize,
+      galleryPreviews,
+      brochureFile,
+      units,
+      activeColumns,
+      additionals,
+      onboardingFloorPlans,
+      selectedPlanIds,
+      documents,
+      teamMembers,
+      savedAt: new Date().toISOString(),
+    };
+
+    try {
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch (e) {
+      // Storage quota fallback (e.g. if large base64 strings exceed quota)
+      try {
+        const lightweightDraft = {
+          ...draft,
+          projectLogoPreview: null,
+          projectCoverPreview: null,
+          galleryPreviews: [],
+        };
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(lightweightDraft));
+        sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(lightweightDraft));
+      } catch (_) {}
+    }
+  }, [
+    step,
+    projectType,
+    baseCurrency,
+    defaultLanguage,
+    projectGeneralData,
+    bankAccounts,
+    projectLogoPreview,
+    projectLogoName,
+    projectLogoSize,
+    projectCoverPreview,
+    projectCoverName,
+    projectCoverSize,
+    galleryPreviews,
+    brochureFile,
+    units,
+    activeColumns,
+    additionals,
+    onboardingFloorPlans,
+    selectedPlanIds,
+    documents,
+    teamMembers,
+  ]);
+
+  const handleDiscardDraft = () => {
+    if (confirm("¿Estás seguro de que deseas descartar el borrador y comenzar de nuevo? Se borrarán todos los datos ingresados en el formulario.")) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+        sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+      }
+      window.location.reload();
+    }
+  };
+
   // Tipologías
   const projectTypesList = [
     { id: "VERTICAL", title: "Vertical", subtitle: "Torres y departamentos", icon: Building2 },
@@ -1545,6 +1672,12 @@ export default function ProjectOnboardingPage() {
         } catch (_) {}
       }
 
+      // Clear onboarding draft upon successful project creation
+      try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+        sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch (_) {}
+
       try {
         window.dispatchEvent(new Event("devio_projects_updated"));
       } catch (_) {}
@@ -1593,8 +1726,32 @@ export default function ProjectOnboardingPage() {
             />
           </Link>
         </div>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap", justifyContent: "center" }}>
           <span className="badge badge-info">Onboarding de Proyecto (6 Etapas)</span>
+          <span style={{ fontSize: "0.72rem", color: "#10B981", display: "inline-flex", alignItems: "center", gap: "0.25rem", backgroundColor: "rgba(16, 185, 129, 0.1)", padding: "0.2rem 0.55rem", borderRadius: "9999px", fontWeight: 500 }}>
+            <Check size={12} /> Autoguardado activo
+          </span>
+          {(projectGeneralData.name || units.length > 0 || step > 1 || bankAccounts.length > 0) && (
+            <button
+              type="button"
+              onClick={handleDiscardDraft}
+              style={{
+                fontSize: "0.72rem",
+                color: "#94A3B8",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: "0.2rem 0.4rem",
+                textDecoration: "underline",
+                transition: "color 0.15s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--devio-red)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#94A3B8")}
+              title="Borrar todos los datos y empezar de nuevo"
+            >
+              Descartar borrador
+            </button>
+          )}
         </div>
         <h1 style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>Configuración de Nuevo Proyecto</h1>
         <p style={{ color: "var(--text-muted)", fontSize: "0.95rem" }}>
