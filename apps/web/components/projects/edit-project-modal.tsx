@@ -18,10 +18,12 @@ import {
   Trash2,
   Mail,
   Shield,
-  Briefcase
+  Briefcase,
+  Landmark,
+  CreditCard,
 } from "lucide-react";
 import { DevioDatePicker } from "../ui/devio-date-picker";
-import { ProjectItem } from "../../data/projects-data";
+import { ProjectItem, ProjectBankAccount } from "../../data/projects-data";
 import { useProject } from "../../context/project-context";
 
 export type ProjectType = "VERTICAL" | "HORIZONTAL" | "COMMERCIAL" | "INDUSTRIAL" | "MIXED";
@@ -69,6 +71,14 @@ export default function EditProjectModal({
     estimatedDeliveryDate: "",
   });
 
+  const [bankAccountData, setBankAccountData] = useState<ProjectBankAccount>({
+    bankName: "",
+    accountHolder: "",
+    clabe: "",
+    accountNumber: "",
+    branchOrReference: "",
+  });
+
   const [logoFileName, setLogoFileName] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string>("");
   const [coverFileName, setCoverFileName] = useState<string | null>(null);
@@ -96,6 +106,14 @@ export default function EditProjectModal({
         websiteUrl: activeProject.websiteUrl || "",
         totalSurfaceM2: activeProject.totalSurfaceM2 ? String(activeProject.totalSurfaceM2) : "",
         estimatedDeliveryDate: activeProject.estimatedDeliveryDate || "",
+      });
+
+      setBankAccountData({
+        bankName: activeProject.bankAccount?.bankName || "",
+        accountHolder: activeProject.bankAccount?.accountHolder || "",
+        clabe: activeProject.bankAccount?.clabe || "",
+        accountNumber: activeProject.bankAccount?.accountNumber || "",
+        branchOrReference: activeProject.bankAccount?.branchOrReference || "",
       });
 
       if (activeProject.type) {
@@ -310,6 +328,7 @@ export default function EditProjectModal({
       websiteUrl: projectGeneralData.websiteUrl.trim(),
       totalSurfaceM2: projectGeneralData.totalSurfaceM2 ? Number(projectGeneralData.totalSurfaceM2) : undefined,
       estimatedDeliveryDate: projectGeneralData.estimatedDeliveryDate,
+      bankAccount: (bankAccountData.bankName || bankAccountData.accountNumber || bankAccountData.clabe) ? bankAccountData : undefined,
       type: projectType,
       currency: baseCurrency,
       image: coverImageUrl || activeProject?.image || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
@@ -663,7 +682,7 @@ export default function EditProjectModal({
 
                 <div>
                   <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                    Razón Social del Proyecto *
+                    Razón Social del Proyecto
                   </label>
                   <input
                     type="text"
@@ -678,7 +697,6 @@ export default function EditProjectModal({
                       fontSize: "0.9rem",
                       color: "var(--devio-blue-dark)",
                     }}
-                    required
                   />
                 </div>
               </div>
@@ -750,30 +768,8 @@ export default function EditProjectModal({
                 />
               </div>
 
-              {/* Superficie, Fecha de Entrega, Moneda Base */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem" }}>
-                <div>
-                  <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.35rem" }}>
-                    Superficie Total (m²) *
-                  </label>
-                  <input
-                    type="number"
-                    value={projectGeneralData.totalSurfaceM2}
-                    onChange={(e) => setProjectGeneralData({ ...projectGeneralData, totalSurfaceM2: e.target.value })}
-                    placeholder="Ej. 12500"
-                    style={{
-                      width: "100%",
-                      padding: "0.7rem 0.9rem",
-                      borderRadius: "0.6rem",
-                      border: "1.5px solid var(--devio-neutral-2)",
-                      fontSize: "0.88rem",
-                      fontWeight: 700,
-                      color: "var(--devio-blue-dark)",
-                    }}
-                    required
-                  />
-                </div>
-
+              {/* Fecha de Entrega y Moneda Base */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                 <div>
                   <DevioDatePicker
                     label="Fecha de Entrega Estimada"
@@ -805,6 +801,116 @@ export default function EditProjectModal({
                     <option value="MXN">Pesos Mexicanos (MXN)</option>
                     <option value="USD">Dólares Americanos (USD)</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Cuenta Bancaria de Transferencia (SPEI) */}
+              <div
+                style={{
+                  padding: "1.15rem",
+                  backgroundColor: "#F8FAFC",
+                  borderRadius: "0.75rem",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <Landmark size={17} color="var(--devio-blue)" />
+                    <h4 style={{ fontSize: "0.9rem", fontWeight: 700, margin: 0, color: "var(--devio-blue-dark)" }}>
+                      Cuenta Bancaria de Transferencia (SPEI)
+                    </h4>
+                  </div>
+                  <span style={{ fontSize: "0.7rem", backgroundColor: "#EDF2F7", color: "#4A5568", padding: "0.2rem 0.5rem", borderRadius: "9999px", fontWeight: 600 }}>
+                    Opcional
+                  </span>
+                </div>
+                <p style={{ fontSize: "0.76rem", color: "var(--devio-neutral-3)", margin: "0 0 0.85rem 0" }}>
+                  Datos bancarios para recibir pagos y transferencias de clientes.
+                </p>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", marginBottom: "0.85rem" }}>
+                  <div>
+                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
+                      Nombre del Banco
+                    </label>
+                    <input
+                      type="text"
+                      value={bankAccountData.bankName || ""}
+                      onChange={(e) => setBankAccountData({ ...bankAccountData, bankName: e.target.value })}
+                      placeholder="Ej: BBVA México, Banorte, Santander"
+                      style={{
+                        width: "100%",
+                        padding: "0.6rem 0.8rem",
+                        borderRadius: "0.5rem",
+                        border: "1.5px solid var(--devio-neutral-2)",
+                        fontSize: "0.85rem",
+                        color: "var(--devio-blue-dark)",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
+                      Titular / Beneficiario
+                    </label>
+                    <input
+                      type="text"
+                      value={bankAccountData.accountHolder || ""}
+                      onChange={(e) => setBankAccountData({ ...bankAccountData, accountHolder: e.target.value })}
+                      placeholder="Ej: Desarrollos Residenciales S.A. de C.V."
+                      style={{
+                        width: "100%",
+                        padding: "0.6rem 0.8rem",
+                        borderRadius: "0.5rem",
+                        border: "1.5px solid var(--devio-neutral-2)",
+                        fontSize: "0.85rem",
+                        color: "var(--devio-blue-dark)",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+                  <div>
+                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
+                      CLABE Interbancaria (18 dígitos)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={18}
+                      value={bankAccountData.clabe || ""}
+                      onChange={(e) => setBankAccountData({ ...bankAccountData, clabe: e.target.value.replace(/\D/g, "") })}
+                      placeholder="012180001234567890"
+                      style={{
+                        width: "100%",
+                        padding: "0.6rem 0.8rem",
+                        borderRadius: "0.5rem",
+                        border: "1.5px solid var(--devio-neutral-2)",
+                        fontSize: "0.85rem",
+                        color: "var(--devio-blue-dark)",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--devio-blue-dark)", display: "block", marginBottom: "0.3rem" }}>
+                      Número de Cuenta
+                    </label>
+                    <input
+                      type="text"
+                      value={bankAccountData.accountNumber || ""}
+                      onChange={(e) => setBankAccountData({ ...bankAccountData, accountNumber: e.target.value })}
+                      placeholder="Ej: 0123456789"
+                      style={{
+                        width: "100%",
+                        padding: "0.6rem 0.8rem",
+                        borderRadius: "0.5rem",
+                        border: "1.5px solid var(--devio-neutral-2)",
+                        fontSize: "0.85rem",
+                        color: "var(--devio-blue-dark)",
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>

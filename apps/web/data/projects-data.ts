@@ -122,6 +122,15 @@ export interface ProjectTeamMember {
   assigned: boolean;
 }
 
+export interface ProjectBankAccount {
+  bankName?: string;
+  accountHolder?: string;
+  clabe?: string;
+  accountNumber?: string;
+  branchOrReference?: string;
+  notes?: string;
+}
+
 export interface ProjectItem {
   id: string;
   developerId?: string;
@@ -141,6 +150,7 @@ export interface ProjectItem {
   totalSurfaceM2?: number;
   estimatedDeliveryDate?: string;
   currency?: "MXN" | "USD";
+  bankAccount?: ProjectBankAccount;
   logoFileName?: string;
   logoUrl?: string;
   logo?: string;

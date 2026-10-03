@@ -50,9 +50,11 @@ import {
   Sliders,
   CheckSquare,
   Square,
+  CreditCard,
+  Landmark,
 } from "lucide-react";
 import { DevioDatePicker } from "@/components/ui/devio-date-picker";
-import { ProjectItem, UnitItem, ProjectAdditional, ProjectFloorPlan } from "@/data/projects-data";
+import { ProjectItem, UnitItem, ProjectAdditional, ProjectFloorPlan, ProjectBankAccount } from "@/data/projects-data";
 import { UserRole, ROLE_PRESETS } from "@/lib/permissions";
 
 type ProjectType = "VERTICAL" | "HORIZONTAL" | "COMMERCIAL" | "INDUSTRIAL" | "MIXED";
@@ -168,6 +170,14 @@ export default function ProjectOnboardingPage() {
     websiteUrl: "",
     totalSurfaceM2: "",
     estimatedDeliveryDate: "",
+  });
+
+  const [bankAccountData, setBankAccountData] = useState<ProjectBankAccount>({
+    bankName: "",
+    accountHolder: "",
+    clabe: "",
+    accountNumber: "",
+    branchOrReference: "",
   });
 
   // ETAPA 5: ASIGNACIÓN DE EQUIPO
@@ -499,9 +509,6 @@ export default function ProjectOnboardingPage() {
       if (!projectGeneralData.name.trim()) {
         return { error: "Por favor ingresa el Nombre del Proyecto.", fieldId: "proj_input_name" };
       }
-      if (!projectGeneralData.legalName.trim()) {
-        return { error: "Por favor ingresa la Razón Social del Proyecto.", fieldId: "proj_input_legalName" };
-      }
       if (!projectLogoPreview) {
         return { error: "Por favor sube el Logo del Proyecto (Solo PNG).", fieldId: "proj_input_logo_box" };
       }
@@ -513,9 +520,6 @@ export default function ProjectOnboardingPage() {
       }
       if (!projectGeneralData.description.trim()) {
         return { error: "Por favor ingresa la Descripción del proyecto.", fieldId: "proj_input_description" };
-      }
-      if (!projectGeneralData.totalSurfaceM2 || Number(projectGeneralData.totalSurfaceM2) <= 0) {
-        return { error: "Por favor ingresa una Superficie total válida en m².", fieldId: "proj_input_totalSurface" };
       }
       if (!projectGeneralData.estimatedDeliveryDate.trim()) {
         return { error: "Por favor selecciona la Fecha de Entrega Estimada.", fieldId: "proj_input_deliveryDate" };
@@ -1238,6 +1242,7 @@ export default function ProjectOnboardingPage() {
       totalSurfaceM2: projectGeneralData.totalSurfaceM2 ? Number(projectGeneralData.totalSurfaceM2) : undefined,
       estimatedDeliveryDate: projectGeneralData.estimatedDeliveryDate || "",
       currency: baseCurrency || "MXN",
+      bankAccount: (bankAccountData.bankName || bankAccountData.accountNumber || bankAccountData.clabe) ? bankAccountData : undefined,
       type: projectType || "VERTICAL",
       image: projectCoverPreview || "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80",
       coverFileName: projectCoverName || undefined,
@@ -1350,6 +1355,7 @@ export default function ProjectOnboardingPage() {
             websiteUrl: projectGeneralData.websiteUrl || undefined,
             totalSurfaceM2: projectGeneralData.totalSurfaceM2 ? Number(projectGeneralData.totalSurfaceM2) : undefined,
             estimatedDeliveryDate: projectGeneralData.estimatedDeliveryDate || undefined,
+            bankAccount: (bankAccountData.bankName || bankAccountData.accountNumber || bankAccountData.clabe) ? bankAccountData : undefined,
             image: newProject.image,
             coverImagePath: newProject.image,
             coverFileName: projectCoverName || undefined,
@@ -1807,7 +1813,7 @@ export default function ProjectOnboardingPage() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Razón Social del Proyecto *</label>
+                  <label className="form-label">Razón Social del Proyecto</label>
                   <input
                     id="proj_input_legalName"
                     type="text"
@@ -1818,7 +1824,6 @@ export default function ProjectOnboardingPage() {
                     }}
                     placeholder="Escribe la Razón Social del proyecto"
                     className="form-input"
-                    required
                   />
                 </div>
               </div>
@@ -1869,23 +1874,7 @@ export default function ProjectOnboardingPage() {
                 />
               </div>
 
-              <div className="grid-cols-3">
-                <div className="form-group">
-                  <label className="form-label">Superficie total del Proyecto en metros cuadrados (m²) *</label>
-                  <input
-                    id="proj_input_totalSurface"
-                    type="number"
-                    value={projectGeneralData.totalSurfaceM2}
-                    onChange={(e) => {
-                      setErrorMsg("");
-                      setProjectGeneralData({ ...projectGeneralData, totalSurfaceM2: e.target.value });
-                    }}
-                    placeholder="Superficie Total m²"
-                    className="form-input"
-                    required
-                  />
-                </div>
-
+              <div className="grid-cols-2">
                 <div className="form-group">
                   <DevioDatePicker
                     id="proj_input_deliveryDate"
@@ -1910,6 +1899,86 @@ export default function ProjectOnboardingPage() {
                     <option value="MXN">MXN — Pesos Mexicanos</option>
                     <option value="USD">USD — Dólares Americanos</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Cuenta Bancaria de Transferencia (SPEI) */}
+              <div
+                style={{
+                  marginTop: "0.75rem",
+                  marginBottom: "0.5rem",
+                  padding: "1.25rem",
+                  backgroundColor: "#F8FAFC",
+                  borderRadius: "0.75rem",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <Landmark size={18} color="var(--devio-blue)" />
+                    <h3 style={{ fontSize: "0.95rem", fontWeight: 700, margin: 0, color: "var(--devio-blue-dark)" }}>
+                      Cuenta Bancaria para Transferencias (SPEI)
+                    </h3>
+                  </div>
+                  <span className="badge badge-neutral" style={{ fontSize: "0.7rem", backgroundColor: "#EDF2F7", color: "#4A5568" }}>
+                    Opcional
+                  </span>
+                </div>
+                <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "0 0 1rem 0" }}>
+                  Esta información bancaria se mostrará a los clientes compradores en sus recibos, estados de cuenta y opciones de pago para realizar transferencias.
+                </p>
+
+                <div className="grid-cols-2">
+                  <div className="form-group">
+                    <label className="form-label">Nombre del Banco</label>
+                    <input
+                      id="proj_input_bankName"
+                      type="text"
+                      value={bankAccountData.bankName || ""}
+                      onChange={(e) => setBankAccountData({ ...bankAccountData, bankName: e.target.value })}
+                      placeholder="Ej: BBVA México, Banorte, Santander"
+                      className="form-input"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Titular / Beneficiario de la Cuenta</label>
+                    <input
+                      id="proj_input_accountHolder"
+                      type="text"
+                      value={bankAccountData.accountHolder || ""}
+                      onChange={(e) => setBankAccountData({ ...bankAccountData, accountHolder: e.target.value })}
+                      placeholder="Ej: Desarrollos Residenciales S.A. de C.V."
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid-cols-2">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">CLABE Interbancaria (18 dígitos)</label>
+                    <input
+                      id="proj_input_clabe"
+                      type="text"
+                      maxLength={18}
+                      value={bankAccountData.clabe || ""}
+                      onChange={(e) => setBankAccountData({ ...bankAccountData, clabe: e.target.value.replace(/\D/g, "") })}
+                      placeholder="012180001234567890"
+                      className="form-input"
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Número de Cuenta</label>
+                    <input
+                      id="proj_input_accountNumber"
+                      type="text"
+                      value={bankAccountData.accountNumber || ""}
+                      onChange={(e) => setBankAccountData({ ...bankAccountData, accountNumber: e.target.value })}
+                      placeholder="Ej: 0123456789"
+                      className="form-input"
+                    />
+                  </div>
                 </div>
               </div>
 
