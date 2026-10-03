@@ -744,6 +744,22 @@ export default function ProjectOnboardingPage() {
   ]);
 
   const [isColumnDropdownOpen, setIsColumnDropdownOpen] = useState(false);
+  const columnDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (columnDropdownRef.current && !columnDropdownRef.current.contains(event.target as Node)) {
+        setIsColumnDropdownOpen(false);
+      }
+    }
+    if (isColumnDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isColumnDropdownOpen]);
+
   const [isCustomColModalOpen, setIsCustomColModalOpen] = useState(false);
   const [newColTitle, setNewColTitle] = useState("");
   const [newColType, setNewColType] = useState<"number" | "text" | "file" | "image" | "boolean">("text");
@@ -2390,52 +2406,92 @@ export default function ProjectOnboardingPage() {
           {/* ETAPA 2: INVENTARIO DE UNIDADES */}
           {step === 2 && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
                 <div>
-                  <h2 style={{ fontSize: "1.25rem", color: "var(--devio-blue-dark)" }}>2. Inventario de Unidades</h2>
-                  <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                    Carga las unidades de tu proyecto o impórtalas masivamente con la plantilla Excel. Puedes subir al menos 1 unidad o continuar sin unidades para subirlas más tarde.
+                  <h2 style={{ fontSize: "1.25rem", color: "var(--devio-blue-dark)", margin: 0 }}>2. Inventario de Unidades</h2>
+                  <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.2rem", margin: 0 }}>
+                    Carga las unidades de tu proyecto o impórtalas masivamente con la plantilla Excel.
                   </p>
                 </div>
 
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", gap: "0.45rem", alignItems: "center", flexWrap: "wrap" }}>
+                  {/* Descargar Plantilla */}
                   <button
                     type="button"
                     onClick={downloadUnitsTemplate}
                     className="btn btn-outline"
-                    style={{ fontSize: "0.75rem", padding: "0.45rem 0.85rem" }}
+                    style={{
+                      fontSize: "0.75rem",
+                      padding: "0.42rem 0.75rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      color: "#475569",
+                      borderColor: "#CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      fontWeight: 500,
+                    }}
+                    title="Descargar plantilla de Excel preconfigurada"
                   >
-                    <Download size={14} /> Descargar Plantilla Excel (.xlsx)
+                    <Download size={13} color="#64748B" />
+                    <span>Plantilla Excel</span>
                   </button>
 
+                  {/* Subir Excel */}
                   <button
                     type="button"
                     onClick={() => unitsFileInputRef.current?.click()}
                     className="btn btn-outline"
-                    style={{ fontSize: "0.75rem", padding: "0.45rem 0.85rem" }}
+                    style={{
+                      fontSize: "0.75rem",
+                      padding: "0.42rem 0.75rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      color: "#475569",
+                      borderColor: "#CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      fontWeight: 500,
+                    }}
+                    title="Subir archivo Excel con inventario"
                   >
-                    <FileSpreadsheet size={14} /> Subir Excel Unidades (.xlsx)
-                  </button>
-
-                  <button
-                    id="proj_btn_add_unit"
-                    type="button"
-                    onClick={handleAddUnit}
-                    className="btn btn-primary"
-                    style={{ fontSize: "0.75rem", padding: "0.45rem 0.85rem" }}
-                  >
-                    <Plus size={14} /> Agregar Unidad
+                    <FileSpreadsheet size={13} color="#64748B" />
+                    <span>Importar Excel</span>
                   </button>
 
                   {/* Dropdown de Columnas con Buscador */}
-                  <div style={{ position: "relative" }}>
+                  <div ref={columnDropdownRef} style={{ position: "relative" }}>
                     <button
                       type="button"
                       onClick={() => setIsColumnDropdownOpen(!isColumnDropdownOpen)}
-                      className="btn btn-secondary"
-                      style={{ fontSize: "0.75rem", padding: "0.45rem 0.85rem" }}
+                      className="btn btn-outline"
+                      style={{
+                        fontSize: "0.75rem",
+                        padding: "0.42rem 0.75rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                        color: "#334155",
+                        borderColor: isColumnDropdownOpen ? "var(--devio-blue)" : "#CBD5E1",
+                        backgroundColor: isColumnDropdownOpen ? "rgba(31, 54, 82, 0.06)" : "#FFFFFF",
+                        fontWeight: 500,
+                      }}
                     >
-                      <Columns size={14} /> Columnas ({activeColumns.length})
+                      <Columns size={13} color="#64748B" />
+                      <span>Columnas</span>
+                      <span
+                        style={{
+                          fontSize: "0.6875rem",
+                          fontWeight: 700,
+                          padding: "0.05rem 0.35rem",
+                          borderRadius: "0.25rem",
+                          backgroundColor: "#E2E8F0",
+                          color: "#334155",
+                          marginLeft: "0.1rem",
+                        }}
+                      >
+                        {activeColumns.length}
+                      </span>
                     </button>
 
                     {isColumnDropdownOpen && (
@@ -2519,6 +2575,25 @@ export default function ProjectOnboardingPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Agregar Unidad */}
+                  <button
+                    id="proj_btn_add_unit"
+                    type="button"
+                    onClick={handleAddUnit}
+                    className="btn btn-primary"
+                    style={{
+                      fontSize: "0.75rem",
+                      padding: "0.42rem 0.85rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      fontWeight: 600,
+                    }}
+                  >
+                    <Plus size={14} />
+                    <span>Agregar Unidad</span>
+                  </button>
                 </div>
               </div>
 
