@@ -73,9 +73,9 @@ export default function ProjectDocumentModal({
       setCategory(initialData.category || "Contratos");
       setVersion(initialData.version || "v1.0");
       setNotes(initialData.notes || "");
-      setFileName((initialData as any).fileName || `${initialData.title || "documento"}.pdf`);
+      setFileName((initialData as any).fileName || "");
       setFileType(initialData.fileType || "PDF");
-      setFileSize(initialData.fileSize || "1.0 MB");
+      setFileSize((initialData as any).fileSize || "");
       setFileDataUrl(initialData.url || (initialData as any).fileDataUrl || "");
       setIsClientVisible((initialData as any).isClientVisible !== false);
     } else {
@@ -160,11 +160,11 @@ export default function ProjectDocumentModal({
       title: title.trim(),
       category: category as any,
       fileType: fileType,
-      fileSize: fileSize || "1.0 MB",
+      fileSize: fileSize || "",
       uploadDate: initialData?.uploadDate || new Date().toLocaleDateString("es-MX"),
       updatedAt: new Date().toLocaleDateString("es-MX"),
       version: version.trim() || "v1.0",
-      notes: notes.trim() || "Documento oficial del proyecto.",
+      notes: notes.trim() || "",
       url: fileDataUrl || initialData?.url || undefined,
       ...(fileName ? { fileName } : {}),
       ...(fileDataUrl ? { fileDataUrl } : {}),

@@ -1282,9 +1282,9 @@ export default function ProjectOnboardingPage() {
         id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         title,
         category,
-        fileName: `${title.toLowerCase().replace(/\s+/g, "_")}.pdf`,
-        fileSize: "Documento oficial",
-        internalNotes: "Documento base registrado para comercialización.",
+        fileName: "",
+        fileSize: "",
+        internalNotes: "",
       },
     ]);
   };
@@ -1295,8 +1295,8 @@ export default function ProjectOnboardingPage() {
 
     const finalDoc = {
       ...modalDocData,
-      fileName: modalDocData.fileName || `${modalDocData.title.toLowerCase().replace(/\s+/g, "_")}.pdf`,
-      fileSize: modalDocData.fileSize || "Adjunto",
+      fileName: modalDocData.fileName || "",
+      fileSize: modalDocData.fileSize || "",
     };
 
     if (documents.some((d) => d.id === finalDoc.id)) {
@@ -3900,10 +3900,10 @@ export default function ProjectOnboardingPage() {
           {/* ETAPA 6: DOCUMENTOS */}
           {step === 6 && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
                 <div>
-                  <h2 style={{ fontSize: "1.25rem", color: "var(--devio-blue-dark)" }}>6. Documentos del Proyecto</h2>
-                  <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                  <h2 style={{ fontSize: "1.25rem", color: "var(--devio-blue-dark)", margin: 0 }}>6. Documentos del Proyecto</h2>
+                  <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.2rem", margin: 0 }}>
                     Agrega contratos, planos, fichas técnicas u otros archivos importantes para el proyecto.
                   </p>
                 </div>
@@ -3911,9 +3911,17 @@ export default function ProjectOnboardingPage() {
                   type="button"
                   onClick={() => handleOpenDocModal()}
                   className="btn btn-primary"
-                  style={{ fontSize: "0.8125rem", padding: "0.5rem 1rem" }}
+                  style={{
+                    fontSize: "0.75rem",
+                    padding: "0.42rem 0.85rem",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    fontWeight: 600,
+                  }}
                 >
-                  <Plus size={16} /> Agregar Documento
+                  <Plus size={14} />
+                  <span>Agregar Documento</span>
                 </button>
               </div>
 
@@ -3935,7 +3943,17 @@ export default function ProjectOnboardingPage() {
                       type="button"
                       onClick={() => handleAddSuggestedDoc(sug)}
                       className="btn btn-outline"
-                      style={{ fontSize: "0.75rem", padding: "0.35rem 0.75rem" }}
+                      style={{
+                        fontSize: "0.75rem",
+                        padding: "0.35rem 0.75rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                        color: "#475569",
+                        borderColor: "#CBD5E1",
+                        backgroundColor: "#FFFFFF",
+                        fontWeight: 500,
+                      }}
                     >
                       <Plus size={12} /> {sug}
                     </button>
@@ -3953,23 +3971,28 @@ export default function ProjectOnboardingPage() {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        padding: "1rem 1.25rem",
+                        padding: "0.9rem 1.15rem",
                         backgroundColor: "var(--bg-page)",
                         border: "1px solid var(--border-subtle)",
                         borderRadius: "0.75rem",
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                        <FileText size={24} color="var(--devio-blue)" />
+                        <FileText size={22} color="var(--devio-blue)" />
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                            <h4 style={{ fontSize: "0.95rem", color: "var(--devio-blue-dark)", margin: 0 }}>
+                            <h4 style={{ fontSize: "0.92rem", color: "var(--devio-blue-dark)", margin: 0, fontWeight: 700 }}>
                               {doc.title}
                             </h4>
                             {doc.category && <span className="badge badge-info" style={{ fontSize: "0.65rem", padding: "0.1rem 0.5rem" }}>{doc.category}</span>}
                           </div>
                           <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.2rem 0 0" }}>
-                            {doc.fileName} • {doc.fileSize} {doc.internalNotes && `• Nota: ${doc.internalNotes}`}
+                            {doc.fileName ? (
+                              <span>{doc.fileName}{doc.fileSize ? ` • ${doc.fileSize}` : ""}</span>
+                            ) : (
+                              <span style={{ color: "#94A3B8", fontStyle: "italic" }}>Sin archivo adjunto</span>
+                            )}
+                            {doc.internalNotes ? ` • Nota: ${doc.internalNotes}` : ""}
                           </p>
                         </div>
                       </div>
@@ -3979,7 +4002,7 @@ export default function ProjectOnboardingPage() {
                           type="button"
                           onClick={() => handleOpenDocModal(doc)}
                           className="btn btn-outline"
-                          style={{ fontSize: "0.75rem", padding: "0.35rem 0.7rem" }}
+                          style={{ fontSize: "0.75rem", padding: "0.35rem 0.7rem", color: "#475569", borderColor: "#CBD5E1" }}
                         >
                           <Edit2 size={13} /> Editar
                         </button>
@@ -4074,8 +4097,8 @@ export default function ProjectOnboardingPage() {
             id: savedDoc.id || `doc-${Date.now()}`,
             title: savedDoc.title,
             category: savedDoc.category || "Legal",
-            fileName: savedDoc.fileName || `${savedDoc.title.toLowerCase().replace(/\s+/g, "_")}.pdf`,
-            fileSize: savedDoc.fileSize || "1.0 MB",
+            fileName: savedDoc.fileName || "",
+            fileSize: savedDoc.fileSize || "",
             internalNotes: savedDoc.notes || "",
             ...(savedDoc.url ? { url: savedDoc.url } : {}),
             ...(savedDoc.fileDataUrl ? { fileDataUrl: savedDoc.fileDataUrl } : {}),
