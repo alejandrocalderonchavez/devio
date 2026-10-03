@@ -3102,38 +3102,75 @@ export default function ProjectOnboardingPage() {
           {/* ETAPA 3: ADICIONALES (ADD-ONS) - TABLA INLINE INDEPENDIENTE */}
           {step === 3 && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
                 <div>
-                  <h2 style={{ fontSize: "1.25rem", color: "var(--devio-blue-dark)" }}>3. Adicionales (Add-ons)</h2>
-                  <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                  <h2 style={{ fontSize: "1.25rem", color: "var(--devio-blue-dark)", margin: 0 }}>3. Adicionales (Add-ons)</h2>
+                  <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.2rem", margin: 0 }}>
                     Registra bodegas, cajones de estacionamiento u otros elementos complementarios. Los adicionales son opcionales.
                   </p>
                 </div>
 
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: "0.45rem", alignItems: "center", flexWrap: "wrap" }}>
+                  {/* Descargar Plantilla */}
                   <button
                     type="button"
                     onClick={downloadAdditionalsTemplate}
                     className="btn btn-outline"
-                    style={{ fontSize: "0.75rem", padding: "0.45rem 0.85rem" }}
+                    style={{
+                      fontSize: "0.75rem",
+                      padding: "0.42rem 0.75rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      color: "#475569",
+                      borderColor: "#CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      fontWeight: 500,
+                    }}
+                    title="Descargar plantilla de Excel para adicionales"
                   >
-                    <Download size={14} /> Plantilla Excel (.xlsx)
+                    <Download size={13} color="#64748B" />
+                    <span>Plantilla Excel</span>
                   </button>
+
+                  {/* Subir Excel */}
                   <button
                     type="button"
                     onClick={() => additionalsFileInputRef.current?.click()}
                     className="btn btn-outline"
-                    style={{ fontSize: "0.75rem", padding: "0.45rem 0.85rem" }}
+                    style={{
+                      fontSize: "0.75rem",
+                      padding: "0.42rem 0.75rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      color: "#475569",
+                      borderColor: "#CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      fontWeight: 500,
+                    }}
+                    title="Subir archivo Excel con adicionales"
                   >
-                    <FileSpreadsheet size={14} /> Subir Excel Adicionales
+                    <FileSpreadsheet size={13} color="#64748B" />
+                    <span>Importar Excel</span>
                   </button>
+
+                  {/* Agregar Adicional */}
                   <button
                     type="button"
                     onClick={handleAddAdditionalRow}
                     className="btn btn-primary"
-                    style={{ fontSize: "0.75rem", padding: "0.45rem 0.85rem" }}
+                    style={{
+                      fontSize: "0.75rem",
+                      padding: "0.42rem 0.85rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      fontWeight: 600,
+                    }}
                   >
-                    <Plus size={14} /> Agregar Adicional
+                    <Plus size={14} />
+                    <span>Agregar Adicional</span>
                   </button>
                 </div>
               </div>
